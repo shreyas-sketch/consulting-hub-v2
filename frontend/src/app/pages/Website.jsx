@@ -177,7 +177,7 @@ function Editor({ d }) {
     <div className="space-y-5">
       <Header />
       <StatusCard d={d} onJump={goTo} />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px] items-start">
+      <div className="grid gap-5 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_400px] items-start">
         <div className="space-y-4 min-w-0">
           <PagesBar d={d} page={page} onPick={setPageKey} />
           <SectionList d={d} page={page} />
@@ -190,7 +190,7 @@ function Editor({ d }) {
           </a>
         </div>
       </div>
-      <div className="grid gap-5 lg:grid-cols-2 items-start">
+      <div className="grid gap-5 grid-cols-[minmax(0,1fr)] lg:grid-cols-2 items-start">
         <AddressCard d={d} />
         <ContactCard d={d} />
         <ImagesCard d={d} />

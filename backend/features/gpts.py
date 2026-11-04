@@ -91,9 +91,18 @@ events.register("gpt_message", "Message to an Action Hub / Mentorship tool (prop
 
 
 # ------------------------------------------------------------------ catalogue ----
+# Shown first in the galleries, in this order (the rest follow in catalogue order).
+FIRST = ["define-your-niche", "linkedin-and-social-media-blueprint-builder", "strategy-thinking-framework",
+         "elevator-pitch-builder", "framework-builder", "5-95-principle",
+         "book-builder", "credibility-code", "document-builder", "signature-offer-productization-builder",
+         "consulting-pricing-advisor", "communication-coach"]
+
+
 @lru_cache(maxsize=1)
 def catalog() -> dict[str, dict]:
-    rows = json.loads((GPT_DIR / "catalog.json").read_text(encoding="utf-8"))
+    raw = json.loads((GPT_DIR / "catalog.json").read_text(encoding="utf-8"))
+    rank = {slug: i for i, slug in enumerate(FIRST)}
+    rows = [g for _, g in sorted(enumerate(raw), key=lambda p: (rank.get(p[1]["slug"], len(FIRST)), p[0]))]
     out: dict[str, dict] = {}
     for i, g in enumerate(rows):
         if g["slug"] in SKIP or g.get("program") not in PROGRAM_FEATURE:
