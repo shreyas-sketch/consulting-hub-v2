@@ -8,6 +8,9 @@ Members are experienced Indian professionals (mostly 40+, 15–35 years in jobs)
 Akshat Dani. Plans: `free` (webinar account) → `member` (₹1,999 plan) → `l1` (₹5,000 + 4-3-2-1) → `l2` (6-month mentorship).
 Higher plans include everything below them. Money in ₹ with Indian grouping (₹1,50,000). Dates in IST.
 
+Never name, hint at or describe the AI providers or models anywhere a member can see it (screens, AI replies, errors,
+PDFs): every tool presents as the hub's own. Say "AI" at most. Put the same rule in every system prompt you write.
+
 Copy on screens: plain, short, spoken English. One idea per sentence. No buzzwords, no hype, no emojis. Never promise income;
 label estimates as estimates. Say what a button does ("Make my deck", not "Submit").
 

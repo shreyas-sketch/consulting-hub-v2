@@ -22,7 +22,8 @@ REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
     "anthropic": ("ANTHROPIC_API_KEY",),
     "search": ("SEARCH_API_KEY",),          # web search for Meeting Briefs (Tavily by default, SEARCH_PROVIDER)
     "gamma": ("GAMMA_API_KEY",),            # Presentation Builder
-    "openai": ("OPENAI_API_KEY",),          # audio: text-to-speech (Listen mode, recaps) and speech-to-text (Story Bank, Pitch Practice)
+    "openai": ("OPENAI_API_KEY",),          # audio: text-to-speech (Listen mode, recaps) and speech-to-text (Story Bank)
+    "gemini": ("GEMINI_API_KEY",),          # Pitch Practice: video analysis (same approach as the Leadership hub's Confidence Coach)
 }
 
 KEYLESS: set[str] = set()
