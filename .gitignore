@@ -1,0 +1,7 @@
+node_modules/
+frontend/build/
+frontend/build-*/
+__pycache__/
+.pytest_cache/
+*.pyc
+backend/.env

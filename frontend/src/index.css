@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==== Consultation Hub tokens: Akshat Dani design system (dark only) ====
+   Token names keep the --bz-* prefix the shared components use; the values are Akshat's palette.
+   gold   = the signal: kickers, key phrases, ₹ figures, numerals, primary buttons, active nav
+   teal   = AI only: AI buttons, AI result frames, "thinking" states
+   miss   = alert red: errors and destructive actions only                                         */
+:root {
+  --bz-bg: #14151a;
+  --bz-panel: #1e2027;
+  --bz-card: #1e2027;
+  --bz-raised: #262932;
+  --bz-ink: #f2eee6;
+  --bz-muted: rgba(242, 238, 230, 0.7);
+  --bz-faint: rgba(242, 238, 230, 0.35);
+  --bz-line: #2a2d36;
+  --bz-line-strong: #3a3e4a;
+  --bz-inset: #262932;
+  --bz-accent: #c9a84c;
+  --bz-accent-deep: #f0d98a;
+  --bz-accent-tint: rgba(201, 168, 76, 0.12);
+  --bz-on-accent: #14151a;
+  --bz-miss: #e0533d;
+  --bz-miss-tint: rgba(224, 83, 61, 0.12);
+  --bz-gold: #c9a84c;
+  --bz-gold-light: #f0d98a;
+  --bz-gold-deep: #c9a84c;     /* text-safe gold; the darker rule colour is --bz-rule */
+  --bz-rule: #8f7635;
+  --bz-gold-tint: rgba(201, 168, 76, 0.12);
+  --bz-teal: #2ed3b7;
+  --bz-teal-ink: #0e2b26;
+  --bz-teal-tint: rgba(46, 211, 183, 0.1);
+  --bz-scrim: rgba(10, 11, 14, 0.7);
+  --card-shadow: none;
+  --focus-ring: 0 0 0 2px rgba(201, 168, 76, 0.55);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  background-color: var(--bz-bg);
+}
+
+body {
+  margin: 0;
+  font-family: "Manrope Variable", "Manrope", "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--bz-ink);
+  min-height: 100vh;
+  /* Radial lift + faint 48px grid: dark, never flat */
+  background-image:
+    radial-gradient(ellipse 1400px 1000px at 0% 0%, #1e2027 0%, rgba(30, 32, 39, 0.3) 50%, transparent 80%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgba(242, 238, 230, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(242, 238, 230, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 30% 20%, #000 0%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 70% at 30% 20%, #000 0%, transparent 75%);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  background-color: transparent;
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+input,
+select,
+textarea {
+  color: var(--bz-ink);
+}
+
+::placeholder {
+  color: var(--bz-faint);
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="range"] {
+  accent-color: var(--bz-gold);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer utilities {
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .rise-in {
+    animation: rise-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes ch-pulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
+  }
+  .skeleton {
+    background: var(--bz-raised);
+    border-radius: 10px;
+    animation: ch-pulse 1.4s ease-in-out infinite;
+  }
+  .ai-dot {
+    animation: ch-pulse 1.1s ease-in-out infinite;
+  }
+  .gold-glow {
+    text-shadow: 0 0 24px rgba(201, 168, 76, 0.35);
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+}
+
+@media print {
+  body { background: #fff !important; color: #111 !important; }
+  body::before { display: none; }
+  .no-print { display: none !important; }
+  .print-plain, .print-plain * { background: transparent !important; color: #111 !important; border-color: #ccc !important; box-shadow: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in, .skeleton, .ai-dot { animation: none !important; }
+}

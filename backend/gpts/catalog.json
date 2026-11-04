@@ -1,0 +1,418 @@
+[
+  {
+    "name": "Turn Data to Action",
+    "program": "action",
+    "starter": "Get Insights",
+    "description": "Go past surface data and uncover the single insight that reshapes your entire strategy",
+    "slug": "turn-data-to-action",
+    "prompt_chars": 25609
+  },
+  {
+    "name": "Website Builder",
+    "program": "action",
+    "starter": "Build site prompt",
+    "description": "Turn your offer, audience and vibe into a copy-paste Lovable prompt for a polished, modern website",
+    "slug": "website-builder",
+    "prompt_chars": 7339
+  },
+  {
+    "name": "Connect the dots",
+    "program": "action",
+    "starter": "Begin analysis",
+    "description": "Experience real world data insights and recommendations",
+    "slug": "connect-the-dots",
+    "prompt_chars": 7713
+  },
+  {
+    "name": "Define Your Niche",
+    "program": "action",
+    "starter": "Let's Go!!!",
+    "description": "Discover your consulting niche in minutes using a simplified Ikigai discovery flow",
+    "slug": "define-your-niche",
+    "prompt_chars": 6020
+  },
+  {
+    "name": "LinkedIn & Social Media Blueprint Builder",
+    "program": "action",
+    "starter": "Build my LinkedIn & Social Media Blueprint",
+    "description": "Paste your Niche Blueprint and get your complete LinkedIn and social media blueprint — profile, content plan, Dream Client List and outreach kit — built for your niche.",
+    "slug": "linkedin-and-social-media-blueprint-builder",
+    "prompt_chars": 22092
+  },
+  {
+    "name": "Strategy Thinking Framework",
+    "program": "action",
+    "starter": "Build my Strategy Thinking Framework",
+    "description": "Meet a realistic client from your niche and watch the six-step Strategic Thinking Framework solve their problem — scope, objective, framework, options, priorities and implementation charter.",
+    "slug": "strategy-thinking-framework",
+    "prompt_chars": 16371
+  },
+  {
+    "name": "Framework Builder",
+    "program": "action",
+    "starter": "Let's Build!!!",
+    "description": "Build powerful frameworks that help you not only solve problems, but build credibility",
+    "slug": "framework-builder",
+    "prompt_chars": 6766
+  },
+  {
+    "name": "Golden Pyramid",
+    "program": "action",
+    "starter": "Let's Start!!!",
+    "description": "Use Golden Pyramid Framework to analyze market potential",
+    "slug": "golden-pyramid",
+    "prompt_chars": 10971
+  },
+  {
+    "name": "Market Growth Analyzer",
+    "program": "action",
+    "starter": "Let's Go!!!!",
+    "description": "Analyze which markets to invest in",
+    "slug": "market-growth-analyzer",
+    "prompt_chars": 10617
+  },
+  {
+    "name": "Presentation Builder",
+    "program": "action",
+    "starter": "Let's build a presentation!",
+    "description": "Generate a downloadable PPTX deck in minutes — fully designed and polished",
+    "slug": "presentation-builder",
+    "prompt_chars": 2860
+  },
+  {
+    "name": "Attrition & HR Strategy Builder",
+    "program": "action",
+    "starter": "Let's Go!!!",
+    "description": "Builds a structured framework to solve HR consulting problems like attrition and talent issues",
+    "slug": "attrition-and-hr-strategy-builder",
+    "prompt_chars": 11420
+  },
+  {
+    "name": "Strategic Thinking Coach",
+    "program": "action",
+    "starter": "Let's Start!!!",
+    "description": "Builds a 'Stay #1 for 3 Years' strategic framework from the CEO's perspective",
+    "slug": "strategic-thinking-coach",
+    "prompt_chars": 10832
+  },
+  {
+    "name": "2x2 Decision Maker",
+    "program": "action",
+    "starter": "Let's Start!!!",
+    "description": "Use 2x2 framework to make a decision",
+    "slug": "2x2-decision-maker",
+    "prompt_chars": 10748
+  },
+  {
+    "name": "Elevator Pitch Builder",
+    "program": "action",
+    "starter": "Let's Go!!!",
+    "description": "Generate powerful pitch to make an impact",
+    "slug": "elevator-pitch-builder",
+    "prompt_chars": 15064
+  },
+  {
+    "name": "5:95 Principle",
+    "program": "action",
+    "starter": "Let's Start!!",
+    "description": "Builds a 90-day plan to land the first 10 clients using the 5:95 principle and your existing network",
+    "slug": "5-95-principle",
+    "prompt_chars": 11707
+  },
+  {
+    "name": "LinkedIn Optimizer",
+    "program": "action",
+    "starter": "Let's Start!!!!",
+    "description": "Build powerful brand presence on LinkedIn",
+    "slug": "linkedin-optimizer",
+    "prompt_chars": 11025
+  },
+  {
+    "name": "Social Media Strategist",
+    "program": "action",
+    "starter": "Build my strategy",
+    "description": "Build a focused cross-platform social strategy — platforms worth your time, themes to own, posting rhythm, and repurposing",
+    "slug": "social-media-strategist",
+    "prompt_chars": 2831
+  },
+  {
+    "name": "Personal Brand Architect",
+    "program": "action",
+    "starter": "Architect my brand",
+    "description": "Nail what you stand for — positioning, pillars, point of view, voice and a 'known for' line — before any content",
+    "slug": "personal-brand-architect",
+    "prompt_chars": 2761
+  },
+  {
+    "name": "Client Workshop & Facilitation Designer",
+    "program": "mentorship",
+    "starter": "Design workshop",
+    "description": "Design a facilitated session that produces a real outcome — objectives, exercises, timeboxed agenda, facilitation prompts",
+    "slug": "client-workshop-and-facilitation-designer",
+    "prompt_chars": 3072
+  },
+  {
+    "name": "Communication Coach",
+    "program": "mentorship",
+    "starter": "Get Insights",
+    "description": "Turn your consulting work into a reframe, narrative, script and closing ask that commands any room",
+    "slug": "communication-coach",
+    "prompt_chars": 31207
+  },
+  {
+    "name": "Cross-Cultural Engagement Playbook",
+    "program": "mentorship",
+    "starter": "Build playbook",
+    "description": "Adapt your consulting style across cultures - communication, trust, negotiation, delivery",
+    "slug": "cross-cultural-engagement-playbook",
+    "prompt_chars": 5403
+  },
+  {
+    "name": "Engagement Retrospective & Lessons-Learned Builder",
+    "program": "mentorship",
+    "starter": "Run retro",
+    "description": "Run a structured post-engagement retro and convert loose reflection into reusable lessons that sharpen the next project",
+    "slug": "engagement-retrospective-and-lessons-learned-builder",
+    "prompt_chars": 2889
+  },
+  {
+    "name": "Socratic Thinking Partner",
+    "program": "mentorship",
+    "starter": "Question me",
+    "description": "Never hands answers — asks precise questions until you reach the answer yourself. Your value is what it makes you realize",
+    "slug": "socratic-thinking-partner",
+    "prompt_chars": 1903
+  },
+  {
+    "name": "Signature Offer / Productization Builder",
+    "program": "mentorship",
+    "starter": "Build offer",
+    "description": "Turn ad-hoc custom work into a named, repeatable signature offer with a methodology and tier ladder",
+    "slug": "signature-offer-productization-builder",
+    "prompt_chars": 5571
+  },
+  {
+    "name": "Client Red-Flag Screener",
+    "program": "mentorship",
+    "starter": "Vet this prospect",
+    "description": "Vet a prospect before you sign — scope, payment risk, expectations, fit — with a clear Take / Requalify / Walk verdict",
+    "slug": "client-red-flag-screener",
+    "prompt_chars": 3273
+  },
+  {
+    "name": "Engagement Economics & Capacity Planner",
+    "program": "mentorship",
+    "starter": "Run the numbers",
+    "description": "Turn a proposed engagement into real numbers — effective hourly, margin, time leaks — and decide if you have capacity",
+    "slug": "engagement-economics-and-capacity-planner",
+    "prompt_chars": 3051
+  },
+  {
+    "name": "Diagnostic Survey & Assessment Designer",
+    "program": "mentorship",
+    "starter": "Design diagnostic",
+    "description": "Design a questionnaire or maturity assessment — questions, scales, scoring, interpretation — to gather decision-grade evidence",
+    "slug": "diagnostic-survey-and-assessment-designer",
+    "prompt_chars": 2930
+  },
+  {
+    "name": "Real-Work Reviewer",
+    "program": "mentorship",
+    "starter": "Tear it apart",
+    "description": "Senior-partner red-line on your actual deck, proposal or model — specific, location-by-location, brutal on substance, constructive on the fix",
+    "slug": "real-work-reviewer",
+    "prompt_chars": 2058
+  },
+  {
+    "name": "Client-Facing Lead-Magnet Diagnostic",
+    "program": "mentorship",
+    "starter": "Configure & test",
+    "description": "An interactive diagnostic the consultant configures once and gives to prospects — a marketing engine, not an advisory tool",
+    "slug": "client-facing-lead-magnet-diagnostic",
+    "prompt_chars": 2018
+  },
+  {
+    "name": "Business Turnaround Simulation",
+    "program": "mentorship",
+    "starter": "Start the sim",
+    "description": "A turn-based simulation with persistent state — make the calls, the numbers move, the fallout sticks. A flight sim for judgment",
+    "slug": "business-turnaround-simulation",
+    "prompt_chars": 2132
+  },
+  {
+    "name": "Editorial Website Builder",
+    "program": "mentorship",
+    "starter": "Build my site",
+    "description": "Build an editorial-grade, multi-page consultant website ready to paste in Employz.ai",
+    "slug": "editorial-website-builder",
+    "prompt_chars": 20383
+  },
+  {
+    "name": "Referral & Case-Study Harvester",
+    "program": "mentorship",
+    "starter": "Harvest proof",
+    "description": "Turn finished engagements into testimonials, warm referrals, and polished case studies",
+    "slug": "referral-and-case-study-harvester",
+    "prompt_chars": 5740
+  },
+  {
+    "name": "Consultant's Operating Rhythm Builder",
+    "program": "mentorship",
+    "starter": "Build rhythm",
+    "description": "Design a sustainable weekly operating system that protects deep work and business development",
+    "slug": "consultant-s-operating-rhythm-builder",
+    "prompt_chars": 5578
+  },
+  {
+    "name": "Client Relationship Health Check",
+    "program": "mentorship",
+    "starter": "Check health",
+    "description": "Diagnose the true health of a client relationship and plan to strengthen, expand, or rescue it",
+    "slug": "client-relationship-health-check",
+    "prompt_chars": 5207
+  },
+  {
+    "name": "Daily Consulting Challenge",
+    "program": "mentorship",
+    "starter": "Today's challenge",
+    "description": "One scored challenge per session with escalating difficulty and a streak — a daily workout for consulting judgment",
+    "slug": "daily-consulting-challenge",
+    "prompt_chars": 1899
+  },
+  {
+    "name": "Book Builder",
+    "program": "mentorship",
+    "starter": "Let's write my book",
+    "description": "Write the first edition of your own business book in one guided conversation — blueprint, title, chapters in your voice, and a complete manuscript ready to copy into a Word or Google Doc.",
+    "slug": "book-builder",
+    "prompt_chars": 13285
+  },
+  {
+    "name": "Credibility Code",
+    "program": "mentorship",
+    "starter": "Build my Credibility Code",
+    "description": "Turn your career into a one-to-two page Credibility Code — headline, Evidence Map, proof stories and how to work with you — that proves you have done this before, at scale.",
+    "slug": "credibility-code",
+    "prompt_chars": 9713
+  },
+  {
+    "name": "Document Builder",
+    "program": "mentorship",
+    "starter": "Build my document suite",
+    "description": "Build your complete client document suite — pitch deck, service brief, proposal and engagement letter, plus seven ready templates from NDA to closure report — all from one intake.",
+    "slug": "document-builder",
+    "prompt_chars": 11265
+  },
+  {
+    "name": "Client Objective Decoder",
+    "program": "mentorship",
+    "starter": "Let's Go!!!",
+    "description": "Uncovers the real financial, process, or future-readiness objectives behind what a client says they want",
+    "slug": "client-objective-decoder",
+    "prompt_chars": 11186
+  },
+  {
+    "name": "Benchmarking Research Assistant",
+    "program": "mentorship",
+    "starter": "Let's Start!!!",
+    "description": "Suggests global, adjacent, and competitive benchmarks based on the industry or problem",
+    "slug": "benchmarking-research-assistant",
+    "prompt_chars": 11176
+  },
+  {
+    "name": "Holy Triad Interpreter",
+    "program": "mentorship",
+    "starter": "Let's Go!!!",
+    "description": "Analyzes Revenue Growth, Market Share, and Revenue Weightage to recommend where to focus",
+    "slug": "holy-triad-interpreter",
+    "prompt_chars": 10875
+  },
+  {
+    "name": "LinkedIn Content Strategist",
+    "program": "mentorship",
+    "starter": "Let's Start!!!",
+    "description": "Generates a 30-day LinkedIn content calendar tailored to your niche and ideal client",
+    "slug": "linkedin-content-strategist",
+    "prompt_chars": 11879
+  },
+  {
+    "name": "The Scope Clarifier",
+    "program": "mentorship",
+    "starter": "Let's Start!!",
+    "description": "Generates essential clarifying questions for consultants before solving any business problem",
+    "slug": "the-scope-clarifier",
+    "prompt_chars": 10892
+  },
+  {
+    "name": "Feasibility Prioritizer",
+    "program": "mentorship",
+    "starter": "Let's Start!!!",
+    "description": "Scores and ranks ideas or solutions on impact vs. feasibility with clear reasoning",
+    "slug": "feasibility-prioritizer",
+    "prompt_chars": 10817
+  },
+  {
+    "name": "Value Chain Analyst",
+    "program": "mentorship",
+    "starter": "Let's Go!!!",
+    "description": "Maps the full value chain working backwards from the desired outcome",
+    "slug": "value-chain-analyst",
+    "prompt_chars": 11060
+  },
+  {
+    "name": "Consulting Pricing Advisor",
+    "program": "mentorship",
+    "starter": "Let's Start!!!",
+    "description": "Recommends a pricing structure and negotiation tips based on niche, experience, and project type",
+    "slug": "consulting-pricing-advisor",
+    "prompt_chars": 11443
+  },
+  {
+    "name": "Consulting Jargon Translator",
+    "program": "mentorship",
+    "starter": "Let's Start!!!",
+    "description": "Explains corporate jargon in plain language with guidance on how and when to use it",
+    "slug": "consulting-jargon-translator",
+    "prompt_chars": 11140
+  },
+  {
+    "name": "Pricing Psychology Coach",
+    "program": "mentorship",
+    "starter": "Let's Start!!!",
+    "description": "Prepares consultants for pricing conversations with behavioral science and live buyer simulations",
+    "slug": "pricing-psychology-coach",
+    "prompt_chars": 10984
+  },
+  {
+    "name": "Noteology",
+    "program": "mentorship",
+    "starter": "—",
+    "description": "AI meeting note-taker — joins your calls, captures the transcript, and delivers a summary with insights and action items",
+    "slug": "noteology",
+    "prompt_chars": 116
+  },
+  {
+    "name": "Change Adoption & Buy-In Planner",
+    "program": "mentorship",
+    "starter": "Plan adoption",
+    "description": "Plan the human side of change so recommendations are actually accepted and used",
+    "slug": "change-adoption-and-buy-in-planner",
+    "prompt_chars": 6051
+  },
+  {
+    "name": "AI Workflow Designer for Consultants",
+    "program": "mentorship",
+    "starter": "Design workflow",
+    "description": "Redesign a consulting task into an AI-assisted workflow with the right human checkpoints",
+    "slug": "ai-workflow-designer-for-consultants",
+    "prompt_chars": 5482
+  },
+  {
+    "name": "Associate & Delegation Planner",
+    "program": "mentorship",
+    "starter": "Plan delegation",
+    "description": "Scale beyond your own hours — what to delegate, the brief for each handoff, and quality checkpoints — without rework",
+    "slug": "associate-and-delegation-planner",
+    "prompt_chars": 2906
+  }
+]
