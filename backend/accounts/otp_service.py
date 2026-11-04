@@ -43,9 +43,9 @@ MAX_PER_PHONE_DAY = 10
 MAX_PER_IP_HOUR = int(os.environ.get("OTP_MAX_PER_IP_HOUR", "1000") or 1000)
 MAX_ATTEMPTS = 5
 # Global brake on sends across the whole app, per clock minute (env OTP_MAX_PER_MINUTE, 0 = off). Stops a bot
-# farm from running up the SMS bill. 300 a minute lets a 500-person webinar QR rush through in about two minutes;
+# farm from running up the SMS bill. 1,200 a minute lets a webinar QR rush (500+ people in a minute) straight through;
 # anyone over it is told to try again in a minute.
-DEFAULT_MAX_PER_MINUTE = 300
+DEFAULT_MAX_PER_MINUTE = 1200          # a webinar QR moment is ~500 people in 1-2 minutes; leave room
 
 indexes.register("rate_counters", [("purge_at", 1)], {"expireAfterSeconds": 0})
 

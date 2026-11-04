@@ -28,6 +28,8 @@ Reference files: `features/brief.py`, `features/cases.py`, `features/linkedin.py
   - `features.common.run_metered(db, user, "<meter>", work, access="<feature>")` → counts one use, runs `work(plan)`,
     gives the use back if the work raises (AI/network). 402 when the month's limit is used.
   - Stored-item caps: `plans.cap("docs", plan)` etc.
+- AI output guards in `features.common`: put `NO_VENDOR` in every system prompt; run member-visible text through
+  `strip_providers`; use `as_list`/`as_dict` before slicing AI fields; `strip_links` on free text (links only from search).
 - AI: `llm.complete_json(task=..., system=..., prompt=..., fake=lambda: {...}, model="fast"|"strong")` or
   `llm.complete_chat(task=..., system=..., messages=[...], fake=lambda: "...")`. Always pass a deterministic `fake`
   built from the inputs (tests and QA run without keys). Validate every AI field (`features.common.text`, `clamp_int`,
@@ -37,7 +39,7 @@ Reference files: `features/brief.py`, `features/cases.py`, `features/linkedin.py
   audience, goal, consultant title, `blueprint` (FINALIZED NICHE text). `knowledge.system_block(k)` for prompts.
 - Akshat's original GPT prompts are in `backend/gpts/prompts/<slug>.md` (catalogue: `backend/gpts/catalog.json`).
   Where a tool matches one, follow its structure and rules.
-- Web search: `research.search.news(query, max_results)` → `[{title, url, source, published, snippet, test}]`.
+- Web search: `research.search.news(query, max_results)` → `[{title, url, source, published, snippet, test}]` (Anthropic web search; cached 6 hours per query). Page text: `research.search.extract(urls)`.
 - Audio: `audio.tts.speak(text)` → `(bytes, content_type)`; `audio.stt.transcribe(bytes, filename=, content_type=)` → text.
   Errors: `audio.tts.TTSError`, `audio.stt.STTError` → answer 503 with a plain message and refund.
 - Files: `media.save_blob(db, user_id=, kind=, content_type=, data=, name=, public=)` → id; `media.blob_url(id)`;
@@ -89,5 +91,5 @@ Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; page
   `App.js`, `AppShell.jsx`, `ui.jsx`, `common.jsx`, `features.js`, `index.css`) are read-only for you. If you need a
   change there, say so in your final report.
 - Don't start servers, don't run Playwright, don't run `git` commands.
-- Vendor APIs (Gamma, Tavily, OpenAI): check the official docs with web search before writing the live client;
+- Vendor APIs (Anthropic, Gemini, Razorpay, AiSensy, MSG91): check the official docs with web search before writing the live client;
   always keep a fake for tests/QA.

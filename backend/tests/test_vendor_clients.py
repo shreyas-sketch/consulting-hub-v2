@@ -160,6 +160,10 @@ async def test_search_goes_through_the_ai_guard(live_search, monkeypatch):
         seen.append((task, timeout))
         return await real(fn, task, timeout)
     monkeypatch.setattr(llm, "_guarded", spy)
+
+    async def no_cache(key):
+        return None
+    monkeypatch.setattr(search, "_cache_get", no_cache)       # an earlier test may have cached this query
     await search.news("Acme India")
     assert seen and seen[0][0] == "web_search"
 
@@ -352,3 +356,20 @@ async def test_stt_retries_once_when_busy(gemini_live, monkeypatch):
         {"type": "model_output", "content": [{"type": "text", "text": '{"text": ""}'}]}]})]
     async with _client(lambda req: replies.pop(0)) as c:
         assert await stt.transcribe(b"x" * 2000, client=c) == ""       # nothing said → empty text, not an error
+
+
+async def test_news_is_cached_for_six_hours(monkeypatch, mdb):
+    import state
+    state.set_db(mdb)
+    calls = []
+
+    async def fake_news(query, max_results=6, *, queue_wait=None):
+        calls.append(query)
+        return [{"title": "T", "url": "https://x.in/a", "source": "x.in", "published": "", "snippet": "s", "test": True}]
+    monkeypatch.setattr(search, "_news", fake_news)
+    a = await search.news("Cache Test Co  India", 5)
+    b = await search.news("cache test co india", 5)          # same query, other spacing/case → cached
+    assert a == b and len(calls) == 1
+    await mdb.search_cache.update_many({}, {"$set": {"purge_at": search.utcnow() - search.timedelta(minutes=1)}})
+    await search.news("cache test co india", 5)
+    assert len(calls) == 2                                    # expired → searched again

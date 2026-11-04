@@ -46,10 +46,47 @@ import re
 from typing import Any, Optional
 from urllib.parse import urlparse
 
+import hashlib
+from datetime import timedelta
+
+import indexes
 import llm
 from core.vendors import vendor_mode
+from growth.clock import utcnow
 
 log = logging.getLogger("search")
+
+# News answers are kept 6 hours per query (load test, 4 Nov): at a webinar many people brief the same few companies,
+# and each fresh search is a paid call that holds an AI slot for several seconds. TTL index clears old rows.
+CACHE_HOURS = 6
+indexes.register("search_cache", [("purge_at", 1)], {"expireAfterSeconds": 0})
+
+
+def _cache_key(query: str, n: int) -> str:
+    return hashlib.sha1(f"{' '.join(query.lower().split())}|{n}".encode()).hexdigest()
+
+
+async def _cache_get(key: str) -> Optional[list[dict]]:
+    try:
+        from state import db
+        row = await db().search_cache.find_one({"_id": key})
+    except Exception:  # noqa: BLE001 — no database bound (scripts) or a DB hiccup: just search
+        return None
+    if row and row.get("purge_at") and row["purge_at"].replace(tzinfo=row["purge_at"].tzinfo or utcnow().tzinfo) > utcnow():
+        return row.get("results") or []
+    return None
+
+
+async def _cache_put(key: str, results: list[dict]) -> None:
+    if not results:
+        return                       # don't keep "no news": the next try may find some
+    try:
+        from state import db
+        await db().search_cache.replace_one({"_id": key}, {"_id": key, "results": results,
+                                                           "purge_at": utcnow() + timedelta(hours=CACHE_HOURS)},
+                                            upsert=True)
+    except Exception:  # noqa: BLE001
+        pass
 
 SEARCH_TOOL = "web_search_20250305"
 FETCH_TOOL = "web_fetch_20250910"
@@ -214,10 +251,24 @@ def parse_search_reply(blocks: list[dict], n: int) -> list[dict]:
     return out
 
 
-async def news(query: str, max_results: int = 6) -> list[dict]:
+async def news(query: str, max_results: int = 6, *, queue_wait: Optional[float] = None) -> list[dict]:
+    key = _cache_key(query, max_results)
+    hit = await _cache_get(key)
+    if hit is not None:
+        return hit
+    found = await _news(query, max_results, queue_wait=queue_wait)
+    await _cache_put(key, found)
+    return found
+
+
+async def _news(query: str, max_results: int = 6, *, queue_wait: Optional[float] = None) -> list[dict]:
     m = mode()
-    if m == "fake":
-        return fake_results(query, min(max_results, 4))
+    if m == "fake":   # load tests (LLM_FAKE_LATENCY_MS) make this wait like a real search call and use the same queue
+        try:
+            return await llm._fake_with_latency(lambda: fake_results(query, min(max_results, 4)), "web_search",
+                                                queue_wait=queue_wait)
+        except llm.LLMError:
+            return []
     if m == "off" or not query.strip():
         return []
     n = max(1, min(10, int(max_results)))
@@ -227,7 +278,7 @@ async def news(query: str, max_results: int = 6) -> list[dict]:
     tool = {"type": SEARCH_TOOL, "name": "web_search", "max_uses": MAX_SEARCHES, "user_location": USER_LOCATION}
     try:
         reply = await llm.complete_with_tools(task="web_search", system=SEARCH_SYSTEM, prompt=prompt, tools=[tool],
-                                              model="fast", max_tokens=1500)
+                                              model="fast", max_tokens=1500, queue_wait=queue_wait)
     except llm.LLMError as e:          # a brief without news beats no brief
         log.warning("search failed: %s", e)
         return []

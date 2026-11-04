@@ -5,11 +5,12 @@ All routes are under `/api`. Login sets httpOnly cookies. Errors come back as `{
 - `403 {code: locked, feature, plan_needed}`: the plan doesn't include this tool
 - `402 {code: limit, feature, used, limit, plan_needed, once}`: the free go or this month's limit is used
 - `503 {code: ai_busy}` (or a tool's own 503): the AI or a vendor didn't answer; the go is given back
+- `429`: too many requests (login codes, public pages, fair-use caps)
 
 Full schema with request and reply shapes: `/api/swagger` on any running copy (`/api/openapi.json` for the raw file).
 Public pages outside `/api`: `/s/{slug}` and `/s/{slug}/{page}` (member websites), `/d/{id}` (shared diagnostic, served by the app).
 
-264 routes, grouped by area.
+270 routes, grouped by area.
 
 ## admin · akshat-questions
 
@@ -130,6 +131,7 @@ Public pages outside `/api`: `/s/{slug}` and `/s/{slug}/{page}` (member websites
 
 ## admin · website
 
+- `POST /api/admin/website/domains/{site_id}/check`
 - `POST /api/admin/website/domains/{site_id}`
 - `GET /api/admin/website/domains`
 
@@ -138,6 +140,11 @@ Public pages outside `/api`: `/s/{slug}` and `/s/{slug}/{page}` (member websites
 - `POST /api/admin/weekly/generate`
 - `POST /api/admin/weekly/{case_id}/active`
 - `GET /api/admin/weekly`
+
+## admin · whatsapp-templates
+
+- `POST /api/admin/whatsapp-templates/test`
+- `GET /api/admin/whatsapp-templates`
 
 ## akshat-ai
 
@@ -207,7 +214,9 @@ Public pages outside `/api`: `/s/{slug}` and `/s/{slug}/{page}` (member websites
 - `GET /api/decks/options`
 - `GET /api/decks/sources`
 - `GET /api/decks/{deck_id}/file`
+- `DELETE /api/decks/{deck_id}`
 - `GET /api/decks/{deck_id}`
+- `PATCH /api/decks/{deck_id}`
 - `GET /api/decks`
 - `POST /api/decks`
 
@@ -240,6 +249,7 @@ Public pages outside `/api`: `/s/{slug}` and `/s/{slug}/{page}` (member websites
 
 ## file
 
+- `POST /api/file/viewed`
 - `GET /api/file`
 
 ## gpts

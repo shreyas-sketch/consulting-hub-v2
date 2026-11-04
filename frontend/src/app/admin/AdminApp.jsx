@@ -17,6 +17,7 @@ import AdminLibrary from "./Library";
 import AdminRecaps from "./Recaps";
 import AdminBootcamps from "./Bootcamps";
 import AdminDomains from "./Domains";
+import AdminWhatsApp from "./WhatsApp";
 import AdminKnowledge from "./Knowledge";
 import AdminFeatures from "./Features";
 import AdminSettings from "./Settings";
@@ -46,6 +47,7 @@ export const GROUPS = [
   { name: "Control", pages: [
     { path: "features", label: "Switches", el: AdminFeatures },
     { path: "vendors", label: "Vendors", el: AdminVendors },
+    { path: "whatsapp", label: "WhatsApp templates", el: AdminWhatsApp },
     { path: "jobs", label: "Jobs", el: AdminJobs },
   ] },
 ];

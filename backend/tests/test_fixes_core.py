@@ -267,7 +267,7 @@ def test_otp_global_cap_per_minute(mdb, monkeypatch):
         assert e.value.code == "busy" and e.value.status == 429 and e.value.extra["retry_in"] == 40
         await otp_service._check_limits(mdb, "+919800000003", "1.1.1.3", now + timedelta(minutes=1))   # next minute
     run(go())
-    assert otp_service.DEFAULT_MAX_PER_MINUTE == 300
+    assert otp_service.DEFAULT_MAX_PER_MINUTE == 1200
 
 
 # ---------------------------------------------------------------- 7. metering is atomic ----

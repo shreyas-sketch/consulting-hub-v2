@@ -25,6 +25,11 @@ This is a new app. It does not touch the current hub (consultant.akshatdani.com)
 
 Calls are group calls only. There are no one-to-one calls anywhere in the app.
 
+**Outside services**: Razorpay (payments), MSG91 (SMS login codes), AiSensy (WhatsApp), Anthropic (all AI text and web
+search), Google Gemini (pitch videos and audio). Decks are made by the app itself.
+
+**Start here**: `docs/CONSULTATION_HUB_A_TO_Z.md` explains the whole app in plain words.
+
 ## Layout
 
 | Path | What |
@@ -33,8 +38,8 @@ Calls are group calls only. There are no one-to-one calls anywhere in the app.
 | `backend/gpts/` | All 52 GPT prompts from the current hub, one file each, for L1 and L2 (see its README) |
 | `frontend/` | React app in Akshat's design system (dark only), served by FastAPI |
 | `scripts/qa_server.py` | Whole app on sample data: no database, no keys, no network |
-| `scripts/loadtest/` | Webinar load test (Locust) |
-| `docs/` | Handover, QA report, load test, API, backend design, build guide; `docs/reference/` = the current hub's and the Leadership hub's working documents |
+| `scripts/loadtest/` | Load test: seed 10,000 accounts, then 500 webinar attendees or 500 paid members (Locust) |
+| `docs/` | A-to-Z guide, handover, WhatsApp templates, QA report, load test, API, backend design, build guide; `docs/reference/` = the current hub's and the Leadership hub's working documents |
 
 ## Run it locally (test mode)
 
@@ -47,7 +52,7 @@ cd ../backend && python ../scripts/qa_server.py      # http://localhost:8765
 Test mode: every vendor is fake, the OTP code shows on screen (000000 also works), and demo logins work:
 `POST /api/qa/login` with `{}` (free), `{"plan":"member"}`, `{"plan":"l1"}`, `{"plan":"l2"}` or `{"role":"admin"}`.
 
-Tests: `cd backend && pytest` (234 tests) · Build: `cd frontend && yarn build`
+Tests: `cd backend && pytest` · Build: `cd frontend && yarn build`
 
 ## Deploy
 

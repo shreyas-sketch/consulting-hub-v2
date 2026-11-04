@@ -459,3 +459,33 @@ async def kb_delete(doc_id: str, _: dict = Admin):
     return {"ok": True}
 
 
+
+
+# ------------------------------------------------------------------ WhatsApp templates ----
+@router.get("/whatsapp-templates")
+async def whatsapp_templates(_: dict = Admin):
+    from notify import templates
+    return templates.catalogue()
+
+
+class TemplateTestIn(BaseModel):
+    kind: str = Field(..., max_length=40)
+
+
+@router.post("/whatsapp-templates/test")
+async def whatsapp_template_test(body: TemplateTestIn, user: dict = Admin):
+    """Send one sample of an alert template to the admin's own mobile, to check the AiSensy campaign works."""
+    from notify import templates
+    from notify.channels import build_whatsapp
+    row = next((t for t in templates.ALERTS if t[0] == body.kind), None)
+    if not row:
+        raise HTTPException(404, {"code": "not_found", "msg": "No such message type."})
+    if not user.get("phone"):
+        raise HTTPException(400, {"code": "no_phone", "msg": "Your admin account has no mobile number. Log in with OTP."})
+    wa = build_whatsapp()
+    if wa is None:
+        raise HTTPException(409, {"code": "off", "msg": "WhatsApp isn't set up yet (AiSensy key missing)."})
+    kind, _t, _w, _o, sample, path, _c = row
+    title, _, text_ = sample.partition(" — ")
+    res = await wa.send(user, {"kind": kind, "title": title, "body": text_ or title, "link": "/" + path})
+    return {"ok": res.ok, "error": res.error, "campaign": templates.campaign_for(kind)}

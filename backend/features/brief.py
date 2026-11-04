@@ -84,7 +84,7 @@ async def make(body: BriefIn, user: dict = Depends(user_dep())):
         results = []
         if is_on("BRIEF_WEB_SEARCH"):
             q = f"{body.company} India" + (f" {body.website}" if body.website else "")
-            results = await search.news(q, max_results=6)
+            results = await search.news(q, max_results=6, queue_wait=45)
         raw = as_dict(await llm.complete_json(task="meeting_brief", system=SYSTEM, prompt=_prompt(body, results),
                                               fake=lambda: _fake(body, results), model="fast", max_tokens=1400,
                                               queue_wait=WEBINAR_QUEUE_WAIT))
