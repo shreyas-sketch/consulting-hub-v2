@@ -20,8 +20,19 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"),
 log = logging.getLogger("server")
 
 ROUTER_MODULES = [
-    "auth", "accounts.routes", "misc_routes", "notify.service", "billing.routes", "jobs.routes", "admin.routes",
+    "auth", "accounts.routes", "misc_routes", "notify.service", "billing.routes", "jobs.routes", "admin.routes", "media",
+    # stage 1 — webinar tools
     "features.readiness", "features.start", "features.cases", "features.brief", "features.linkedin", "features.file",
+    # ₹1,999 plan
+    "features.weekly", "features.decks", "features.visuals", "features.listen", "features.progress", "features.docs",
+    "features.website", "features.support",
+    # L1
+    "features.gpts", "features.akshat_ai", "features.program", "features.calls", "features.library", "features.recaps",
+    "features.offer_card", "features.stories", "features.insights", "features.portfolio", "features.pitch",
+    "features.notebook",
+    # L2
+    "features.network", "features.outreach", "features.radar", "features.call_prep", "features.proposals",
+    "features.diagnostic", "features.social", "features.bootcamps",
 ]
 
 
@@ -58,6 +69,8 @@ def create_app(db=None, *, start_jobs: bool | None = None, seed: bool | None = N
         if hasattr(mod, "bind"):
             mod.bind(db)
         api.include_router(mod.router)
+        if hasattr(mod, "public_router"):          # pages outside /api, e.g. member websites at /s/<name>
+            app.include_router(mod.public_router)
     app.include_router(api)
 
     run_jobs = settings.inprocess_scheduler if start_jobs is None else start_jobs

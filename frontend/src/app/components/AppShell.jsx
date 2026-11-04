@@ -5,11 +5,12 @@ import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from "react
 import { useQuery } from "@tanstack/react-query";
 import {
   Bell, BriefcaseBusiness, CreditCard, FileText, Gauge, Grid2x2, Home, IdCard, Lock, LogOut, Menu, Shield, Target, User, X,
-  ClipboardList,
+  ClipboardList, LifeBuoy, ChevronRight, Sparkles,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { captureAttribution, track } from "@/lib/attribution";
+import { FEATURES, MENU_GROUPS, PLAN_RANK } from "@/lib/features";
 import brand from "@/brand";
 import Logo from "./Logo";
 import { PlanChip } from "./common";
@@ -27,6 +28,7 @@ export const NAV_MAIN = [
 const NAV_ACCOUNT = [
   { to: "/app/tools", key: "tools", label: "All tools", sub: "What each plan opens", icon: Grid2x2 },
   { to: "/app/plans", key: "plans", label: "Plans", sub: "₹1,999 plan and L1", icon: CreditCard },
+  { to: "/app/support", key: "support", label: "Support", sub: "Ask the team", icon: LifeBuoy, feature: "support" },
   { to: "/app/inbox", key: "inbox", label: "Inbox", sub: "Messages from the team", icon: Bell },
   { to: "/app/account", key: "account", label: "Account", sub: "Profile, plan, usage", icon: User },
 ];
@@ -66,6 +68,28 @@ function GroupLabel({ children }) {
   return <div className="px-3 pt-4 pb-1 text-[11px] font-medium uppercase tracking-kicker text-bz-gold">{children}</div>;
 }
 
+// A plan's tools: open by default when the member's plan includes them, folded (with a lock) when not.
+function PlanGroup({ g, mine, onGo, locked }) {
+  const open = PLAN_RANK[mine] >= PLAN_RANK[g.plan];
+  const { pathname } = useLocation();
+  const here = g.keys.some((k) => FEATURES[k].to && pathname.startsWith(FEATURES[k].to));
+  return (
+    <details open={open || here} className="group">
+      <summary className="list-none cursor-pointer flex items-center justify-between px-3 pt-4 pb-1 select-none">
+        <span className="text-[11px] font-medium uppercase tracking-kicker text-bz-gold">{g.label}</span>
+        <span className="flex items-center gap-1 text-bz-faint">
+          {!open && <Lock className="w-3 h-3" aria-label="Not on your plan" />}
+          <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" aria-hidden />
+        </span>
+      </summary>
+      {g.keys.map((k) => (
+        <NavItem key={k} onGo={onGo} locked={locked({ feature: k })}
+          item={{ to: FEATURES[k].to, key: k, label: FEATURES[k].name, sub: FEATURES[k].what, icon: Sparkles }} />
+      ))}
+    </details>
+  );
+}
+
 function MenuBody({ onGo, user, plan, unread, onLogout }) {
   const feat = plan?.features || {};
   const admin = user?.role === "admin";
@@ -78,6 +102,7 @@ function MenuBody({ onGo, user, plan, unread, onLogout }) {
       <nav aria-label="Main" className="mt-2 flex flex-col gap-0.5 overflow-y-auto no-scrollbar -mx-1 px-1 pb-2 flex-1 min-h-0">
         <GroupLabel>Your tools</GroupLabel>
         {NAV_MAIN.map((i) => <NavItem key={i.to} item={i} onGo={onGo} locked={locked(i)} />)}
+        {MENU_GROUPS.map((g) => <PlanGroup key={g.plan} g={g} mine={admin ? "l2" : plan?.plan || "free"} onGo={onGo} locked={locked} />)}
         <GroupLabel>You</GroupLabel>
         {NAV_ACCOUNT.map((i) => <NavItem key={i.to} item={i} onGo={onGo} badge={i.key === "inbox" ? unread : 0} />)}
         {admin && <NavItem item={{ to: "/admin", key: "admin", label: "Admin panel", sub: "Team only", icon: Shield }} onGo={onGo} />}

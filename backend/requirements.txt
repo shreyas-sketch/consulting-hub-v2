@@ -31,3 +31,8 @@ APScheduler==3.11.0
 python-dotenv==1.1.0
 sentry-sdk[fastapi]==2.27.0
 tzdata==2025.2
+
+# Documents and sites (stage 2–4)
+pypdf==5.4.0
+python-docx==1.1.2
+jinja2==3.1.6

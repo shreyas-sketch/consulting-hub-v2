@@ -49,57 +49,109 @@ def monthly_value(plan: str, period: str) -> float:
 # Lowest plan that opens each feature. `built` = stage it ships in (the menu shows later ones as "being built").
 FEATURES: dict[str, dict] = {
     # webinar tools — free accounts get one go each
-    "readiness": {"min": "free", "name": "Readiness Score", "stage": 1},
-    "start": {"min": "free", "name": "Starting Point", "stage": 1},
-    "case": {"min": "free", "name": "Weekly Case", "stage": 1},
-    "brief": {"min": "free", "name": "Meeting Brief", "stage": 1},
-    "linkedin": {"min": "free", "name": "LinkedIn Score", "stage": 1},
-    "file": {"min": "free", "name": "My Consulting File", "stage": 1},
+    "readiness": {"min": "free", "name": "Readiness Score"},
+    "start": {"min": "free", "name": "Starting Point"},
+    "case": {"min": "free", "name": "Weekly Case"},
+    "brief": {"min": "free", "name": "Meeting Brief"},
+    "linkedin": {"min": "free", "name": "LinkedIn Score"},
+    "file": {"min": "free", "name": "My Consulting File"},
     # ₹1,999 plan
-    "linkedin_improve": {"min": "member", "name": "LinkedIn rewrites", "stage": 1},
-    "presentation": {"min": "member", "name": "Presentation Builder", "stage": 2},
-    "visuals": {"min": "member", "name": "Visual Builder", "stage": 2},
-    "website": {"min": "member", "name": "Website Builder", "stage": 2},
-    "listen": {"min": "member", "name": "Listen mode", "stage": 2},
-    "doc_reader": {"min": "member", "name": "Doc Reader", "stage": 2},
-    "progress": {"min": "member", "name": "Progress Report", "stage": 2},
+    "linkedin_improve": {"min": "member", "name": "LinkedIn rewrites"},
+    "presentation": {"min": "member", "name": "Presentation Builder"},
+    "visuals": {"min": "member", "name": "Visual Builder"},
+    "website": {"min": "member", "name": "Website Builder"},
+    "listen": {"min": "member", "name": "Listen mode"},
+    "doc_reader": {"min": "member", "name": "Doc Reader"},
+    "progress": {"min": "member", "name": "Progress Report"},
+    "support": {"min": "member", "name": "Support"},
     # L1
-    "action_tools": {"min": "l1", "name": "Action Hub tools", "stage": 3},
-    "calls": {"min": "l1", "name": "Group calls with Akshat", "stage": 3},
-    "recordings": {"min": "l1", "name": "Recordings and workbooks", "stage": 3},
-    "offer_card": {"min": "l1", "name": "Offer Card", "stage": 3},
-    "story_bank": {"min": "l1", "name": "Career Story Bank", "stage": 3},
-    "insight_pack": {"min": "l1", "name": "Industry Insight Pack", "stage": 3},
-    "portfolio": {"min": "l1", "name": "Portfolio Project", "stage": 3},
-    "akshat_ai": {"min": "l1", "name": "Akshat AI", "stage": 3},
-    "pitch": {"min": "l1", "name": "Pitch Practice", "stage": 3},
-    "research": {"min": "l1", "name": "Research Notebook", "stage": 3},
-    "recaps": {"min": "l1", "name": "Session Recap Pack", "stage": 3},
+    "program": {"min": "l1", "name": "4-3-2-1 action program"},
+    "action_tools": {"min": "l1", "name": "Action Hub tools"},
+    "calls": {"min": "l1", "name": "Group calls with Akshat"},
+    "recordings": {"min": "l1", "name": "Recordings and workbooks"},
+    "offer_card": {"min": "l1", "name": "Offer Card"},
+    "story_bank": {"min": "l1", "name": "Career Story Bank"},
+    "insight_pack": {"min": "l1", "name": "Industry Insight Pack"},
+    "portfolio": {"min": "l1", "name": "Portfolio Project"},
+    "akshat_ai": {"min": "l1", "name": "Akshat AI"},
+    "pitch": {"min": "l1", "name": "Pitch Practice"},
+    "research": {"min": "l1", "name": "Research Notebook"},
+    "recaps": {"min": "l1", "name": "Session Recap Pack"},
     # L2
-    "mentorship_tools": {"min": "l2", "name": "Mentorship tools", "stage": 4},
-    "network_finder": {"min": "l2", "name": "Warm Network Finder", "stage": 4},
-    "outreach": {"min": "l2", "name": "Outreach Drafter", "stage": 4},
-    "radar": {"min": "l2", "name": "Opportunity Radar", "stage": 4},
-    "call_prep": {"min": "l2", "name": "Discovery Call Prep", "stage": 4},
-    "proposal": {"min": "l2", "name": "Proposal Follow-through", "stage": 4},
-    "client_diagnostic": {"min": "l2", "name": "Client Diagnostic", "stage": 4},
-    "social_builder": {"min": "l2", "name": "Social Media Builder", "stage": 4},
+    "mentorship_tools": {"min": "l2", "name": "Mentorship tools"},
+    "network_finder": {"min": "l2", "name": "Warm Network Finder"},
+    "outreach": {"min": "l2", "name": "Outreach Drafter"},
+    "radar": {"min": "l2", "name": "Opportunity Radar"},
+    "call_prep": {"min": "l2", "name": "Discovery Call Prep"},
+    "proposal": {"min": "l2", "name": "Proposal Follow-through"},
+    "client_diagnostic": {"min": "l2", "name": "Client Diagnostic"},
+    "social_builder": {"min": "l2", "name": "Social Media Builder"},
+    "bootcamps": {"min": "l2", "name": "Bootcamps"},
+    "events": {"min": "l2", "name": "L2 events"},
 }
 FEATURE_MIN = {k: v["min"] for k, v in FEATURES.items()}
 FEATURE_NAMES = {k: v["name"] for k, v in FEATURES.items()}
 
 # Monthly limits (None = no limit, fair use applies). Free = once for life (the webinar go).
+def _lim(member: Optional[int], l1: Optional[int], l2: Optional[int], free: Optional[int] = 0) -> dict:
+    return {"free": free, "member": member, "l1": l1, "l2": l2}
+
+
+# Monthly limits (None = no limit, fair use applies). Free = once for life (the webinar go); 0 = not on the plan.
 LIMITS: dict[str, dict[str, Optional[int]]] = {
-    "readiness": {"free": 1, "member": 1, "l1": 1, "l2": 1},
-    "start": {"free": 1, "member": 5, "l1": 10, "l2": 10},
-    "goal": {"free": 1, "member": None, "l1": None, "l2": None},
-    "case": {"free": 1, "member": 8, "l1": 12, "l2": 12},
-    "brief": {"free": 1, "member": 4, "l1": 8, "l2": 8},
-    "linkedin": {"free": 1, "member": 2, "l1": 4, "l2": 4},
+    # webinar tools
+    "readiness": _lim(1, 1, 1, free=1),
+    "start": _lim(5, 10, 10, free=1),
+    "goal": _lim(None, None, None, free=1),
+    "case": _lim(8, 12, 12, free=1),
+    "brief": _lim(4, 8, 8, free=1),
+    "linkedin": _lim(2, 4, 4, free=1),
+    # ₹1,999 plan
+    "presentation": _lim(2, 6, 6),
+    "visuals": _lim(10, 30, 30),
+    "audio": _lim(5, 10, 10),            # Listen mode and Insight Pack audio
+    "doc_q": _lim(60, 150, 300),         # questions to Doc Reader and Research Notebook
+    "progress": _lim(1, 1, 1),
+    "site_ai": _lim(20, 60, 100),        # Website Builder AI writes and edits
+    # L1
+    "gpt": _lim(0, 300, 600),            # messages to the Action Hub (L1) and Mentorship (L2) tools
+    "akshat_ai": _lim(0, 30, 60),
+    "pitch": _lim(0, 4, 4),
+    "offer_card": _lim(0, 10, 10),
+    "story": _lim(0, 6, 6),              # Career Story Bank: one story a week
+    "insight": _lim(0, 2, 2),
+    "portfolio": _lim(0, 2, 2),
+    # L2
+    "contacts": _lim(0, 0, 50),          # Warm Network Finder: contacts scored
+    "outreach": _lim(0, 0, 100),
+    "radar": _lim(0, 0, 10),             # Opportunity Radar: companies found
+    "call_prep": _lim(0, 0, 20),
+    "proposal": _lim(0, 0, 20),
+    "diagnostic": _lim(0, 0, 20),
+    "posts": _lim(0, 0, 30),
 }
 LIMIT_UNITS = {"readiness": "Readiness Scores", "start": "Niche Snapshots", "goal": "Goal Map changes",
-               "case": "case answers", "brief": "Meeting Briefs", "linkedin": "LinkedIn checks"}
+               "case": "case answers", "brief": "Meeting Briefs", "linkedin": "LinkedIn checks",
+               "presentation": "decks", "visuals": "visuals", "audio": "audio versions", "doc_q": "document questions",
+               "progress": "Progress Reports", "site_ai": "website AI edits", "gpt": "messages to the tools",
+               "akshat_ai": "questions to Akshat AI", "pitch": "pitch practices", "offer_card": "Offer Cards",
+               "story": "career stories", "insight": "Insight Packs", "portfolio": "portfolio projects",
+               "contacts": "contacts scored", "outreach": "outreach drafts", "radar": "companies",
+               "call_prep": "call preps", "proposal": "proposals", "diagnostic": "diagnostics", "posts": "posts"}
 FAIR_USE = {"goal": 60}
+
+# Stored-item caps by plan (not monthly): checked by the module that stores them.
+CAPS = {
+    "docs": {"member": 5, "l1": 20, "l2": 20},             # Doc Reader documents kept at a time
+    "research_projects": {"member": 0, "l1": 4, "l2": 8},  # Research Notebook projects
+    "site_pages": {"member": 1, "l1": 5, "l2": 5},         # Website Builder pages
+    "custom_domain": {"member": 0, "l1": 1, "l2": 1},
+}
+
+
+def cap(name: str, plan: str) -> int:
+    return int(CAPS.get(name, {}).get(plan, 0) or 0)
+
 
 CATALOG = [
     {"id": "free", "name": "Free account", "periods": [], "features": [
@@ -251,7 +303,8 @@ async def consume(db, user: dict, feature: str, plan: Optional[str] = None) -> d
     key = usage_key(uid, plan)
     if limit == 0:
         await events.track(db, "locked_hit", user_id=uid, props={"feature": feature, "plan": plan})
-        raise locked_error(feature, "member")
+        need = next((p for p in PLANS if RANK[p] > RANK[plan] and LIMITS[feature][p] != 0), "member")
+        raise locked_error(feature, need)
     doc = await db.usage.find_one({"_id": key}) or {}
     used = int(doc.get(feature, 0))
     cap = limit if limit is not None else FAIR_USE.get(feature)

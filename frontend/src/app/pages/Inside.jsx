@@ -100,7 +100,6 @@ export default function Inside() {
                 {t.keys.map((k) => (
                   <li key={k} className="text-[14px] leading-snug">
                     <span className="font-bold">{FEATURES[k].name}</span>
-                    {FEATURES[k].stage > 1 && <span className="text-[11px] font-bold text-bz-muted"> · coming soon</span>}
                   </li>
                 ))}
               </ul>

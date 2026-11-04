@@ -21,9 +21,8 @@ REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
     "msg91": ("MSG91_AUTH_KEY", "MSG91_OTP_TEMPLATE_ID"),
     "anthropic": ("ANTHROPIC_API_KEY",),
     "search": ("SEARCH_API_KEY",),          # web search for Meeting Briefs (Tavily by default, SEARCH_PROVIDER)
-    "gamma": ("GAMMA_API_KEY",),            # Presentation Builder (stage 2)
-    "tts": ("TTS_API_KEY",),                # Listen mode audio (stage 2)
-    "gemini": ("GEMINI_API_KEY",),          # Pitch Practice video feedback (stage 3)
+    "gamma": ("GAMMA_API_KEY",),            # Presentation Builder
+    "openai": ("OPENAI_API_KEY",),          # audio: text-to-speech (Listen mode, recaps) and speech-to-text (Story Bank, Pitch Practice)
 }
 
 KEYLESS: set[str] = set()

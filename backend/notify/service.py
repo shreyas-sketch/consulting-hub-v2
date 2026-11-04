@@ -29,6 +29,10 @@ KINDS = {"weekly_case", "group_session", "l2", "billing", "system"}
 _state = {"db": None, "wa": None, "wa_built": False}
 
 
+def register_kind(kind: str) -> None:
+    KINDS.add(kind)
+
+
 def bind(db) -> None:
     _state["db"] = db
 

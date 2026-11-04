@@ -24,6 +24,19 @@ const Tools = lazy(() => import("@/app/pages/Tools"));
 const Inbox = lazy(() => import("@/app/pages/Inbox"));
 const Account = lazy(() => import("@/app/pages/Account"));
 const AppPlans = lazy(() => import("@/app/pages/AppPlans"));
+// ₹1,999 plan, L1 and L2 tools (one file each; "x" and "x/:id" both go to the same screen)
+const P = (name) => lazy(() => import(`./app/pages/${name}.jsx`));
+const TOOL_ROUTES = [
+  ["decks", "Decks"], ["visuals", "Visuals"], ["website", "Website"], ["listen", "Listen"], ["docs", "Docs"],
+  ["progress", "Progress"], ["support", "Support"],
+  ["program", "Program"], ["calls", "Calls"], ["library", "Library"], ["recaps", "Recaps"], ["gpt", "GptChat"],
+  ["akshat-ai", "AkshatAI"], ["offer", "OfferCard"], ["stories", "Stories"], ["insights", "Insights"],
+  ["portfolio", "Portfolio"], ["pitch", "Pitch"], ["research", "Research"],
+  ["network", "Network"], ["outreach", "Outreach"], ["radar", "Radar"], ["call-prep", "CallPrep"],
+  ["proposals", "Proposals"], ["diagnostic", "Diagnostic"], ["social", "Social"], ["bootcamps", "Bootcamps"],
+].map(([path, name]) => [path, P(name)]);
+const Gpts = P("Gpts");
+const DiagnosticPublic = P("DiagnosticPublic");
 const AdminApp = lazy(() => import("@/app/admin/AdminApp"));
 const AdminLogin = lazy(() => import("@/app/admin/AdminLogin"));
 
@@ -41,6 +54,7 @@ export default function App() {
             <Route path="/plans" element={<PublicPlans />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/d/:id" element={<DiagnosticPublic />} />
 
             <Route path="/app" element={<RequireAuth><AppShell /></RequireAuth>}>
               <Route index element={<Home />} />
@@ -56,6 +70,12 @@ export default function App() {
               <Route path="inbox" element={<Inbox />} />
               <Route path="account" element={<Account />} />
               <Route path="plans" element={<AppPlans />} />
+              <Route path="hub" element={<Gpts program="action" />} />
+              <Route path="mentorship" element={<Gpts program="mentorship" />} />
+              {TOOL_ROUTES.map(([path, El]) => [
+                <Route key={path} path={path} element={<El />} />,
+                <Route key={`${path}-id`} path={`${path}/:id`} element={<El />} />,
+              ])}
               <Route path="*" element={<Navigate to="/app" replace />} />
             </Route>
 

@@ -17,7 +17,7 @@ export default function Tools() {
   const mine = user?.role === "admin" ? "l2" : plan?.plan || "free";
   return (
     <div className="space-y-5">
-      <PageHeader kicker="All tools" title="What each plan" accent="opens." sub={`You're on the ${PLAN_LABEL[mine]}. Tools marked "coming soon" are being built and switch on by themselves.`} />
+      <PageHeader kicker="All tools" title="What each plan" accent="opens." sub={`You're on the ${PLAN_LABEL[mine]}. Tap any tool on your plan to open it.`} />
       {GROUPS.map((g) => {
         const items = Object.entries(FEATURES).filter(([, f]) => f.plan === g.plan);
         const open = PLAN_RANK[mine] >= PLAN_RANK[g.plan];
@@ -28,7 +28,7 @@ export default function Tools() {
               {open ? <Chip tone="gold">On your plan</Chip> : <Link to={`/app/plans?plan=${g.plan === "l2" ? "l1" : g.plan}&from=tools`} className="text-[13px] font-bold text-bz-gold min-h-[36px] inline-flex items-center">See plan</Link>}
             </div>
             {items.map(([key, f]) => {
-              const live = f.stage === 1;
+              const live = !!f.to;
               const body = (
                 <div className="flex items-start gap-3 py-3 border-b border-bz-line last:border-0">
                   <div className="min-w-0 flex-1">

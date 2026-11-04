@@ -24,6 +24,11 @@ JOBS: dict[str, tuple[str, tuple, str]] = {
 }
 
 
+def register(name: str, label: str, schedule: tuple, path: str) -> None:
+    """Feature modules add their jobs at import time. schedule: ("daily", h, m) | ("weekly", weekday, h, m) | ("every", minutes)."""
+    JOBS[name] = (label, schedule, path)
+
+
 @dataclass
 class Ctx:
     db: object

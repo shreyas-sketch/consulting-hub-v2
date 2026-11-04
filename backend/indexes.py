@@ -35,6 +35,11 @@ INDEXES = [
 ]
 
 
+def register(coll: str, keys: list, opts: dict | None = None) -> None:
+    """Feature modules add their indexes at import time."""
+    INDEXES.append((coll, keys, opts or {}))
+
+
 async def ensure_indexes(db) -> None:
     for coll, keys, opts in INDEXES:
         try:

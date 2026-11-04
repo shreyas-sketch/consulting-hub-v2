@@ -8,6 +8,14 @@ import Pulse from "./Pulse";
 import Webinar from "./Webinar";
 import Users from "./Users";
 import Live from "./Live";
+import AdminSupport from "./Support";
+import AdminQuestions from "./Questions";
+import AdminWeekly from "./Weekly";
+import AdminProgram from "./Program";
+import AdminCalls from "./Calls";
+import AdminLibrary from "./Library";
+import AdminRecaps from "./Recaps";
+import AdminBootcamps from "./Bootcamps";
 import AdminKnowledge from "./Knowledge";
 import AdminFeatures from "./Features";
 import AdminSettings from "./Settings";
@@ -16,8 +24,23 @@ import AdminJobs from "./Jobs";
 
 export const GROUPS = [
   { name: "Overview", pages: [{ path: "", label: "Pulse", el: Pulse }, { path: "live", label: "Live now", el: Live }, { path: "webinar", label: "Webinar", el: Webinar }] },
-  { name: "People", pages: [{ path: "users", label: "Members", el: Users }] },
-  { name: "Content", pages: [{ path: "settings", label: "Live case & group session", el: AdminSettings }, { path: "kb", label: "Knowledge base", el: AdminKnowledge }] },
+  { name: "People", pages: [
+    { path: "users", label: "Members", el: Users },
+    { path: "support", label: "Support inbox", el: AdminSupport },
+    { path: "questions", label: "Akshat AI questions", el: AdminQuestions },
+  ] },
+  { name: "Program", pages: [
+    { path: "program", label: "4-3-2-1 program", el: AdminProgram },
+    { path: "calls", label: "Calls and events", el: AdminCalls },
+    { path: "recaps", label: "Session recaps", el: AdminRecaps },
+    { path: "library", label: "Recordings and workbooks", el: AdminLibrary },
+    { path: "bootcamps", label: "Bootcamps", el: AdminBootcamps },
+  ] },
+  { name: "Content", pages: [
+    { path: "settings", label: "Live case & group session", el: AdminSettings },
+    { path: "weekly", label: "Weekly case", el: AdminWeekly },
+    { path: "kb", label: "Knowledge base", el: AdminKnowledge },
+  ] },
   { name: "Control", pages: [
     { path: "features", label: "Switches", el: AdminFeatures },
     { path: "vendors", label: "Vendors", el: AdminVendors },

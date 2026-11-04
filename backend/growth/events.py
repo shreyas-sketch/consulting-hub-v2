@@ -61,6 +61,13 @@ EVENTS: dict[str, str] = {
     "feature_toggled": "Admin switched a feature (props.key, on)",
 }
 
+def register(name: str, desc: str, client: bool = False) -> None:
+    """Feature modules add their own event names at import time (keeps the registry closed to typos)."""
+    EVENTS[name] = desc
+    if client:
+        CLIENT_EVENTS.add(name)
+
+
 CLIENT_EVENTS = {"page_view", "tool_opened", "upgrade_viewed", "checkout_opened", "share_clicked", "group_session_clicked"}
 
 _ANON_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")

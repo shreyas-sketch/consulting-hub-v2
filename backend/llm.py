@@ -159,3 +159,26 @@ async def complete_text(*, task: str, system: str, prompt: str, fake: Callable[[
     except Exception as e:  # noqa: BLE001
         log.warning("LLM task %s failed: %s", task, e)
         raise LLMError(f"AI call failed: {type(e).__name__}") from e
+
+
+async def complete_chat(*, task: str, system: str, messages: list[dict], fake: Callable[[], str],
+                        model: str = "fast", max_tokens: int = 2048) -> str:
+    """Multi-turn chat: messages = [{"role": "user"|"assistant", "content": str}, ...] ending with a user turn.
+    Returns the assistant's text. Same queue, timeout and fake rules as complete_json."""
+    m = mode()
+    if m == "fake":
+        return await _fake_with_latency(fake, task)
+    if m == "off":
+        raise LLMError("AI is not configured (ANTHROPIC_API_KEY).")
+    msgs = [{"role": x["role"], "content": str(x["content"])} for x in messages if x.get("content")]
+
+    async def call():
+        resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs)
+        return "".join(getattr(b, "text", "") for b in resp.content)
+    try:
+        return (await _guarded(call, task)).strip()
+    except LLMError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.warning("LLM task %s failed: %s", task, e)
+        raise LLMError(f"AI call failed: {type(e).__name__}") from e
