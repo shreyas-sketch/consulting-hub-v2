@@ -121,10 +121,12 @@ def test_job_skips_when_search_finds_nothing(seeded_client, mdb, monkeypatch):
     async def empty(q, max_results=6, **kw):
         return []
     monkeypatch.setattr(search, "news", empty)
-    from features.weekly import job_weekly_case
+    import pytest
+    from features.weekly import WeeklyCaseNotMade, job_weekly_case
     from jobs.registry import Ctx
     from growth.clock import utcnow
-    assert run(job_weekly_case(Ctx(mdb, utcnow())))["skipped"] == "no_news"
+    with pytest.raises(WeeklyCaseNotMade, match="no_news"):           # recorded as a failed run, retried later
+        run(job_weekly_case(Ctx(mdb, utcnow())))
     assert run(mdb.cases.count_documents({"origin": "news"})) == 0
 
 

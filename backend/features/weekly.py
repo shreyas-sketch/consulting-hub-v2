@@ -8,9 +8,12 @@ search result, never from the AI. Bad AI output is skipped, never published.
 
     cases {..., kind: "weekly", week: "YYYY-Www", origin: "news", source: {title, url}, test, active, created_at}
 
-When a newer week's case is published, older weekly cases stay active as practice cases (kind "practice", week and
-source kept), so their answers stay reachable and only the current week shows the "This week" chip.
-Members on any paid plan get an inbox alert (once per week, deduped).
+When a new case is published (a newer week, or "Make one now" again in the same week), every other weekly case
+becomes a practice case (kind "practice", week and source kept), so answers stay reachable and only the newest case
+shows the "This week" chip. Members on any paid plan get an inbox alert (once per week, deduped).
+
+Jobs: "weekly_case" (Mon 06:30 IST) fails (ok: false in Admin › Jobs) when no news came back or the AI output failed
+the checks; "weekly_case_retry" (daily 10:30 IST) tries again only while this week has no case at all.
 
 Admin: GET /admin/weekly · POST /admin/weekly/generate · POST /admin/weekly/{id}/active {active}
 """
@@ -49,6 +52,8 @@ notify.register_kind("weekly_case")
 indexes.register("cases", [("origin", 1), ("week", -1)], {"sparse": True})
 registry.register("weekly_case", "Publish the weekly case from real Indian business news", ("weekly", 0, 6, 30),
                   "features.weekly:job_weekly_case")
+registry.register("weekly_case_retry", "Weekly case: try again if this week has none yet", ("daily", 10, 30),
+                  "features.weekly:job_weekly_case_retry")
 
 # Rotated one per run. Plain news queries; the AI then picks the story that makes the best case.
 QUERIES = [
@@ -80,6 +85,10 @@ SYSTEM = (
 
 class LLMSkip(llm.LLMError):
     """AI output that fails validation: the case is not published."""
+
+
+class WeeklyCaseNotMade(RuntimeError):
+    """A scheduled run made no case (no news, or AI output that failed the checks): the run is recorded as failed."""
 
 
 def week_key(now: Optional[datetime] = None) -> str:
@@ -233,8 +242,9 @@ async def make_weekly_case(d, now: Optional[datetime] = None) -> dict:
            "source": {"title": r["title"][:200], "url": r["url"][:500]}, "test": bool(r.get("test")),
            "query": query, "active": True, "created_at": now}
     await d.cases.insert_one(doc)
-    # Older weeks stay as practice cases: answers remain reachable, only this week is "This week".
-    await d.cases.update_many({"origin": "news", "kind": "weekly", "week": {"$lt": week}}, {"$set": {"kind": "practice"}})
+    # Every other weekly case (older weeks, or an earlier one made this week) stays as a practice case: answers remain
+    # reachable, and only the newest case is "This week".
+    await d.cases.update_many({"origin": "news", "kind": "weekly", "_id": {"$ne": doc["_id"]}}, {"$set": {"kind": "practice"}})
     await events.track(d, "weekly_case_published", props={"case_id": doc["_id"], "week": week,
                                                           "company": case["company"][:60], "test": doc["test"]})
     sent = await notify.alert_many(d, await _recipients(d), "weekly_case", "This week's case is ready",
@@ -243,12 +253,28 @@ async def make_weekly_case(d, now: Optional[datetime] = None) -> dict:
     return {"published": doc["_id"], "week": week, "company": case["company"], "alerts": sent, "test": doc["test"]}
 
 
+def _made(res: dict) -> dict:
+    """A scheduled run that made nothing raises, so job_runs records ok: false and Admin › Jobs shows it failed."""
+    if res.get("published"):
+        return res
+    raise WeeklyCaseNotMade(f"{res.get('skipped')}: {res.get('reason') or res.get('query') or ''}"[:200])
+
+
 async def job_weekly_case(ctx) -> dict:
     """Monday 06:30 IST. One case a week: a re-run in the same week does nothing."""
     week = week_key(ctx.now)
     if await ctx.db.cases.find_one({"origin": "news", "week": week, "active": {"$ne": False}}, {"_id": 1}):
         return {"skipped": "already_published", "week": week}
-    return await make_weekly_case(ctx.db, ctx.now)
+    return _made(await make_weekly_case(ctx.db, ctx.now))
+
+
+async def job_weekly_case_retry(ctx) -> dict:
+    """Daily 10:30 IST. Runs only while this week has no case at all (a case the team switched off counts as one,
+    so a hidden case is not replaced behind their back)."""
+    week = week_key(ctx.now)
+    if await ctx.db.cases.find_one({"origin": "news", "week": week}, {"_id": 1}):
+        return {"skipped": "already_published", "week": week}
+    return _made(await make_weekly_case(ctx.db, ctx.now))
 
 
 # ------------------------------------------------------------------ admin ----
@@ -265,7 +291,7 @@ async def admin_list(_: dict = Admin):
     rows = []
     async for c in d.cases.find({"origin": "news"}).sort([("week", -1), ("created_at", -1)]).limit(100):
         rows.append(_row(c, await d.case_answers.count_documents({"case_id": c["_id"]})))
-    last = await d.job_runs.find_one({"name": "weekly_case"}, sort=[("at", -1)])
+    last = await d.job_runs.find_one({"name": {"$in": ["weekly_case", "weekly_case_retry"]}}, sort=[("at", -1)])
     return {"items": rows, "schedule": registry.schedule_text(("weekly", 0, 6, 30)), "this_week": week_key(),
             "last_run": {"at": iso(last["at"]), "ok": last.get("ok"), "result": last.get("result") or last.get("error")}
             if last else None}

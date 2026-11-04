@@ -6,7 +6,8 @@
 - Codes are 6 digits from `secrets`, stored only as HMAC-SHA256(challenge_id:code).
 - A new request supersedes the phone's earlier open challenges.
 - Limits: 30 s between sends per phone, 5 sends/hour and 10/day per phone,
-  30 sends/hour per IP, 5 wrong guesses per challenge, 10-minute expiry.
+  OTP_MAX_PER_IP_HOUR sends/hour per IP, OTP_MAX_PER_MINUTE sends a minute across the whole app,
+  5 wrong guesses per challenge, 10-minute expiry.
 - Channel: WhatsApp first when enabled, SMS on any WhatsApp failure; the user
   can also ask for SMS directly ("Send by SMS instead").
 - Rows purge after 24 h (TTL index on purge_at).
@@ -22,6 +23,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal, Optional
 
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
+
+import indexes
 from growth import events
 from growth.clock import as_utc, utcnow
 
@@ -37,6 +42,19 @@ MAX_PER_PHONE_DAY = 10
 # let only 30 of 500 people behind one IP sign up. The per-phone limits below are the real protection.
 MAX_PER_IP_HOUR = int(os.environ.get("OTP_MAX_PER_IP_HOUR", "1000") or 1000)
 MAX_ATTEMPTS = 5
+# Global brake on sends across the whole app, per clock minute (env OTP_MAX_PER_MINUTE, 0 = off). Stops a bot
+# farm from running up the SMS bill. 300 a minute lets a 500-person webinar QR rush through in about two minutes;
+# anyone over it is told to try again in a minute.
+DEFAULT_MAX_PER_MINUTE = 300
+
+indexes.register("rate_counters", [("purge_at", 1)], {"expireAfterSeconds": 0})
+
+
+def max_per_minute() -> int:
+    try:
+        return int(os.environ.get("OTP_MAX_PER_MINUTE", "") or DEFAULT_MAX_PER_MINUTE)
+    except ValueError:
+        return DEFAULT_MAX_PER_MINUTE
 
 Channel = Literal["auto", "sms", "whatsapp"]
 
@@ -101,6 +119,27 @@ async def _check_limits(db, phone: str, ip: str, now: datetime) -> None:
         raise OtpError("phone_daily_limit", "Too many codes today. Try again tomorrow.", 429)
     if ip and await db.otp_challenges.count_documents({"ip": ip, "created_at": {"$gte": hour}}) >= MAX_PER_IP_HOUR:
         raise OtpError("ip_limit", "Too many requests from this network. Try again later.", 429)
+    await _global_minute(db, now)
+
+
+async def _global_minute(db, now: datetime) -> None:
+    """Count this send in the minute's counter (one atomic write) and refuse it past the cap."""
+    cap = max_per_minute()
+    if cap <= 0:
+        return
+    key = "otp:" + as_utc(now).strftime("%Y%m%d%H%M")
+    doc = None
+    for _ in range(2):                       # two first sends of a minute can race to create the row
+        try:
+            doc = await db.rate_counters.find_one_and_update(
+                {"_id": key}, {"$inc": {"n": 1}, "$setOnInsert": {"purge_at": now + timedelta(minutes=10)}},
+                upsert=True, return_document=ReturnDocument.AFTER)
+            break
+        except DuplicateKeyError:
+            continue
+    if doc and doc.get("n", 0) > cap:
+        wait = 60 - as_utc(now).second
+        raise OtpError("busy", "Lots of people are logging in right now. Try again in a minute.", 429, retry_in=wait)
 
 
 async def _deliver(senders: Senders, phone: str, code: str, channel: Channel) -> tuple[SendResult, bool]:

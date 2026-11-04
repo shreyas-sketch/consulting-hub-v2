@@ -1,4 +1,5 @@
-// /app/cases — the live case (from the webinar) first, then the practice cases. Free accounts: live case only.
+// /app/cases — the live case (from the webinar) first, then the practice cases. Free accounts: the live case, plus
+// any case they answered before (read-only).
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Lock } from "lucide-react";
@@ -13,6 +14,7 @@ function CaseRow({ c }) {
         <div className="flex flex-wrap items-center gap-2">
           {c.live && <Chip tone="solid">Live case</Chip>}
           {c.kind === "weekly" && <Chip tone="gold">This week</Chip>}
+          {c.read_only && c.answered && <Chip>You answered this</Chip>}
           <span className="text-[12px] text-bz-muted">{c.industry}{c.city ? ` · ${c.city}` : ""}</span>
         </div>
         <p className="text-[16px] font-bold mt-1.5">{c.title}</p>

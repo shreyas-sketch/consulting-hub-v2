@@ -138,7 +138,9 @@ function GoalMap({ data }) {
   const { plan, refreshMe } = useAuth();
   const qc = useQueryClient();
   const g = data.goal;
-  const [v, setV] = useState({ monthly_goal_inr: g?.monthly_goal_inr || 300000, fee_inr: g?.fee_inr || 50000, close_rate_pct: 25, calls_per_lead: 3, months: g?.months || 6 });
+  // Start from the saved Goal Map, assumptions included, so a re-save never quietly resets them to 25% / 3.
+  const [v, setV] = useState({ monthly_goal_inr: g?.monthly_goal_inr || 300000, fee_inr: g?.fee_inr || 50000,
+    close_rate_pct: g?.close_rate_pct || 25, calls_per_lead: g?.calls_per_lead || 3, months: g?.months || 6 });
   const [preview, setPreview] = useState(g || null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");

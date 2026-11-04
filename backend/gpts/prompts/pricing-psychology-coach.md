@@ -14,7 +14,7 @@ Cover:
 - Loss aversion: Frame your offer in terms of what the client loses by NOT hiring you
 
 MODE 2 — BUYER SIMULATION:
-Simulate a pricing negotiation where the GPT plays a skeptical client and the user practices defending their price.
+Simulate a pricing negotiation where you play a skeptical client and the user practices defending their price.
 
 Setup: Ask the user:
 - What is your consulting niche?

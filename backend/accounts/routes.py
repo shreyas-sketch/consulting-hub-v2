@@ -53,11 +53,26 @@ def _senders() -> Senders:
 
 
 def client_ip(request: Request) -> str:
-    for h in ("cf-connecting-ip", "x-forwarded-for"):
-        v = request.headers.get(h)
+    """The caller's IP, for rate limits (OTP sends, the public diagnostic, the website lead form).
+
+    Anyone can send X-Forwarded-For or CF-Connecting-IP, so only what our own proxies add is trusted. Railway's edge
+    adds the address it saw as the LAST X-Forwarded-For entry; Railway staff: "The right most value of the
+    X-Forwarded-For header is trustworthy" (station.railway.com/questions/edge-proxy-x-forwarded-for-and-x-real-ip-c5a50049).
+      TRUSTED_PROXY_HOPS (default 1): proxies in front of the app that append to X-Forwarded-For; the client is that
+        many entries from the right. 0 = ignore the header.
+      BEHIND_CLOUDFLARE=true: Cloudflare sits in front of Railway, so read CF-Connecting-IP (only then).
+    Without a trusted header: the socket address."""
+    from core.settings import env_bool, env_int
+    if env_bool("BEHIND_CLOUDFLARE"):
+        v = (request.headers.get("cf-connecting-ip") or "").strip()
         if v:
-            return v.split(",")[0].strip()[:64]
-    return (request.client.host if request.client else "") or ""
+            return v[:64]
+    hops = env_int("TRUSTED_PROXY_HOPS", 1)
+    if hops > 0:
+        parts = [p.strip() for p in (request.headers.get("x-forwarded-for") or "").split(",") if p.strip()]
+        if parts:
+            return parts[max(0, len(parts) - hops)][:64]
+    return ((request.client.host if request.client else "") or "")[:64]
 
 
 class OtpRequestIn(BaseModel):
@@ -206,8 +221,11 @@ async def update_profile(body: ProfileIn, user: dict = Depends(_user_dep())):
         upd["name"] = body.name.strip() or None
     if body.email is not None:
         email = body.email.lower().strip()
+        import os
+        staff = (os.environ.get("ADMIN_EMAIL") or "").strip().lower()
         clash = await _db().users.find_one({"email": email, "_id": {"$ne": user["_id"]}})
-        if clash:
+        # Emails here aren't checked, so a member can't take the staff login email (seed_admin also refuses it).
+        if clash or (staff and email == staff and not user.get("password_hash")):
             raise HTTPException(status_code=409, detail={"code": "email_taken", "msg": "Email already in use."})
         upd["email"] = email
     if upd:

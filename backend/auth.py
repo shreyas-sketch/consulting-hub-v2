@@ -7,6 +7,7 @@ admin role on OTP login.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -174,27 +175,42 @@ async def refresh(request: Request, response: Response):
     return {"ok": True}
 
 
-async def _lockout_ok(identifier: str) -> bool:
-    doc = await _db().login_attempts.find_one({"_id": identifier})
-    if not doc:
-        return True
+async def _count_attempt(identifier: str) -> bool:
+    """Count this try FIRST, in one write, then decide. (Checking and counting in two steps let parallel guesses
+    all pass the check.) The 6th try inside 15 minutes is refused; a correct login clears the count."""
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+
     from growth.clock import as_utc
-    if doc.get("count", 0) >= LOCKOUT_MAX_ATTEMPTS and _now() - as_utc(doc["first_at"]) < timedelta(minutes=LOCKOUT_WINDOW_MIN):
+    now = _now()
+    doc = None
+    for _ in range(2):                        # two first tries can race to create the row
+        try:
+            doc = await _db().login_attempts.find_one_and_update(
+                {"_id": identifier}, {"$inc": {"count": 1}, "$setOnInsert": {"first_at": now}},
+                upsert=True, return_document=ReturnDocument.AFTER)
+            break
+        except DuplicateKeyError:
+            continue
+    if doc is None:
         return False
-    if _now() - as_utc(doc["first_at"]) >= timedelta(minutes=LOCKOUT_WINDOW_MIN):
-        await _db().login_attempts.delete_one({"_id": identifier})
-    return True
+    if now - as_utc(doc["first_at"]) >= timedelta(minutes=LOCKOUT_WINDOW_MIN):
+        # The old window is over: this try starts a new one.
+        await _db().login_attempts.update_one({"_id": identifier, "first_at": doc["first_at"]},
+                                              {"$set": {"count": 1, "first_at": now}})
+        return True
+    return int(doc.get("count", 0)) <= LOCKOUT_MAX_ATTEMPTS
 
 
 @router.post("/staff/login")
 async def staff_login(body: StaffLoginIn, response: Response):
     email = body.email.strip().lower()
-    if not await _lockout_ok(email):
+    if not await _count_attempt(email):
         raise HTTPException(status_code=429, detail={"code": "locked_out", "msg": "Too many tries. Wait 15 minutes."})
     user = await _db().users.find_one({"email": email, "password_hash": {"$exists": True}})
-    if not user or not verify_password(body.password, user["password_hash"]):
-        await _db().login_attempts.update_one({"_id": email}, {"$inc": {"count": 1}, "$setOnInsert": {"first_at": _now()}},
-                                              upsert=True)
+    # bcrypt takes ~0.2 s of CPU: run it in a thread so other requests aren't held up.
+    ok = bool(user) and await asyncio.to_thread(verify_password, body.password, user["password_hash"])
+    if not ok:
         raise HTTPException(status_code=401, detail={"code": "bad_login", "msg": "Wrong email or password."})
     if (user.get("status") or "active") == "revoked":
         raise HTTPException(status_code=403, detail={"code": "revoked", "msg": "This account is disabled."})
@@ -213,12 +229,19 @@ async def seed_admin(db) -> None:
         return
     existing = await db.users.find_one({"email": email})
     if existing:
+        if existing.get("phone") and not existing.get("password_hash"):
+            # A member who logs in by OTP typed this email on their profile (profile emails aren't checked).
+            # Never turn a member account into the staff admin.
+            log.warning("ADMIN_EMAIL %s belongs to a member account (OTP login); not making it admin. "
+                        "Change ADMIN_EMAIL or that member's email.", email)
+            return
         if existing.get("role") != "admin":
             await db.users.update_one({"_id": existing["_id"]}, {"$set": {"role": "admin"}})
         if not existing.get("password_hash"):
-            await db.users.update_one({"_id": existing["_id"]}, {"$set": {"password_hash": hash_password(password)}})
+            await db.users.update_one({"_id": existing["_id"]},
+                                      {"$set": {"password_hash": await asyncio.to_thread(hash_password, password)}})
         return
     await db.users.insert_one({"email": email, "name": "Admin", "role": "admin", "status": "active",
-                               "password_hash": hash_password(password), "created_at": _now(),
+                               "password_hash": await asyncio.to_thread(hash_password, password), "created_at": _now(),
                                "acquisition": {"source": "staff"}})
     log.info("Seeded staff admin %s", email)

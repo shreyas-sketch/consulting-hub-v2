@@ -1,5 +1,5 @@
-// Admin › Weekly case: the cases made from real news each Monday 06:30 IST. Make one now, switch one off,
-// see how many members answered. Older weeks stay on as practice cases.
+// Admin › Weekly case: the cases made from real news each Monday 06:30 IST (retried daily 10:30 IST while the week
+// has none). Make one now, switch one off, see how many members answered. Older cases stay on as practice cases.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
@@ -16,7 +16,7 @@ export default function AdminWeekly() {
   const refresh = () => { qc.invalidateQueries({ queryKey: ["admin", "weekly"] }); qc.invalidateQueries({ queryKey: ["admin", "cases"] }); };
 
   const generate = async () => {
-    if (!window.confirm("Make a new weekly case now? Paid members get an inbox alert (once a week).")) return;
+    if (!window.confirm("Make a new weekly case now? It becomes this week's case. An earlier one stays as a practice case. Paid members get an inbox alert once a week.")) return;
     setErr(""); setOk(""); setBusy("gen");
     try {
       const { data } = await api.post("/admin/weekly/generate", null, { timeout: 120000 });
@@ -45,7 +45,7 @@ export default function AdminWeekly() {
               </div>
               <Card>
                 <Label>Make one now</Label>
-                <p className="text-[14px] text-bz-muted">Searches Indian business news, picks one story and writes the case with a model answer. If the case fails the checks, nothing is published.</p>
+                <p className="text-[14px] text-bz-muted">Searches Indian business news, picks one story and writes the case with a model answer. If the case fails the checks, nothing is published. If Monday's run makes nothing, it tries again every day at 10:30 IST until this week has a case.</p>
                 {last && <Note className="mt-2">Last scheduled run: {dt(last.at)} · {last.ok ? "ok" : "failed"}{last.result && typeof last.result === "object" ? ` · ${last.result.published ? `published ${last.result.company || ""}` : `skipped: ${last.result.skipped || ""}`}` : last.result ? ` · ${last.result}` : ""}</Note>}
                 {err && <p className="text-sm text-bz-miss mt-2" role="alert">{err}</p>}
                 <OkLine>{ok}</OkLine>

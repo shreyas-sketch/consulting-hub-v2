@@ -43,6 +43,16 @@ api.interceptors.response.use(undefined, async (error) => {
     }
   }
   const d = error?.response?.data?.detail;
+  // The AI queue was full (webinar QR moment: hundreds press the button in the same minute). Try once more by
+  // ourselves after a random 2-6 s, so retries spread out; the page keeps showing its thinking state meanwhile.
+  // Safe: a busy answer always gives the go back on the server before it replies, so nothing is counted twice.
+  // Pass `{ _noAiRetry: true }` in a request config to turn this off.
+  if (status === 503 && d?.code === "ai_busy" && cfg && !cfg._aiRetried && !cfg._noAiRetry
+    && String(cfg.method || "").toLowerCase() === "post") {
+    cfg._aiRetried = true;
+    await new Promise((ok) => { setTimeout(ok, 2000 + Math.random() * 4000); });
+    return api(cfg);
+  }
   // The team disabled this account: treat it like a lost session (back to login, which explains it).
   if (status === 403 && d?.code === "revoked" && !url.includes("/auth/otp/")) emit(UNAUTH_EVENT, { url, revoked: true });
   if ((status === 402 || status === 403) && d && (d.code === "limit" || d.code === "locked") && !cfg?._silentGate) {

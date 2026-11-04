@@ -14,7 +14,15 @@ Public site (outside /api, on `public_router`):
 On its own address (own domain, or <slug>.SITES_DOMAIN) the same pages answer at "/", "/about"… through
 install_domain_middleware(app), which server.py must call; nothing else of the hub answers on a member's address.
 
-    sites       see features/site_model.py
+Own domains: what a member types is only a request (sites.domain_request, status "pending"): it is not routed and
+doesn't stop anyone else asking for the same name. Infrastructure hosts are refused (*.railway.app, the app host,
+SITES_DOMAIN and its subdomains, localhost, IPs). The member's "Check" only reports whether the CNAME points to us.
+The team connects it in Admin › Website domains: sites.domain (unique) + domain_status "connected" — refused when
+another site already has that domain connected. Only connected domains are routed. When the owner's plan no longer
+includes an own domain, routing stops at once; the daily job "site_domains_release" frees the domain 30 days later.
+
+    sites       see features/site_model.py; own domain: domain_request?, domain? (connected only), domain_status
+                pending|connected, domain_at, domain_check {ok, found, at}, domain_lapsed_at?
     site_leads  {_id, site_id, user_id, name, email, phone, company, message, page, ip_hash, at, read}
     site_rate   {_id: "<key>:<window>", n, purge_at}   (TTL)
 """
@@ -22,6 +30,7 @@ from __future__ import annotations
 
 import copy as _copy
 import hashlib
+import ipaddress
 import logging
 import re
 import time
@@ -38,7 +47,8 @@ import media
 import plans
 from core.deps import admin_dep, optional_user, user_dep
 from growth import events
-from growth.clock import utcnow
+from growth.clock import as_utc, utcnow
+from jobs import registry
 from notify import service as notify_service
 from state import db
 from util import iso, oid
@@ -62,6 +72,8 @@ indexes.register("sites", [("domain", 1)], {"unique": True, "sparse": True})
 indexes.register("site_leads", [("user_id", 1), ("at", -1)])
 indexes.register("site_rate", [("purge_at", 1)], {"expireAfterSeconds": 0})
 notify_service.register_kind("site_lead")
+registry.register("site_domains_release", "Website: free own domains 30 days after the plan stops including them",
+                  ("daily", 4, 20), "features.website:job_release_domains")
 
 IMAGE_MAX = 2 * 1024 * 1024
 LEADS_PER_IP = (5, 600)          # 5 messages per IP per site in 10 minutes
@@ -73,6 +85,9 @@ EMAIL_RX = re.compile(r"^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+
 HOST_RX = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$")
 SECOND_LEVEL = {"co.in", "net.in", "org.in", "firm.in", "gen.in", "ind.in", "ac.in", "edu.in", "res.in", "co.uk",
                 "org.uk", "com.au", "net.au", "co.nz", "com.sg", "co.za", "com.my", "ae.org"}
+# Hosts no member may ask for: our hosting platform's names (health checks, other services) and local names.
+INFRA_SUFFIXES = ("railway.app", "up.railway.app", "railway.internal", "localhost", "localdomain", "local", "internal")
+DOMAIN_RELEASE_DAYS = 30
 
 
 def _err(status: int, code: str, msg: str, **extra) -> HTTPException:
@@ -113,17 +128,35 @@ def _registrable(labels: list[str]) -> int:
     return 3 if len(labels) >= 3 and ".".join(labels[-2:]) in SECOND_LEVEL else 2
 
 
+def _under(d: str, base: str) -> bool:
+    return bool(base) and (d == base or d.endswith("." + base))
+
+
 def clean_domain(raw: str) -> str:
     d = re.sub(r"^[a-z]+://", "", (raw or "").strip().lower()).split("/")[0].split(":")[0].strip(".")
-    if not HOST_RX.match(d):
+    try:
+        ipaddress.ip_address(d.strip("[]"))
+        is_ip = True
+    except ValueError:
+        is_ip = False
+    if is_ip or not HOST_RX.match(d):
         raise _err(400, "bad_domain", "That doesn't look like a domain. Type it like www.yourname.in")
     labels = d.split(".")
     if len(labels) == _registrable(labels):
         d = "www." + d                      # most providers don't allow this record on the bare name
-    app, sd = R.app_host(), R.sites_domain()
-    if (app and (d == app or d.endswith("." + app))) or (sd and (d == sd or d.endswith("." + sd))):
+    if (_under(d, R.app_host()) or _under(d, R.sites_domain()) or any(_under(d, s) for s in INFRA_SUFFIXES)
+            or d in LOCAL_HOSTS):
         raise _err(400, "bad_domain", "Use a domain you own, like www.yourname.in")
     return d
+
+
+def domain_shown(site: dict) -> Optional[str]:
+    """The member's own domain as they see it: a pending request, else the connected one."""
+    return site.get("domain_request") or site.get("domain") or None
+
+
+def domain_connected(site: dict) -> Optional[str]:
+    return site.get("domain") if site.get("domain") and site.get("domain_status") == "connected" else None
 
 
 def dns_steps(domain: str) -> dict:
@@ -167,14 +200,17 @@ async def _state(user: dict, plan: str, site: Optional[dict]) -> dict:
     pages = [{"key": k, "label": M.PAGE_LABEL[k], "live": k in live_keys,
               "sections": [_section_out(s) for s in site["pages"][k]]} for k in M.PAGE_KEYS if k in site.get("pages", {})]
     unread = await db().site_leads.count_documents({"user_id": site["user_id"], "read": False})
-    domain = site.get("domain")
+    domain = domain_shown(site)
+    chk = site.get("domain_check") or {}
     out["site"] = {
         "id": site["_id"], "slug": site["slug"], "look": site.get("look"), "profile": site.get("profile") or {},
         "pages": pages, "published": bool(site.get("published")), "published_at": iso(site.get("published_at")),
         "url": R.site_root(site, plan), "hub_url": f"{R.public_base()}/s/{site['slug']}",
         "preview_path": f"/s/{site['slug']}?preview=1", "contact": site.get("contact") or {},
         "logo_url": media.blob_url(site.get("logo_id")), "photo_url": media.blob_url(site.get("photo_id")),
-        "domain": domain, "domain_status": site.get("domain_status") if domain else None,
+        "domain": domain,
+        "domain_status": ("connected" if domain == domain_connected(site) else "pending") if domain else None,
+        "domain_check": {"ok": bool(chk.get("ok")), "at": iso(chk.get("at"))} if domain and chk.get("at") else None,
         "dns": dns_steps(domain) if domain else None, "seo": site.get("seo") or {},
         "proposal": _proposal_out(site.get("proposal")), "can_undo": bool(site.get("undo")),
         "placeholders": M.site_placeholders(site, live_keys), "views": int(site.get("views") or 0),
@@ -472,13 +508,15 @@ async def ai_edit(sid: str, body: PromptIn, user: dict = Depends(user_dep())):
     plan, new, note = await run_metered(db(), user, "site_ai", work, access="website")
     if new == sec["data"]:
         await plans.refund(db(), user, "site_ai", plan)        # nothing to change: the go is given back
-        return {"changed": False, "refunded": True, "note": note or "Nothing on this section needed to change for that.",
-                "proposal": None}
+        return {**await _fresh(user, plan), "changed": False, "refunded": True,
+                "note": note or "Nothing on this section needed to change for that.", "proposal": None}
     proposal = {"page": page, "section_id": sid, "type": sec["type"], "before": sec["data"], "after": new,
                 "note": note, "instruction": instruction, "at": utcnow()}
     await db().sites.update_one({"_id": site["_id"]}, {"$set": {"proposal": proposal}})
     await events.track(db(), "site_ai_edit", user_id=site["user_id"], props={"type": sec["type"]})
-    return {"changed": True, "refunded": False, "note": note, "proposal": _proposal_out(proposal)}
+    # The whole editor state comes back (like every other editor call), so the screen shows the proposal at once.
+    return {**await _fresh(user, plan), "changed": True, "refunded": False, "note": note,
+            "proposal": _proposal_out(proposal)}
 
 
 @router.post("/website/proposal/apply")
@@ -556,17 +594,27 @@ def _domain_locked() -> HTTPException:
     return _locked("l1", "Your own domain comes with L1. On your plan the site lives on its own link.")
 
 
+DOMAIN_FIELDS = {"domain": "", "domain_request": "", "domain_status": "", "domain_at": "", "domain_check": "",
+                 "domain_lapsed_at": ""}
+
+
 @router.put("/website/domain")
 async def set_domain(body: DomainIn, user: dict = Depends(user_dep())):
+    """Ask for an own domain. Only a request: nothing is routed and nobody else is blocked until the team connects it.
+    Asking for a different domain stops the one connected before."""
     plan, site = await _need(user)
     if not plans.cap("custom_domain", plan):
         raise _domain_locked()
     d = clean_domain(body.domain)
-    if d != site.get("domain"):
-        if await db().sites.find_one({"domain": d, "_id": {"$ne": site["_id"]}}, {"_id": 1}):
+    if d != domain_shown(site) and d == domain_connected(site):          # back to the one that is connected
+        await db().sites.update_one({"_id": site["_id"]}, {"$unset": {"domain_request": ""}})
+    elif d != domain_shown(site):
+        if await db().sites.find_one({"domain": d, "domain_status": "connected", "_id": {"$ne": site["_id"]}}, {"_id": 1}):
             raise _err(409, "domain_taken", "That domain is already connected to another site.")
-        await db().sites.update_one({"_id": site["_id"]}, {"$set": {"domain": d, "domain_status": "waiting",
-                                                                    "domain_at": utcnow(), "updated_at": utcnow()}})
+        now = utcnow()
+        await db().sites.update_one({"_id": site["_id"]}, {
+            "$set": {"domain_request": d, "domain_status": "pending", "domain_at": now, "updated_at": now},
+            "$unset": {"domain": "", "domain_check": "", "domain_lapsed_at": ""}})
         clear_host_cache()
     return await _fresh(user, plan)
 
@@ -574,10 +622,20 @@ async def set_domain(body: DomainIn, user: dict = Depends(user_dep())):
 @router.delete("/website/domain")
 async def remove_domain(user: dict = Depends(user_dep())):
     plan, site = await _need(user)
-    await db().sites.update_one({"_id": site["_id"]}, {"$unset": {"domain": "", "domain_status": "", "domain_at": ""},
-                                                       "$set": {"updated_at": utcnow()}})
+    await db().sites.update_one({"_id": site["_id"]}, {"$unset": DOMAIN_FIELDS, "$set": {"updated_at": utcnow()}})
     clear_host_cache()
     return await _fresh(user, plan)
+
+
+async def _check_record(site: dict) -> dict:
+    """Does the domain's CNAME point to us? Saved on the site for the team; never changes the status."""
+    d = domain_shown(site)
+    target = R.app_host()
+    found = await lookup_cname(d)
+    ok = bool(target) and any(t == target or t.endswith("." + target) for t in found)
+    await db().sites.update_one({"_id": site["_id"]}, {"$set": {"domain_check": {"ok": ok, "found": found[:3],
+                                                                                 "domain": d, "at": utcnow()}}})
+    return {"ok": ok, "found": found[:3]}
 
 
 @router.post("/website/domain/check")
@@ -585,16 +643,11 @@ async def check_domain(user: dict = Depends(user_dep())):
     plan, site = await _need(user)
     if not plans.cap("custom_domain", plan):
         raise _domain_locked()
-    if not site.get("domain"):
+    if not domain_shown(site):
         raise _err(404, "no_domain", "Add your domain first.")
-    target = R.app_host()
-    found = await lookup_cname(site["domain"])
-    ok = bool(target) and any(t == target or t.endswith("." + target) for t in found)
-    status = "connected" if ok else "waiting"
-    await db().sites.update_one({"_id": site["_id"]}, {"$set": {"domain_status": status, "domain_checked_at": utcnow()}})
-    clear_host_cache()
+    check = await _check_record(site)
     state = await _fresh(user, plan)
-    return {**state, "check": {"ok": ok, "found": found[:3]}}
+    return {**state, "check": {**check, "connected": state["site"]["domain_status"] == "connected"}}
 
 
 # leads
@@ -630,11 +683,12 @@ def _back(request: Request, slug: str, page: str, q: str) -> RedirectResponse:
     return RedirectResponse(f"{path}?{q}#contact", status_code=303)
 
 
-async def _owner_plan(site: dict) -> Optional[str]:
-    owner = await db().users.find_one({"_id": oid(site["user_id"]) or site["user_id"]})
+async def _owner_plan(site: dict, d=None) -> Optional[str]:
+    d = d if d is not None else db()
+    owner = await d.users.find_one({"_id": oid(site["user_id"]) or site["user_id"]})
     if not owner or owner.get("status") == "revoked":
         return None
-    return (await plans.effective_plan(db(), owner))["plan"]
+    return (await plans.effective_plan(d, owner))["plan"]
 
 
 @router.post("/website/public/{slug}/leads")
@@ -678,8 +732,12 @@ async def public_lead(slug: str, request: Request):
     who = name + (f" from {lead['company']}" if lead["company"] else "")
     reach = " · ".join(x for x in (lead["email"], lead["phone"]) if x)
     try:
+        # Every lead gets its inbox row; WhatsApp goes out for the first lead of each clock hour only (per site),
+        # so a burst of form posts can't flood the member's phone or our message bill.
+        wa = not await _over(f"lead-wa:{site['_id']}", 1, 3600)
         await notify_service.alert(db(), site["user_id"], "site_lead", "New message from your website",
-                                   f"{who}: {text(lead['message'], 300) or '(no message)'} ({reach})", link="/app/website")
+                                   f"{who}: {text(lead['message'], 300) or '(no message)'} ({reach})", link="/app/website",
+                                   whatsapp=wa)
     except Exception:  # noqa: BLE001 — the lead is saved; an alert problem must not lose it
         log.warning("site lead alert failed", exc_info=True)
     await events.track(db(), "site_lead", user_id=site["user_id"], props={"page": page})
@@ -718,14 +776,25 @@ async def site_home(slug: str, request: Request):
 
 
 @public_router.get("/s/{slug}/img/{kind}", include_in_schema=False)
-async def site_image(slug: str, kind: str):
-    site = await db().sites.find_one({"slug": (slug or "").lower()[:60]}, {"logo_id": 1, "photo_id": 1})
+async def site_image(slug: str, kind: str, request: Request):
+    """Same rule as the pages: a live site (published, owner's plan has the Website Builder), or its logged-in owner
+    (the preview)."""
+    site = await db().sites.find_one({"slug": (slug or "").lower()[:60]},
+                                     {"logo_id": 1, "photo_id": 1, "user_id": 1, "published": 1})
     bid = (site or {}).get(f"{kind}_id") if kind in ("logo", "photo") else None
-    b = await media.get_blob(db(), bid) if bid else None
+    if not bid:
+        return Response(status_code=404)
+    plan = await _owner_plan(site)
+    live = bool(plan) and bool(site.get("published")) and plans.plan_allows(plan, "website")
+    if not live:
+        viewer = await optional_user(request)
+        if not viewer or str(viewer["_id"]) != site["user_id"]:
+            return Response(status_code=404)
+    b = await media.get_blob(db(), bid)
     if not b:
         return Response(status_code=404)
     return Response(bytes(b["data"]), media_type=b.get("content_type") or "image/png",
-                    headers={"Cache-Control": "public, max-age=86400"})
+                    headers={"Cache-Control": "public, max-age=86400" if live else "private, no-store"})
 
 
 @public_router.api_route("/s/{slug}/{page}", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
@@ -736,25 +805,113 @@ async def site_page(slug: str, page: str, request: Request):
 
 
 # ───────────────────────── admin: own domains to set up at the host ─────────────────────────
+_HAS_DOMAIN = {"$or": [{"domain": {"$exists": True, "$ne": None}}, {"domain_request": {"$exists": True, "$ne": None}}]}
+
+
 @router.get("/admin/website/domains")
 async def admin_domains(_: dict = Depends(admin_dep())):
-    rows = [{"site_id": s["_id"], "user_id": s["user_id"], "slug": s["slug"], "domain": s.get("domain"),
-             "domain_status": s.get("domain_status"), "published": bool(s.get("published")), "at": iso(s.get("domain_at"))}
-            async for s in db().sites.find({"domain": {"$exists": True}}).sort("domain_at", -1).limit(500)]
+    d = db()
+    sites = [s async for s in d.sites.find(_HAS_DOMAIN).sort("domain_at", -1).limit(500)]
+    connected = {s["domain"]: s["slug"] async for s in d.sites.find({"domain_status": "connected",
+                                                                      "domain": {"$exists": True, "$ne": None}},
+                                                                     {"domain": 1, "slug": 1})}
+    oids = [oid(s["user_id"]) for s in sites if oid(s["user_id"])]
+    people = {str(u["_id"]): u async for u in d.users.find({"_id": {"$in": oids}}, {"name": 1, "phone": 1})} if oids else {}
+    rows = []
+    for s in sites:
+        shown = domain_shown(s)
+        status = "connected" if shown == domain_connected(s) else "pending"
+        chk = s.get("domain_check") or {}
+        lapsed = s.get("domain_lapsed_at")
+        rows.append({
+            "site_id": s["_id"], "user_id": s["user_id"], "slug": s["slug"], "domain": shown, "domain_status": status,
+            "name": (people.get(s["user_id"]) or {}).get("name"), "phone": (people.get(s["user_id"]) or {}).get("phone"),
+            "published": bool(s.get("published")), "at": iso(s.get("domain_at")),
+            "check": {"ok": bool(chk.get("ok")), "found": chk.get("found") or [], "at": iso(chk.get("at"))}
+            if chk.get("at") and chk.get("domain") in (None, shown) else None,
+            "taken_by": connected.get(shown) if status != "connected" and connected.get(shown) != s["slug"] else None,
+            "lapsed_at": iso(lapsed), "release_at": iso(as_utc(lapsed) + timedelta(days=DOMAIN_RELEASE_DAYS)) if lapsed else None})
     return {"items": rows, "target": R.app_host()}
 
 
 class DomainStatusIn(BaseModel):
-    status: Literal["waiting", "connected"]
+    status: Literal["waiting", "pending", "connected"]
+
+
+async def _site_with_domain(site_id: str) -> tuple[dict, str]:
+    s = await db().sites.find_one({"_id": site_id})
+    shown = domain_shown(s) if s else None
+    if not shown:
+        raise _err(404, "not_found", "No site with a domain there.")
+    return s, shown
 
 
 @router.post("/admin/website/domains/{site_id}")
 async def admin_domain_status(site_id: str, body: DomainStatusIn, _: dict = Depends(admin_dep())):
-    r = await db().sites.update_one({"_id": site_id, "domain": {"$exists": True}}, {"$set": {"domain_status": body.status}})
-    if not r.matched_count:
-        raise _err(404, "not_found", "No site with a domain there.")
+    """connected: the team has added the domain at the host and checked the record. One site per domain.
+    waiting / pending: stop routing it; it goes back to being the member's request."""
+    d = db()
+    s, shown = await _site_with_domain(site_id)
+    now = utcnow()
+    if body.status == "connected":
+        clean_domain(shown)                                     # infrastructure hosts can never be connected
+        plan = await _owner_plan(s)
+        if not plan or not plans.cap("custom_domain", plan):
+            raise _err(400, "plan", "This member's plan doesn't include an own domain.")
+        other = await d.sites.find_one({"domain": shown, "domain_status": "connected", "_id": {"$ne": site_id}},
+                                       {"slug": 1})
+        if other:
+            raise _err(409, "domain_taken", f"{shown} is already connected to /s/{other['slug']}. Disconnect it there first.")
+        # Old unverified claims (before requests were split out) still hold the unique `domain` field: they go back
+        # to being requests, so the connected site can take it.
+        async for o in d.sites.find({"domain": shown, "_id": {"$ne": site_id}}, {"domain_request": 1}):
+            await d.sites.update_one({"_id": o["_id"]}, {"$set": {"domain_request": o.get("domain_request") or shown,
+                                                                  "domain_status": "pending"}, "$unset": {"domain": ""}})
+        try:
+            await d.sites.update_one({"_id": site_id}, {
+                "$set": {"domain": shown, "domain_status": "connected", "domain_connected_at": now, "updated_at": now},
+                "$unset": {"domain_request": "", "domain_lapsed_at": ""}})
+        except Exception as e:  # noqa: BLE001 — the unique index: someone connected it a moment ago
+            if "duplicate" in str(e).lower():
+                raise _err(409, "domain_taken", f"{shown} is already connected to another site.")
+            raise
+    else:
+        await d.sites.update_one({"_id": site_id}, {"$set": {"domain_request": shown, "domain_status": "pending",
+                                                             "updated_at": now},
+                                                    "$unset": {"domain": "", "domain_lapsed_at": ""}})
     clear_host_cache()
     return {"ok": True}
+
+
+@router.post("/admin/website/domains/{site_id}/check")
+async def admin_domain_check(site_id: str, _: dict = Depends(admin_dep())):
+    s, _shown = await _site_with_domain(site_id)
+    return await _check_record(s)
+
+
+async def job_release_domains(ctx) -> dict:
+    """Daily. A connected domain whose owner's plan no longer includes one is marked (routing already stopped);
+    30 days later it is freed for others and goes back to being the member's request. Back on a plan: unmarked."""
+    d, now = ctx.db, ctx.now
+    out = {"marked": 0, "released": 0, "kept": 0}
+    async for s in d.sites.find({"domain_status": "connected", "domain": {"$exists": True, "$ne": None}},
+                                {"domain": 1, "user_id": 1, "domain_lapsed_at": 1}):
+        plan = await _owner_plan(s, d)
+        if plan and plans.cap("custom_domain", plan):
+            if s.get("domain_lapsed_at"):
+                await d.sites.update_one({"_id": s["_id"]}, {"$unset": {"domain_lapsed_at": ""}})
+                out["kept"] += 1
+        elif not s.get("domain_lapsed_at"):
+            await d.sites.update_one({"_id": s["_id"]}, {"$set": {"domain_lapsed_at": now}})
+            out["marked"] += 1
+        elif as_utc(s["domain_lapsed_at"]) <= as_utc(now) - timedelta(days=DOMAIN_RELEASE_DAYS):
+            await d.sites.update_one({"_id": s["_id"]}, {
+                "$set": {"domain_request": s["domain"], "domain_status": "pending", "domain_released_at": now},
+                "$unset": {"domain": "", "domain_lapsed_at": ""}})
+            out["released"] += 1
+    if out["released"]:
+        clear_host_cache()
+    return out
 
 
 # ───────────────────────── serving a site on its own address ─────────────────────────
@@ -780,8 +937,8 @@ async def resolve_host(host: str) -> Optional[str]:
     if hit and hit[0] > time.monotonic():
         return hit[1]
     value: Optional[str] = None
-    site = await db().sites.find_one({"domain": host}, {"slug": 1, "user_id": 1})
-    if site:
+    site = await db().sites.find_one({"domain": host, "domain_status": "connected"}, {"slug": 1, "user_id": 1})
+    if site:                                     # only domains the team connected; a request is never routed
         plan = await _owner_plan(site)
         value = site["slug"] if plan and plans.cap("custom_domain", plan) else ""
     if len(_HOSTS) > 5000:

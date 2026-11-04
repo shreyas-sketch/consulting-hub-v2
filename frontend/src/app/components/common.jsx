@@ -21,11 +21,15 @@ export function UsageLine({ usage, what = "uses", className = "" }) {
 }
 
 // Shown on a locked page or after a 403/402 from the API.
+// At a monthly limit the API sends plan_needed = the next plan that really gives more, or null when there is none
+// (L1 and L2 members, or a plan above with the same limit). Then the card only says it resets on the 1st.
 export function LockCard({ feature, planNeeded, kind = "locked", msg, once, onAction }) {
   const { user } = useAuth();
   const info = featureInfo(feature);
-  const need = planNeeded || (info.plan === "free" ? "member" : info.plan);
   const isLimit = kind === "limit";
+  const need = isLimit ? planNeeded || null : planNeeded || (info.plan === "free" ? "member" : info.plan);
+  const resets = "It resets on the 1st.";
+  const limitText = need ? msg || "You've used this month's limit." : msg && /resets on the 1st/i.test(msg) ? msg : `${msg || "You've used this month's limit."} ${resets}`;
   return (
     <Card className="border-bz-rule" data-testid={isLimit ? "limit-card" : "lock-card"}>
       <div className="flex items-start gap-3">
@@ -33,7 +37,7 @@ export function LockCard({ feature, planNeeded, kind = "locked", msg, once, onAc
         <div className="min-w-0">
           <p className="text-[20px] font-extrabold leading-tight">{info.name}</p>
           {isLimit ? (
-            <p className="text-[15px] mt-1.5">{msg || "You've used this month's limit."}</p>
+            <p className="text-[15px] mt-1.5">{limitText}</p>
           ) : (
             <>
               <p className="text-[15px] mt-1.5 text-bz-muted">{info.what}</p>

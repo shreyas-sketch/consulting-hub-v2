@@ -4,7 +4,8 @@ support_tickets {_id, user_id, subject, category billing|tools|program|other, st
                  messages: [{from: member|team, text, at, by, by_name?}], created_at, updated_at, last_from}
 
 A team reply marks the ticket answered and sends an inbox alert. A member reply (also on a closed ticket) opens it
-again. Members never see which team member wrote: replies show as "Support team".
+again, unless that would go past MAX_OPEN open tickets. Members never see which team member wrote: replies show as
+"Support team".
 """
 from __future__ import annotations
 
@@ -76,14 +77,18 @@ async def _mine(ticket_id: str, user: dict) -> dict:
 
 
 # ------------------------------------------------------------------ member ----
+async def _room_to_open(d, uid: str) -> None:
+    if await d.support_tickets.count_documents({"user_id": uid, "status": {"$ne": "closed"}}) >= MAX_OPEN:
+        raise HTTPException(status_code=429, detail={"code": "too_many", "msg": (
+            f"You have {MAX_OPEN} open questions with the team. Close one you no longer need, or add to an open one.")})
+
+
 @router.post("/support/tickets")
 async def open_ticket(body: TicketIn, user: dict = Depends(user_dep())):
     d = db()
     await plans.require(d, user, "support")
     uid = str(user["_id"])
-    if await d.support_tickets.count_documents({"user_id": uid, "status": {"$ne": "closed"}}) >= MAX_OPEN:
-        raise HTTPException(status_code=429, detail={"code": "too_many", "msg": (
-            f"You have {MAX_OPEN} open questions with the team. Close one you no longer need, or add to an open one.")})
+    await _room_to_open(d, uid)
     now = utcnow()
     t = {"_id": uuid.uuid4().hex, "user_id": uid, "subject": " ".join(body.subject.split()), "category": body.category,
          "status": "open", "messages": [{"from": "member", "text": body.text.strip(), "at": now, "by": uid}],
@@ -112,6 +117,8 @@ async def member_reply(ticket_id: str, body: ReplyIn, user: dict = Depends(user_
     msg = body.text.strip()
     if not msg:
         raise HTTPException(status_code=422, detail={"code": "empty", "msg": "Type your message first."})
+    if t.get("status") == "closed":
+        await _room_to_open(d, str(user["_id"]))            # replying reopens it: same limit as a new question
     now = utcnow()
     await d.support_tickets.update_one({"_id": t["_id"]}, {
         "$push": {"messages": {"from": "member", "text": msg, "at": now, "by": str(user["_id"])}},

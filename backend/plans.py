@@ -17,10 +17,15 @@ Free accounts count once for life instead:
 """
 from __future__ import annotations
 
-from datetime import datetime
+import asyncio
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import HTTPException
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from growth import events
 from growth.clock import as_utc, ist_month_key, utcnow
@@ -153,6 +158,41 @@ def cap(name: str, plan: str) -> int:
     return int(CAPS.get(name, {}).get(plan, 0) or 0)
 
 
+CAP_LOCK_SECONDS = 30
+
+
+@asynccontextmanager
+async def cap_lock(db, user, name: str, wait_s: float = 3.0):
+    """Safe pattern for stored-item caps. Counting then inserting in two steps lets two parallel requests both see
+    "one slot left". Hold this per-member lock around the count and the insert:
+
+        async with plans.cap_lock(db, user, "docs"):
+            if await db.docs.count_documents({"user_id": uid}) >= plans.cap("docs", plan):
+                raise HTTPException(409, ...)
+            await db.docs.insert_one(...)
+
+    The lock is a short lease in Mongo, so it works across workers; a crashed holder's lease ends after 30 s.
+    If another request holds it for longer than `wait_s`, this answers 409 busy."""
+    key = f"{_uid(user)}:{name}"
+    token = uuid.uuid4().hex
+    deadline = asyncio.get_running_loop().time() + wait_s
+    while True:
+        now = utcnow()
+        try:
+            await db.cap_locks.find_one_and_update(
+                {"_id": key, "until": {"$lt": now}},
+                {"$set": {"until": now + timedelta(seconds=CAP_LOCK_SECONDS), "by": token}}, upsert=True)
+            break
+        except DuplicateKeyError:                    # held by another request
+            if asyncio.get_running_loop().time() >= deadline:
+                raise HTTPException(status_code=409, detail={"code": "busy", "msg": "Another change is still saving. Try again."})
+            await asyncio.sleep(0.05)
+    try:
+        yield
+    finally:
+        await db.cap_locks.delete_one({"_id": key, "by": token})
+
+
 CATALOG = [
     {"id": "free", "name": "Free account", "periods": [], "features": [
         "Made on the webinar: your Readiness Score, Niche Snapshot, Goal Map, one live case and one Meeting Brief",
@@ -185,10 +225,32 @@ def _uid(user) -> str:
 
 
 LIVE_SUB = ["active", "authenticated", "pending"]
+# Two short bridges so a member never drops to free between two steps that belong together:
+#   - L2 has ended and the hourly job hasn't restarted the paused L1 yet: the L1 counts from resume_at.
+#   - A plan bought to start later (subscription "authenticated" with starts_at): it counts from its start date
+#     until Razorpay's first charge webhook arrives.
+# Each bridge lasts BRIDGE_DAYS at most (the same 2 days a verified-but-unconfirmed payment gets).
+BRIDGE_DAYS = 2
+
+
+def _bridge(s: dict, now: datetime) -> Optional[datetime]:
+    """End of the bridge access this subscription gives right now, or None."""
+    st = s.get("status")
+    if st == "paused" and s.get("paused_for_l2") and s.get("resume_at"):
+        start = as_utc(s["resume_at"])
+    elif st == "authenticated" and s.get("starts_at") and not s.get("current_end") and not s.get("cancel_at_cycle_end"):
+        start = as_utc(s["starts_at"])
+    else:
+        return None
+    end = start + timedelta(days=BRIDGE_DAYS)
+    return end if start <= now < end else None
 
 
 async def effective_plan(db, user: dict, now: Optional[datetime] = None) -> dict:
-    """{plan, source, period, paid_until, cancelling, paused_for_l2}"""
+    """{plan, source, period, until, paid_until, cancelling, paused_for_l2, scheduled}
+
+    scheduled = a plan bought to start later (the ₹1,999 offer after cancelling L1, or a period switch):
+    {plan, label, period, starts_at}, or None."""
     now = now or utcnow()
     uid = _uid(user)
     cands: list[tuple[str, str, Optional[datetime], Optional[str]]] = []   # (plan, source, until, period)
@@ -196,13 +258,28 @@ async def effective_plan(db, user: dict, now: Optional[datetime] = None) -> dict
         cands.append(("l2", "grant", None, None))
     renewing = False
     paused = False
+    scheduled: Optional[dict] = None
+    sched_at: Optional[datetime] = None
     async for s in db.subscriptions.find({"user_id": uid}):
+        if s.get("plan") not in PLANS:
+            continue
         if s.get("status") == "paused" and s.get("paused_for_l2"):
             paused = True
         end = s.get("current_end")
-        if s.get("status") in LIVE_SUB and end and as_utc(end) > now and s.get("plan") in PLANS:
+        bridge = _bridge(s, now)
+        if s.get("status") in LIVE_SUB and end and as_utc(end) > now:
             cands.append((s["plan"], "paid", as_utc(end), s.get("period") or "monthly"))
             renewing = renewing or not s.get("cancel_at_cycle_end")
+        elif bridge:
+            cands.append((s["plan"], "paid", bridge, s.get("period") or "monthly"))
+            renewing = True
+        elif (s.get("status") == "authenticated" and s.get("starts_at") and not s.get("current_end")
+              and not s.get("cancel_at_cycle_end") and as_utc(s["starts_at"]) > now):
+            st = as_utc(s["starts_at"])
+            if sched_at is None or st < sched_at:
+                sched_at = st
+                scheduled = {"plan": s["plan"], "label": LABELS[s["plan"]], "period": s.get("period") or "monthly",
+                             "starts_at": st.isoformat()}
     async for g in db.plan_grants.find({"user_id": uid}):
         if g.get("ends_at") and as_utc(g["ends_at"]) > now and g.get("plan") in PLANS:
             cands.append((g["plan"], "grant", as_utc(g["ends_at"]), None))
@@ -214,11 +291,11 @@ async def effective_plan(db, user: dict, now: Optional[datetime] = None) -> dict
     paid = [c for c in cands if c[1] == "paid"]
     return {"plan": best[0], "source": best[1], "period": best[3], "until": best[2].isoformat() if best[2] else None,
             "paid_until": max(c[2] for c in paid).isoformat() if paid else None,
-            "cancelling": bool(paid) and not renewing, "paused_for_l2": paused}
+            "cancelling": bool(paid) and not renewing, "paused_for_l2": paused, "scheduled": scheduled}
 
 
 async def nonfree_plans(db, now: Optional[datetime] = None) -> dict[str, str]:
-    """user_id → effective plan for everyone NOT on free, in three queries. Same precedence as effective_plan."""
+    """user_id → effective plan for everyone NOT on free, in a few queries. Same precedence as effective_plan."""
     now = now or utcnow()
     best: dict[str, str] = {}
 
@@ -227,6 +304,12 @@ async def nonfree_plans(db, now: Optional[datetime] = None) -> dict[str, str]:
             best[uid] = p
     async for s in db.subscriptions.find({"status": {"$in": LIVE_SUB}, "current_end": {"$gt": now}}, {"user_id": 1, "plan": 1}):
         up(s["user_id"], s.get("plan"))
+    since = now - timedelta(days=BRIDGE_DAYS)
+    async for s in db.subscriptions.find({"$or": [
+            {"status": "paused", "paused_for_l2": True, "resume_at": {"$lte": now, "$gt": since}},
+            {"status": "authenticated", "starts_at": {"$lte": now, "$gt": since}}]}):
+        if _bridge(s, now):
+            up(s["user_id"], s.get("plan"))
     async for g in db.plan_grants.find({"ends_at": {"$gt": now}}, {"user_id": 1, "plan": 1}):
         up(g["user_id"], g.get("plan"))
     async for u in db.users.find({"role": "admin"}, {"_id": 1}):
@@ -291,12 +374,34 @@ async def require(db, user: dict, feature: str) -> str:
     return plan
 
 
-def _next_plan(plan: str) -> Optional[str]:
-    return {"free": "member", "member": "l1"}.get(plan)
+def _allowance(feature: str, plan: str) -> Optional[int]:
+    """How many uses `plan` gets of `feature` in a month (None = no cap at all)."""
+    lim = LIMITS.get(feature, {}).get(plan)
+    return lim if lim is not None else FAIR_USE.get(feature)
+
+
+def _next_plan(plan: str, feature: Optional[str] = None, cap: Optional[int] = None) -> Optional[str]:
+    """The plan to point a member to at a limit: the next plan they can buy in the app that really gives more of
+    `feature`. None when there is none (L1 and L2 members, or a plan above with the same limit): the screen then
+    says the limit resets on the 1st and shows no upgrade button."""
+    if plan == "free":
+        return "member"
+    for p in ("member", "l1"):                      # L2 isn't bought in the app
+        if RANK[p] <= RANK[plan]:
+            continue
+        if feature is None:
+            return p
+        more = _allowance(feature, p)
+        if more is None or (cap is not None and more > cap):
+            return p
+    return None
 
 
 async def consume(db, user: dict, feature: str, plan: Optional[str] = None) -> dict:
-    """Meter one use. Returns {used, limit}. Raises 402 limit (or 403 locked when the limit is 0)."""
+    """Meter one use. Returns {used, limit}. Raises 402 limit (or 403 locked when the limit is 0).
+
+    The check and the count are ONE conditional write: the counter goes up only if it is still below the limit.
+    Two taps at the same moment can't both get the last go (a free account really gets one go)."""
     uid = _uid(user)
     plan = plan or (await effective_plan(db, user))["plan"]
     limit = limit_for(feature, plan)
@@ -305,12 +410,25 @@ async def consume(db, user: dict, feature: str, plan: Optional[str] = None) -> d
         await events.track(db, "locked_hit", user_id=uid, props={"feature": feature, "plan": plan})
         need = next((p for p in PLANS if RANK[p] > RANK[plan] and LIMITS[feature][p] != 0), "member")
         raise locked_error(feature, need)
-    doc = await db.usage.find_one({"_id": key}) or {}
-    used = int(doc.get(feature, 0))
     cap = limit if limit is not None else FAIR_USE.get(feature)
-    if cap is not None and used >= cap:
+    setoi = {"user_id": uid} if plan == "free" else {"user_id": uid, "month": ist_month_key()}
+    flt: dict = {"_id": key}
+    if cap is not None:
+        flt[feature] = {"$not": {"$gte": cap}}       # missing (never used) or still below the limit
+    doc = None
+    for _ in range(2):
+        try:
+            doc = await db.usage.find_one_and_update(flt, {"$inc": {feature: 1}, "$setOnInsert": setoi},
+                                                     upsert=True, return_document=ReturnDocument.AFTER)
+            break
+        except DuplicateKeyError:
+            # The row exists but didn't match: it is at the limit. (On the first try this can also be two
+            # first-ever uses racing to create the row, so try once more now that it exists.)
+            doc = None
+    if doc is None:
         await events.track(db, "limit_hit", user_id=uid, props={"feature": feature, "plan": plan})
-        nxt = _next_plan(plan)
+        used = int(((await db.usage.find_one({"_id": key})) or {}).get(feature, cap or 0))
+        nxt = _next_plan(plan, feature, cap)
         unit = LIMIT_UNITS.get(feature, FEATURE_NAMES.get(feature, feature) + " uses")
         if plan == "free":
             msg = f"You've used your free go on the webinar. The {LABELS['member']} gives you {LIMITS[feature]['member'] or 'more'} {unit} a month."
@@ -318,9 +436,7 @@ async def consume(db, user: dict, feature: str, plan: Optional[str] = None) -> d
             msg = f"You've used all {cap} {unit} this month." + (f" {LABELS[nxt]} gives you more." if nxt else " It resets on the 1st.")
         raise HTTPException(status_code=402, detail={"code": "limit", "feature": feature, "used": used, "limit": cap,
                                                      "plan_needed": nxt, "once": plan == "free", "msg": msg})
-    setoi = {"user_id": uid} if plan == "free" else {"user_id": uid, "month": ist_month_key()}
-    await db.usage.update_one({"_id": key}, {"$inc": {feature: 1}, "$setOnInsert": setoi}, upsert=True)
-    return {"used": used + 1, "limit": limit}
+    return {"used": int(doc.get(feature, 1)), "limit": limit}
 
 
 async def refund(db, user: dict, feature: str, plan: Optional[str] = None) -> None:

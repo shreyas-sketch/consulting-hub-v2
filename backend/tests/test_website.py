@@ -262,7 +262,7 @@ def test_own_domain_locked_for_member_and_connects_on_l1(client, monkeypatch):
     qa_login(c, plan="l1")
     build(c)
     st = c.put("/api/website/domain", json={"domain": "https://Asha-Consulting.in/about"}).json()["site"]
-    assert st["domain"] == "www.asha-consulting.in" and st["domain_status"] == "waiting"
+    assert st["domain"] == "www.asha-consulting.in" and st["domain_status"] == "pending"
     assert st["dns"] == {"type": "CNAME", "name": "www", "value": "hub.example.com", "domain": "www.asha-consulting.in"}
     assert c.put("/api/website/domain", json={"domain": "not a domain"}).status_code == 400
     assert c.put("/api/website/domain", json={"domain": "x.hub.example.com"}).status_code == 400
@@ -271,7 +271,14 @@ def test_own_domain_locked_for_member_and_connects_on_l1(client, monkeypatch):
         return ["hub.example.com"]
     monkeypatch.setattr(website, "lookup_cname", cname)
     r = c.post("/api/website/domain/check").json()
-    assert r["check"]["ok"] and r["site"]["domain_status"] == "connected" and r["site"]["url"] == "https://www.asha-consulting.in"
+    assert r["check"]["ok"] and r["site"]["domain_status"] == "pending"            # the check only reports
+    site_id = r["site"]["id"]
+    c.post("/api/auth/logout")
+    qa_login(c, role="admin")
+    assert c.post(f"/api/admin/website/domains/{site_id}", json={"status": "connected"}).json() == {"ok": True}
+    qa_login(c, plan="l1")
+    st = c.get("/api/website").json()["site"]
+    assert st["domain_status"] == "connected" and st["url"] == "https://www.asha-consulting.in"
     assert c.delete("/api/website/domain").json()["site"]["domain"] is None
 
 
@@ -289,6 +296,12 @@ def test_middleware_serves_a_site_by_host(mdb, monkeypatch):
         slug = site["slug"]
         c.put("/api/website/domain", json={"domain": "www.asha-consulting.in"})
         own = {"host": "www.asha-consulting.in"}
+        assert c.get("/api/health", headers=own).status_code == 200    # a request is not routed until the team connects it
+        c.post("/api/auth/logout")
+        qa_login(c, role="admin")
+        assert c.post(f"/api/admin/website/domains/{site['id']}", json={"status": "connected"}).status_code == 200
+        qa_login(c, plan="l1")
+        website.clear_host_cache()
         assert c.get("/", headers=own).status_code == 404               # not published yet
         c.post("/api/website/publish", json={"on": True})
         website.clear_host_cache()

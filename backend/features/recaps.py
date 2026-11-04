@@ -8,6 +8,8 @@ The team uploads a transcript (.txt/.vtt/.srt/.md, ≤ 8 MB) → the AI writes t
 action points are read aloud (audio.tts) and stored with media.save_blob (not public; served by
 GET /recaps/{id}/audio after a plan check) → the team checks it and publishes. Publishing adds the transcript to
 Akshat AI's knowledge base (features.kb.ingest) and sends an inbox alert to every member whose plan has `recaps`.
+"Hide from members" (unpublish) takes the transcript out of the knowledge base again (kb_doc_id cleared); publishing
+again adds it back.
 """
 from __future__ import annotations
 
@@ -35,7 +37,7 @@ from state import db
 from util import iso
 
 from . import kb
-from .common import text, text_list
+from .common import NO_VENDOR, as_list, strip_providers, text, text_list
 
 log = logging.getLogger("recaps")
 router = APIRouter(tags=["recaps"])
@@ -60,7 +62,7 @@ SYSTEM = (
     "one live session. Use only what was said in the session: no outside facts, no made-up numbers, names or links. "
     "If something was unclear in the transcript, leave it out. Plain, spoken English, short sentences, one idea per "
     "sentence, written to the member as 'you'. No buzzwords, no hype, no emojis, never promise income. Never name or "
-    "describe any AI provider or model; if you need to refer to yourself, say 'the hub'."
+    "describe any AI provider or model; if you need to refer to yourself, say 'the hub'. " + NO_VENDOR
 )
 
 
@@ -108,9 +110,9 @@ def validate(raw) -> dict:
     key_ideas = text_list(raw.get("key_ideas"), 8, 300)
     actions = text_list(raw.get("action_points"), 8, 300)
     frameworks = [{"name": text(f.get("name"), 100), "how_to_use": text(f.get("how_to_use"), 600)}
-                  for f in (raw.get("frameworks") or [])[:6] if isinstance(f, dict) and text(f.get("name"), 100)]
+                  for f in as_list(raw.get("frameworks"))[:6] if isinstance(f, dict) and text(f.get("name"), 100)]
     qa = [{"q": text(x.get("q"), 300), "a": text(x.get("a"), 800)}
-          for x in (raw.get("questions_answered") or [])[:10]
+          for x in as_list(raw.get("questions_answered"))[:10]
           if isinstance(x, dict) and text(x.get("q"), 300) and text(x.get("a"), 800)]
     if len(summary) < 40 or len(key_ideas) < 2 or len(actions) < 2:
         raise llm.LLMError("recap: incomplete")
@@ -140,7 +142,7 @@ async def _write(title: str, day: str, transcript: str) -> dict:
     kw = {"timeout": 120} if "timeout" in inspect.signature(llm.complete_json).parameters else {}
     raw = await llm.complete_json(task="session_recap", system=SYSTEM, prompt=_prompt(title, day, transcript),
                                   fake=lambda: fake_recap(title, transcript), model="strong", max_tokens=3000, **kw)
-    return validate(raw)
+    return strip_providers(validate(raw))           # AI wording only; the team's own edits are kept as typed
 
 
 # ------------------------------------------------------------------ outputs ----
@@ -367,8 +369,11 @@ async def admin_publish(recap_id: str, _: dict = Admin):
 
 @admin.post("/{recap_id}/unpublish")
 async def admin_unpublish(recap_id: str, _: dict = Admin):
-    await _recap(recap_id)
-    await db().recaps.update_one({"_id": recap_id}, {"$set": {"status": "draft", "updated_at": utcnow()}})
+    """Hide from members: back to draft, and the transcript leaves Akshat AI's knowledge base (re-added on publish)."""
+    d = db()
+    r = await _recap(recap_id)
+    await d.recaps.update_one({"_id": recap_id}, {"$set": {"status": "draft", "kb_doc_id": None, "updated_at": utcnow()}})
+    await kb.remove(d, r.get("kb_doc_id"))
     return _admin_full(await _recap(recap_id))
 
 
@@ -379,10 +384,7 @@ async def admin_delete(recap_id: str, _: dict = Admin):
     r = await _recap(recap_id)
     await d.recaps.delete_one({"_id": recap_id})
     await media.delete_blob(d, r.get("audio_id"))
-    if r.get("kb_doc_id"):
-        await d.kb_docs.delete_one({"_id": r["kb_doc_id"]})
-        await d.kb_chunks.delete_many({"doc_id": r["kb_doc_id"]})
-        kb.reset_kb_cache()
+    await kb.remove(d, r.get("kb_doc_id"))
     return {"ok": True}
 
 

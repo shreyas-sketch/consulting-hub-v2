@@ -1,4 +1,4 @@
-// Admin › Jobs: list, last run, Run now.
+// Admin › Jobs: list, last run, Run now (409 while the job is already running).
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Play } from "lucide-react";
@@ -38,6 +38,7 @@ export default function AdminJobs() {
               <span className="block max-w-[340px]">
                 <span className="flex items-center gap-2"><Chip tone={r.last.ok ? "gold" : "miss"}>{r.last.ok ? "ok" : "failed"}</Chip><span className="text-bz-muted">{dt(r.last.at)}</span></span>
                 {r.last.result != null && <span className="block text-[12px] text-bz-muted mt-0.5 break-words">{short(r.last.result)}</span>}
+                {!r.last.ok && <span className="block text-[12px] text-bz-muted mt-0.5">Tries again in 15 minutes, up to 4 times per run.</span>}
               </span>
             ) : <span className="text-bz-muted">Never</span>) },
             { key: "run", label: "", render: (r) => (

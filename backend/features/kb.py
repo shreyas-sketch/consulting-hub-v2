@@ -64,6 +64,15 @@ async def ingest(d, title: str, raw: str) -> dict:
     return {"id": doc_id, "title": title, "chunks": len(rows), "words": doc["words"], "uploaded_at": iso(now)}
 
 
+async def remove(d, doc_id: str) -> None:
+    """Take one document (and its chunks) out of the knowledge base."""
+    if not doc_id:
+        return
+    await d.kb_chunks.delete_many({"doc_id": doc_id})
+    await d.kb_docs.delete_one({"_id": doc_id})
+    reset_kb_cache()
+
+
 _KB: dict = {"sig": None, "checked": 0.0, "rows": [], "tf": [], "lens": [], "avg": 1.0, "post": {}}
 
 

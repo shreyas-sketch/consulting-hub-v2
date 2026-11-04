@@ -34,23 +34,31 @@ class LLMError(RuntimeError):
 
 
 # Concurrency guard (load test, 3 Nov): a webinar puts hundreds of people on X-Ray / Ask at the same second.
-# At most LLM_MAX_CONCURRENCY calls are in flight per worker; the rest wait up to LLM_QUEUE_WAIT_S (15 s) for a slot,
-# then fail fast with LLMError so the caller shows its rule-based answer instead of hanging. Each call has a
-# hard LLM_TIMEOUT_S. Size LLM_MAX_CONCURRENCY × workers against your Anthropic rate limit.
+# At most LLM_MAX_CONCURRENCY (48) calls are in flight per worker; the rest wait up to LLM_QUEUE_WAIT_S (15 s) for a
+# slot, then fail fast with LLMError so the caller shows its rule-based answer instead of hanging. A caller can pass
+# `queue_wait` to wait longer: the webinar tools (Niche Snapshot, case scoring, Meeting Brief) wait up to 45 s,
+# because at the QR-code moment 500 people press the button in the same minute and a short wait beats "busy".
+# Each call has a hard LLM_TIMEOUT_S. Size LLM_MAX_CONCURRENCY × workers against your Anthropic rate limit.
 _SEM: dict = {"sem": None, "n": None}
 
 
+def _wait_kw(queue_wait: Optional[float]) -> dict:
+    """Pass queue_wait on to _guarded only when the caller set it (keeps _guarded's 3-argument call shape)."""
+    return {"queue_wait": queue_wait} if queue_wait else {}
+
+
 def _sem() -> asyncio.Semaphore:
-    n = int(os.environ.get("LLM_MAX_CONCURRENCY", "32") or 32)
+    n = int(os.environ.get("LLM_MAX_CONCURRENCY", "48") or 48)
     if _SEM["sem"] is None or _SEM["n"] != n:
         _SEM["sem"], _SEM["n"] = asyncio.Semaphore(n), n
     return _SEM["sem"]
 
 
-async def _guarded(coro_fn, task: str, timeout: Optional[float] = None):
+async def _guarded(coro_fn, task: str, timeout: Optional[float] = None, queue_wait: Optional[float] = None):
     sem = _sem()
+    wait = queue_wait or float(os.environ.get("LLM_QUEUE_WAIT_S", "15") or 15)
     try:
-        await asyncio.wait_for(sem.acquire(), timeout=float(os.environ.get("LLM_QUEUE_WAIT_S", "15") or 15))
+        await asyncio.wait_for(sem.acquire(), timeout=wait)
     except (asyncio.TimeoutError, TimeoutError):
         log.warning("LLM task %s: queue full, using fallback", task)
         raise LLMError("AI is busy right now.")
@@ -99,19 +107,21 @@ def _parse(text: str) -> dict:
 
 async def complete_json(*, task: str, system: str, prompt: str, fake: Callable[[], Any], model: str = "fast",
                         max_tokens: int = 1200, images: Optional[list[tuple[str, bytes]]] = None,
-                        fallback_on_error: bool = False, timeout: Optional[float] = None) -> dict:
+                        fallback_on_error: bool = False, timeout: Optional[float] = None,
+                        queue_wait: Optional[float] = None) -> dict:
     """images: [(media_type, bytes)] for vision tasks. fallback_on_error: return fake() instead of raising.
-    timeout: seconds for this call (default LLM_TIMEOUT_S, 45); long documents pass more."""
+    timeout: seconds for this call (default LLM_TIMEOUT_S, 45); long documents pass more.
+    queue_wait: seconds to wait for a free slot before "busy" (default LLM_QUEUE_WAIT_S, 15)."""
     try:
         return await _complete_json(task=task, system=system, prompt=prompt, fake=fake, model=model,
-                                    max_tokens=max_tokens, images=images, timeout=timeout)
+                                    max_tokens=max_tokens, images=images, timeout=timeout, queue_wait=queue_wait)
     except LLMError:
         if fallback_on_error:
             return fake()
         raise
 
 
-async def _fake_with_latency(fake: Callable[[], Any], task: str):
+async def _fake_with_latency(fake: Callable[[], Any], task: str, queue_wait: Optional[float] = None):
     """LLM_FAKE_LATENCY_MS (load tests only): make fake answers take as long as real ones and go through the
     same concurrency guard, so a load test shows what the real Anthropic latency does to queues."""
     ms = int(os.environ.get("LLM_FAKE_LATENCY_MS", "0") or 0)
@@ -121,13 +131,13 @@ async def _fake_with_latency(fake: Callable[[], Any], task: str):
     async def slow():
         await asyncio.sleep(ms / 1000)
         return fake()
-    return await _guarded(slow, task)
+    return await _guarded(slow, task, **_wait_kw(queue_wait))
 
 
-async def _complete_json(*, task, system, prompt, fake, model, max_tokens, images, timeout=None) -> dict:
+async def _complete_json(*, task, system, prompt, fake, model, max_tokens, images, timeout=None, queue_wait=None) -> dict:
     m = mode()
     if m == "fake":
-        return await _fake_with_latency(fake, task)
+        return await _fake_with_latency(fake, task, queue_wait)
     if m == "off":
         raise LLMError("AI is not configured (ANTHROPIC_API_KEY).")
     content: list = []
@@ -138,7 +148,7 @@ async def _complete_json(*, task, system, prompt, fake, model, max_tokens, image
     content.append({"type": "text", "text": prompt + "\n\nReply with one JSON object only."})
     try:
         text = await _guarded(lambda: _call_text(model=model, max_tokens=max_tokens, system=system, content=content), task,
-                              timeout or (120 if max_tokens > 3000 else None))
+                              timeout or (120 if max_tokens > 3000 else None), **_wait_kw(queue_wait))
         return _parse(text)
     except LLMError:
         raise
@@ -148,14 +158,15 @@ async def _complete_json(*, task, system, prompt, fake, model, max_tokens, image
 
 
 async def complete_text(*, task: str, system: str, prompt: str, fake: Callable[[], str], model: str = "strong",
-                        max_tokens: int = 1200) -> str:
+                        max_tokens: int = 1200, queue_wait: Optional[float] = None) -> str:
     m = mode()
     if m == "fake":
-        return await _fake_with_latency(fake, task)
+        return await _fake_with_latency(fake, task, queue_wait)
     if m == "off":
         raise LLMError("AI is not configured (ANTHROPIC_API_KEY).")
     try:
-        text = await _guarded(lambda: _call_text(model=model, max_tokens=max_tokens, system=system, content=prompt), task)
+        text = await _guarded(lambda: _call_text(model=model, max_tokens=max_tokens, system=system, content=prompt), task,
+                              **_wait_kw(queue_wait))
         return text.strip()
     except LLMError:
         raise
@@ -165,12 +176,13 @@ async def complete_text(*, task: str, system: str, prompt: str, fake: Callable[[
 
 
 async def complete_chat(*, task: str, system: str, messages: list[dict], fake: Callable[[], str],
-                        model: str = "fast", max_tokens: int = 2048, timeout: Optional[float] = None) -> str:
+                        model: str = "fast", max_tokens: int = 2048, timeout: Optional[float] = None,
+                        queue_wait: Optional[float] = None) -> str:
     """Multi-turn chat: messages = [{"role": "user"|"assistant", "content": str}, ...] ending with a user turn.
     Returns the assistant's text. Same queue, timeout and fake rules as complete_json."""
     m = mode()
     if m == "fake":
-        return await _fake_with_latency(fake, task)
+        return await _fake_with_latency(fake, task, queue_wait)
     if m == "off":
         raise LLMError("AI is not configured (ANTHROPIC_API_KEY).")
     msgs = [{"role": x["role"], "content": str(x["content"])} for x in messages if x.get("content")]
@@ -179,7 +191,7 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
         resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs)
         return "".join(getattr(b, "text", "") for b in resp.content)
     try:
-        return (await _guarded(call, task, timeout or (150 if max_tokens > 3000 else None))).strip()
+        return (await _guarded(call, task, timeout or (150 if max_tokens > 3000 else None), **_wait_kw(queue_wait))).strip()
     except LLMError:
         raise
     except Exception as e:  # noqa: BLE001
@@ -188,7 +200,8 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
 
 
 async def complete_with_tools(*, task: str, system: str, prompt: str, tools: list[dict], model: str = "fast",
-                              max_tokens: int = 1200, timeout: Optional[float] = None, max_continues: int = 2) -> dict:
+                              max_tokens: int = 1200, timeout: Optional[float] = None, max_continues: int = 2,
+                              queue_wait: Optional[float] = None) -> dict:
     """One live call that uses Anthropic's server-side tools (web search, web fetch: the API runs them itself).
 
     Returns the reply as plain JSON, not SDK objects, so newer block types (web_search_tool_result,
@@ -215,7 +228,7 @@ async def complete_with_tools(*, task: str, system: str, prompt: str, tools: lis
             msgs = [{"role": "user", "content": prompt}, {"role": "assistant", "content": list(blocks)}]
         return {"content": blocks, "stop_reason": stop, "usage": usage}
     try:
-        return await _guarded(call, task, timeout)
+        return await _guarded(call, task, timeout, **_wait_kw(queue_wait))
     except LLMError:
         raise
     except Exception as e:  # noqa: BLE001

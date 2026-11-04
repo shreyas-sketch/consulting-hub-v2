@@ -29,9 +29,9 @@ from growth.clock import IST, utcnow
 from state import db
 from util import iso
 
-from .common import clamp_int, text
-from .knowledge import knowledge, system_block
-from .network import NO_VENDOR, run_metered_n
+from .common import NO_VENDOR, as_dict, as_list, clamp_int, strip_providers, text
+from .knowledge import knowledge, links_in, no_links, own_links, system_block
+from .network import run_metered_n
 
 router = APIRouter(prefix="/social", tags=["social-builder"])
 
@@ -53,7 +53,9 @@ SYSTEM = (
     "question as the first line), short paragraphs of 1-3 lines, 120-220 words, plain words, no buzzwords, no "
     "emojis, at most 3 hashtags at the very end, end with a question or a soft call to action. Never invent the "
     "member's experiences, clients or numbers: use only the stories given; where a personal example or figure is "
-    "needed and none is given, write it in [square brackets] for the member to fill. No income claims. " + NO_VENDOR
+    "needed and none is given, write it in [square brackets] for the member to fill. No income claims. Never "
+    "include links or web addresses: LinkedIn shows fewer people posts with links, and the member adds their own. "
+    + NO_VENDOR
 )
 
 
@@ -159,9 +161,13 @@ async def generate(body: GenIn, user: dict = Depends(user_dep())):
     uid = str(user["_id"])
     await plans.require(d, user, FEATURE)
     today = _today()
-    start = date.fromisoformat(body.start_date) if body.start_date else today + timedelta(days=1)
+    bad_start = HTTPException(status_code=422, detail={"code": "start_date", "msg": "Pick a start date between today and the next four months."})
+    try:
+        start = date.fromisoformat(body.start_date) if body.start_date else today + timedelta(days=1)
+    except ValueError:                              # e.g. 2026-02-30: the right shape but not a real date
+        raise bad_start
     if start < today or start > today + timedelta(days=120):
-        raise HTTPException(status_code=422, detail={"code": "start_date", "msg": "Pick a start date between today and the next four months."})
+        raise bad_start
     body.pillars = list(dict.fromkeys(body.pillars))
     body.formats = list(dict.fromkeys(body.formats))
 
@@ -170,16 +176,19 @@ async def generate(body: GenIn, user: dict = Depends(user_dep())):
         stories = await read_stories(uid) if body.use_stories else []
         taken = {p["date"] async for p in d.social_posts.find({"user_id": uid, "date": {"$gte": start.isoformat()}}, {"date": 1})}
         slots = plan_slots(body, schedule(start, n, body.per_week, taken), stories)
-        raw = await llm.complete_json(task="social_posts", system=SYSTEM, prompt=_prompt(k, slots, body.topic.strip()),
-                                      fake=lambda: _fake(k, slots), model="strong", max_tokens=min(8000, 700 * n + 400))
+        raw = as_dict(await llm.complete_json(task="social_posts", system=SYSTEM, prompt=_prompt(k, slots, body.topic.strip()),
+                                              fake=lambda: _fake(k, slots), model="strong",
+                                              max_tokens=min(8000, 700 * n + 400)))
+        allowed = (await own_links(d, user)) | links_in(body.topic)
         got: dict[int, dict] = {}
-        for x in raw.get("posts") or []:
+        for x in as_list(raw.get("posts")):
             if not isinstance(x, dict):
                 continue
             i = clamp_int(x.get("n"), -1, 10_000, -1)
-            t = _post_text(x.get("text"))
+            t = no_links(strip_providers(_post_text(x.get("text") if isinstance(x.get("text"), str) else "")), allowed)
             if 1 <= i <= len(slots) and i not in got and len(t) >= 150:
-                got[i] = {"hook": text(x.get("hook"), 200) or text(t.split("\n")[0], 200), "text": t}
+                hook = no_links(strip_providers(text(x.get("hook"), 200)), allowed)
+                got[i] = {"hook": hook or text(t.split("\n")[0], 200), "text": t}
         if not got:
             raise llm.LLMError("social: no posts")
         run_id, now = uuid.uuid4().hex, utcnow()
@@ -200,6 +209,8 @@ async def listing(month: str = Query("", pattern=r"^(\d{4}-\d{2})?$"), user: dic
     uid = str(user["_id"])
     m = month or _today().strftime("%Y-%m")
     y, mo = int(m[:4]), int(m[5:7])
+    if not 1 <= mo <= 12 or not 2000 <= y <= 2100:
+        raise HTTPException(status_code=422, detail={"code": "month", "msg": "That month isn't valid. Pick one from the calendar."})
     first = date(y, mo, 1)
     nxt = (first + timedelta(days=32)).replace(day=1)
     items = [public(p) async for p in d.social_posts.find(

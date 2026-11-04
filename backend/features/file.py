@@ -1,6 +1,8 @@
 """My Consulting File: everything the member has made, on one page they can print or save as PDF.
 
 Reads only; nothing is metered. Free accounts keep their file after the webinar (view-only).
+GET /file is also what Home reads for its progress, so it records nothing; the File page itself calls
+POST /file/viewed once when it opens (the "file_viewed" event behind the admin webinar report).
 """
 from __future__ import annotations
 
@@ -29,10 +31,16 @@ async def my_file(user: dict = Depends(user_dep())):
     answers = [{"case_id": a["case_id"], "title": titles.get(a["case_id"], a["case_id"]), "overall": a["overall"],
                 "scores": a["scores"], "at": a["at"].isoformat() if hasattr(a["at"], "isoformat") else a["at"]}
                async for a in d.case_answers.find({"user_id": uid}).sort("at", -1).limit(10)]
-    await events.track(d, "file_viewed", user_id=uid)
     snap = sp["snapshot"]
     niche = snap["options"][snap.get("chosen") or 0] if snap and snap.get("options") else None
     return {"name": user.get("name"), "readiness": readiness._public(r) if r else None, "niche": niche,
             "snapshot": snap, "goal": sp["goal"], "linkedin": linkedin._public(li) if li else None,
             "cases": answers, "criteria": [{"key": k, "label": lbl} for k, lbl in CRITERIA], "briefs": briefs,
             "knowledge": await knowledge(d, user)}
+
+
+@router.post("/viewed")
+async def viewed(user: dict = Depends(user_dep())):
+    """The File page was opened (once per visit, from the page itself, not from Home's progress read)."""
+    await events.track(db(), "file_viewed", user_id=str(user["_id"]))
+    return {"ok": True}

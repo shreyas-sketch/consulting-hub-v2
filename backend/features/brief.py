@@ -22,14 +22,17 @@ from research import search
 from state import db
 from util import iso
 
-from .common import run_metered, text, text_list
+from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text, text_list
+from .knowledge import links_in, no_links
 
 router = APIRouter(prefix="/briefs", tags=["meeting-brief"])
+WEBINAR_QUEUE_WAIT = 45          # seconds a brief may wait for an AI slot when the whole webinar makes one at once
 
 SYSTEM = (
     "You prepare a consultant for a first meeting with an Indian company. Use only the news items provided and what "
     "is generally known about this kind of business; if you are not sure about a fact, don't state it. Plain English, "
-    "short sentences. The consultant is experienced but new to consulting."
+    "short sentences. The consultant is experienced but new to consulting. Refer to news only by its number; never "
+    "write a link. " + NO_VENDOR
 )
 
 
@@ -82,25 +85,31 @@ async def make(body: BriefIn, user: dict = Depends(user_dep())):
         if is_on("BRIEF_WEB_SEARCH"):
             q = f"{body.company} India" + (f" {body.website}" if body.website else "")
             results = await search.news(q, max_results=6)
-        raw = await llm.complete_json(task="meeting_brief", system=SYSTEM, prompt=_prompt(body, results),
-                                      fake=lambda: _fake(body, results), model="fast", max_tokens=1400)
+        raw = as_dict(await llm.complete_json(task="meeting_brief", system=SYSTEM, prompt=_prompt(body, results),
+                                              fake=lambda: _fake(body, results), model="fast", max_tokens=1400,
+                                              queue_wait=WEBINAR_QUEUE_WAIT))
         news = []
-        for n in (raw.get("news") or [])[:3]:
+        for n in as_list(raw.get("news"))[:3]:
             try:
-                r = results[int(n.get("i")) - 1]
+                i = int(n.get("i"))
+                if i < 1:                    # 0 or negative would wrap to the end of the list: not a real pick
+                    continue
+                r = results[i - 1]
             except (TypeError, ValueError, IndexError, AttributeError):
                 continue
             if any(x["url"] == r["url"] for x in news):
                 continue
             news.append({"title": r["title"], "url": r["url"], "source": r["source"], "published": r["published"],
-                         "why": text(n.get("why"), 240)})
-        problems = [{"problem": text(p.get("problem"), 160), "why": text(p.get("why"), 240)}
-                    for p in (raw.get("problems") or [])[:3] if isinstance(p, dict) and p.get("problem")]
-        questions = text_list(raw.get("questions"), 5, 200)
+                         "why": strip_providers(text(n.get("why"), 240))})
+        problems = strip_providers([{"problem": text(p.get("problem"), 160), "why": text(p.get("why"), 240)}
+                                    for p in as_list(raw.get("problems"))[:3] if isinstance(p, dict) and p.get("problem")])
+        questions = strip_providers(text_list(raw.get("questions"), 5, 200))
         if not text(raw.get("about"), 600) or len(questions) < 3:
             raise llm.LLMError("brief: incomplete")
-        doc = {"_id": uuid.uuid4().hex, "user_id": uid, "input": body.model_dump(), "about": text(raw.get("about"), 600),
-               "news": news, "problems": problems, "questions": questions, "opening": text(raw.get("opening"), 300),
+        ok_links = links_in(body.website, *(r["url"] for r in results))      # links in the text: only real ones
+        written = no_links({"about": strip_providers(text(raw.get("about"), 600)), "problems": problems,
+                            "questions": questions, "opening": strip_providers(text(raw.get("opening"), 300))}, ok_links)
+        doc = {"_id": uuid.uuid4().hex, "user_id": uid, "input": body.model_dump(), **written, "news": news,
                "live_news": bool(results), "test": any(r.get("test") for r in results), "at": utcnow()}
         await db().briefs.insert_one(doc)
         await events.track(db(), "brief_made", user_id=uid, props={"company": body.company[:60], "sources": len(news)})

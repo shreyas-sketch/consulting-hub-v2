@@ -8,6 +8,9 @@ Retrieval: features.kb.search (BM25 over transcript chunks), k=6. The AI answers
 only from those chunks; sources are picked by number, so a title is always a real knowledge-base document. When the
 chunks don't cover the question it is saved for the next group call; the team answers it in Admin and the member gets
 an inbox alert. Personal financial, tax, investment and legal advice is declined politely.
+
+Metering (`akshat_ai`): the knowledge base is searched first. Only a real answer counts as a question: nothing found
+(no AI call), "not covered" and "decline" give the use back. Wrong-shaped AI output → llm.LLMError (refund + busy).
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ from pydantic import BaseModel, Field
 
 import indexes
 import llm
+import plans
 from core.deps import admin_dep, user_dep
 from growth import events
 from growth.clock import utcnow
@@ -29,16 +33,17 @@ from state import db
 from util import iso
 
 from . import kb
-from .common import run_metered, text
+from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text
 
 router = APIRouter(tags=["akshat-ai"])
 
 K = 6
 QUEUED_TEXT = ("I couldn't find this in Akshat's sessions yet, so I won't guess. I've sent your question to the next "
-               "group call, so Akshat can answer it there. You'll get a message in your inbox when the answer is ready.")
+               "group call, so Akshat can answer it there. You'll get a message in your inbox when the answer is ready. "
+               "This didn't use up a question.")
 DECLINE_TEXT = ("I can't give personal financial, tax, investment or legal advice. For that, please speak to a "
                 "qualified professional who can look at your situation. Ask me anything about building your "
-                "consulting practice and I'll answer from Akshat's sessions.")
+                "consulting practice and I'll answer from Akshat's sessions. This didn't use up a question.")
 PERSONAL_ADVICE = re.compile(r"\b(should i (invest|buy|sell)|which (stock|share|mutual fund|fund)|mutual funds?|"
                              r"stock market|crypto\w*|my (taxes|tax return|itr|loan|emi)|file my (itr|gst)|"
                              r"legal advice|sue|lawsuit|my lawyer|divorce|court case)\b", re.I)
@@ -55,7 +60,7 @@ SYSTEM = (
     "Write the answer in Markdown: a short paragraph, then a few bullets or numbered steps if it helps. 80-250 words.\n"
     "- Money in rupees (₹) with Indian grouping.\n"
     "- Never name or hint at the AI company or model behind you. You are the hub's Akshat AI.\n"
-    "- \"sources\" are the numbers of the excerpts you actually used."
+    "- \"sources\" are the numbers of the excerpts you actually used.\n" + NO_VENDOR
 )
 
 indexes.register("akshat_threads", [("user_id", 1), ("updated_at", -1)])
@@ -124,64 +129,81 @@ async def ask(body: AskIn, user: dict = Depends(user_dep())):
     thread = await _thread(body.thread_id, uid) if body.thread_id else None
     earlier = [m for m in (thread or {}).get("messages", []) if m.get("text")][-6:]
 
+    await plans.require(d, user, "akshat_ai")
+    query = question
+    prev_q = next((m["text"] for m in reversed(earlier) if m["role"] == "user"), "")
+    if prev_q and len(kb.tokens(question)) < 6:
+        query = f"{prev_q} {question}"               # short follow-ups ("and for MSMEs?") search with the last question
+    chunks = await kb.search(d, query, k=K)          # search first: nothing found → no AI call, nothing counted
+    if not chunks:
+        return await _save(d, uid, thread, question, "decline" if PERSONAL_ADVICE.search(question) else "not_covered")
+
     async def work(plan: str):
-        dup = None
-        query = question
-        prev_q = next((m["text"] for m in reversed(earlier) if m["role"] == "user"), "")
-        if prev_q and len(kb.tokens(question)) < 6:
-            query = f"{prev_q} {question}"           # short follow-ups ("and for MSMEs?") search with the last question
-        chunks = await kb.search(d, query, k=K)
-        if chunks:
-            raw = await llm.complete_json(task="akshat_ai", system=SYSTEM, prompt=_prompt(question, chunks, earlier),
-                                          fake=lambda: _fake(question, chunks), model="strong", max_tokens=900)
-            kind = raw.get("kind") if raw.get("kind") in ("answer", "not_covered", "decline") else None
-            if kind is None:
-                raise llm.LLMError("akshat_ai: bad kind")
-        else:
-            kind = "decline" if PERSONAL_ADVICE.search(question) else "not_covered"
-            raw = {}
-        now = utcnow()
-        um = {"role": "user", "text": question, "at": now}
-        qid = None
-        if kind == "answer":
-            answer = str(raw.get("answer") or "").strip()[:4000]
-            if len(answer) < 20:
-                raise llm.LLMError("akshat_ai: empty answer")
-            titles: list[str] = []
-            for n in raw.get("sources") or []:
-                try:
-                    c = chunks[int(n) - 1]
-                except (TypeError, ValueError, IndexError):
-                    continue
-                if int(n) >= 1 and c.get("title") and c["title"] not in titles:
-                    titles.append(c["title"])
-            if not titles:
-                titles = list(dict.fromkeys(c["title"] for c in chunks[:2] if c.get("title")))
-            am = {"role": "assistant", "text": answer, "at": now, "status": "answered",
-                  "sources": [{"title": t} for t in titles[:4]]}
-        elif kind == "decline":
-            am = {"role": "assistant", "text": DECLINE_TEXT, "at": now, "status": "declined", "sources": []}
-        else:
-            dup = await d.akshat_questions.find_one({"user_id": uid, "status": "queued",
-                                                     "question": {"$regex": f"^{re.escape(question)}$", "$options": "i"}})
-            qid = dup["_id"] if dup else uuid.uuid4().hex
-            am = {"role": "assistant", "text": QUEUED_TEXT, "at": now, "status": "queued", "sources": [], "question_id": qid}
-        if thread:
-            tid = thread["_id"]
-            await d.akshat_threads.update_one({"_id": tid}, {"$push": {"messages": {"$each": [um, am]}},
-                                                              "$set": {"updated_at": now}})
-        else:
-            tid = uuid.uuid4().hex
-            await d.akshat_threads.insert_one({"_id": tid, "user_id": uid, "title": text(question, 80),
-                                               "messages": [um, am], "created_at": now, "updated_at": now})
-        if am["status"] == "queued" and not dup:
-            await d.akshat_questions.insert_one({"_id": qid, "user_id": uid, "thread_id": tid, "question": question,
-                                                 "status": "queued", "answer": None, "at": now})
-        await events.track(d, "akshat_ai_asked", user_id=uid,
-                           props={"status": am["status"], "sources": len(am["sources"])})
-        return {"thread_id": tid, "status": am["status"], "question_id": qid,
-                "user_message": _public_msg(um), "message": _public_msg(am)}
-    return await run_metered(d, user, "akshat_ai", work, access="akshat_ai")
+        raw = await llm.complete_json(task="akshat_ai", system=SYSTEM, prompt=_prompt(question, chunks, earlier),
+                                      fake=lambda: _fake(question, chunks), model="strong", max_tokens=900)
+        if not isinstance(raw, dict):
+            raise llm.LLMError("akshat_ai: not an object")
+        raw = as_dict(raw)
+        kind = raw.get("kind") if raw.get("kind") in ("answer", "not_covered", "decline") else None
+        if kind is None:
+            raise llm.LLMError("akshat_ai: bad kind")
+        if kind != "answer":
+            return plan, await _save(d, uid, thread, question, kind)
+        answer = strip_providers(str(raw.get("answer") or "").strip()[:4000])
+        if len(answer) < 20:
+            raise llm.LLMError("akshat_ai: empty answer")
+        titles: list[str] = []
+        for n in as_list(raw.get("sources")):
+            try:
+                i = int(n)
+                c = chunks[i - 1]
+            except (TypeError, ValueError, IndexError):
+                continue
+            if i >= 1 and c.get("title") and c["title"] not in titles:
+                titles.append(c["title"])
+        if not titles:
+            titles = list(dict.fromkeys(c["title"] for c in chunks[:2] if c.get("title")))
+        return plan, await _save(d, uid, thread, question, "answer", answer=answer, titles=titles)
+
+    plan, out = await run_metered(d, user, "akshat_ai", work, access="akshat_ai")
+    if out["status"] != "answered":                  # "not covered" / decline: give the question back
+        await plans.refund(d, user, "akshat_ai", plan)
+        out["counted"] = False
+    return out
+
+
+async def _save(d, uid: str, thread: Optional[dict], question: str, kind: str, *, answer: str = "",
+                titles: Optional[list[str]] = None) -> dict:
+    """Store the member's question and the reply (answer, decline, or queued for the next group call)."""
+    dup = None
+    now = utcnow()
+    um = {"role": "user", "text": question, "at": now}
+    qid = None
+    if kind == "answer":
+        am = {"role": "assistant", "text": answer, "at": now, "status": "answered",
+              "sources": [{"title": t} for t in (titles or [])[:4]]}
+    elif kind == "decline":
+        am = {"role": "assistant", "text": DECLINE_TEXT, "at": now, "status": "declined", "sources": []}
+    else:
+        dup = await d.akshat_questions.find_one({"user_id": uid, "status": "queued",
+                                                 "question": {"$regex": f"^{re.escape(question)}$", "$options": "i"}})
+        qid = dup["_id"] if dup else uuid.uuid4().hex
+        am = {"role": "assistant", "text": QUEUED_TEXT, "at": now, "status": "queued", "sources": [], "question_id": qid}
+    if thread:
+        tid = thread["_id"]
+        await d.akshat_threads.update_one({"_id": tid}, {"$push": {"messages": {"$each": [um, am]}},
+                                                          "$set": {"updated_at": now}})
+    else:
+        tid = uuid.uuid4().hex
+        await d.akshat_threads.insert_one({"_id": tid, "user_id": uid, "title": text(question, 80),
+                                           "messages": [um, am], "created_at": now, "updated_at": now})
+    if am["status"] == "queued" and not dup:
+        await d.akshat_questions.insert_one({"_id": qid, "user_id": uid, "thread_id": tid, "question": question,
+                                             "status": "queued", "answer": None, "at": now})
+    await events.track(d, "akshat_ai_asked", user_id=uid,
+                       props={"status": am["status"], "sources": len(am["sources"])})
+    return {"thread_id": tid, "status": am["status"], "question_id": qid, "counted": am["status"] == "answered",
+            "user_message": _public_msg(um), "message": _public_msg(am)}
 
 
 @router.get("/akshat-ai/threads")

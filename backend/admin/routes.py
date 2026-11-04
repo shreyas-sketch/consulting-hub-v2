@@ -12,6 +12,7 @@ import asyncio
 import csv
 import io
 import re
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -23,6 +24,7 @@ import appsettings
 import plans
 from auth import public_user
 from billing import l2 as l2_billing
+from billing.razorpay_client import build_client
 from core import flags
 from core.deps import admin_dep
 from core.vendors import REQUIRED_KEYS, vendor_mode
@@ -184,6 +186,18 @@ async def webinar(start: str, end: str, _: dict = Admin):
             "group_session_list": sum(1 for u in ids if u not in paid and u not in granted)}
 
 
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+_PLAIN_NUMBER = re.compile(r"^[+-]?\d+(\.\d+)?$")
+
+
+def csv_safe(v):
+    """Excel and Sheets run a cell that starts with = + - @ (or a tab / CR before one) as a formula. Member names are
+    typed by members, so prefix such cells with ' (OWASP CSV injection). Plain numbers (+919876543210) stay as they are."""
+    if not isinstance(v, str) or not v or _PLAIN_NUMBER.match(v):
+        return v
+    return "'" + v if v.startswith(_FORMULA_START) else v
+
+
 @router.get("/webinar/group-session.csv")
 async def group_session_csv(start: str, end: str, _: dict = Admin):
     """Accounts from the window who haven't bought: invite them to Akshat's group session."""
@@ -210,9 +224,10 @@ async def group_session_csv(start: str, end: str, _: dict = Admin):
     for u in rows:
         uid = str(u["_id"])
         ll = u.get("last_login_at") or u.get("created_at")
-        w.writerow([u.get("name") or "", u.get("phone") or "", as_utc(u["created_at"]).astimezone(IST).strftime("%Y-%m-%d %H:%M"),
-                    (u.get("acquisition") or {}).get("source", ""), used_by.get(uid, 0), scores.get(uid, ""),
-                    as_utc(ll).astimezone(IST).strftime("%Y-%m-%d %H:%M") if ll else ""])
+        w.writerow([csv_safe(x) for x in (
+            u.get("name") or "", u.get("phone") or "", as_utc(u["created_at"]).astimezone(IST).strftime("%Y-%m-%d %H:%M"),
+            (u.get("acquisition") or {}).get("source", ""), used_by.get(uid, 0), scores.get(uid, ""),
+            as_utc(ll).astimezone(IST).strftime("%Y-%m-%d %H:%M") if ll else "")])
     return Response(buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": f'attachment; filename="group-session-{start}-to-{end}.csv"'})
 
@@ -265,7 +280,9 @@ async def user_detail(user_id: str, _: dict = Admin):
            async for e in d.events.find({"user_id": user_id}).sort("ts", -1).limit(60)]
     subs = [{"id": s["_id"], "plan": s["plan"], "period": s.get("period") or "monthly", "status": s["status"],
              "current_end": iso(s.get("current_end")), "cancel_at_cycle_end": s.get("cancel_at_cycle_end"),
-             "paused_for_l2": s.get("paused_for_l2", False), "resume_at": iso(s.get("resume_at"))}
+             "paused_for_l2": s.get("paused_for_l2", False), "resume_at": iso(s.get("resume_at")),
+             "starts_at": iso(s.get("starts_at")), "cancel_failed": bool(s.get("cancel_failed")),
+             "resume_failed": bool(s.get("resume_failed")), "error": s.get("cancel_error") or s.get("resume_error")}
             async for s in d.subscriptions.find({"user_id": user_id}).sort("created_at", -1)]
     grants = [{"plan": g["plan"], "ends_at": iso(g["ends_at"]), "by": g.get("by"), "kind": g.get("kind")}
               async for g in d.plan_grants.find({"user_id": user_id}).sort("at", -1)]
@@ -298,16 +315,32 @@ async def grant(user_id: str, body: GrantIn, admin: dict = Admin):
 @router.post("/users/{user_id}/start-l2")
 async def start_l2(user_id: str, admin: dict = Admin):
     """The member has paid for L2 (₹1.5L, outside the app): switch L2 on for 6 months and pause their L1."""
-    u = await _user(user_id)
-    st = l2_billing.l2_status(u)
-    if st and st["active"]:
-        raise HTTPException(status_code=409, detail={"code": "already_l2", "msg": f"L2 already runs until {st['ends_at'][:10]}."})
-    res = await l2_billing.start_l2(db(), user_id, by=str(admin["_id"]))
+    await _user(user_id)
+    try:
+        res = await l2_billing.start_l2(db(), user_id, by=str(admin["_id"]))     # claims L2 atomically
+    except l2_billing.L2AlreadyActive as e:
+        until = f" until {e.ends_at.astimezone(IST).date().isoformat()}" if e.ends_at else ""
+        raise HTTPException(status_code=409, detail={"code": "already_l2", "msg": f"L2 already runs{until}."})
     return {"result": res, **(await user_detail(user_id, admin))}
 
 
 class StatusIn(BaseModel):
     status: str = Field(..., pattern="^(active|revoked)$")
+
+
+async def _stop_billing(user_id: str) -> dict:
+    """A revoked account must not keep paying: every running, scheduled or paused subscription stops renewing
+    (running ones at the end of the period already paid). Ones the payment provider didn't take are flagged and
+    retried by the hourly l2_resume job."""
+    c = build_client()
+    stopped, failed = 0, 0
+    async for s in db().subscriptions.find({"user_id": user_id, "status": {"$in": [*plans.LIVE_SUB, "paused"]},
+                                            "cancel_at_cycle_end": {"$ne": True}}):
+        if await l2_billing.stop_renewal(c, db(), s, ended_for_revoke=True):
+            stopped += 1
+        else:
+            failed += 1
+    return {"stopped": stopped, "failed": failed}
 
 
 @router.post("/users/{user_id}/status")
@@ -316,7 +349,8 @@ async def set_status(user_id: str, body: StatusIn, admin: dict = Admin):
     if str(u["_id"]) == str(admin["_id"]):
         raise HTTPException(status_code=400, detail={"code": "self", "msg": "You can't change your own status."})
     await db().users.update_one({"_id": u["_id"]}, {"$set": {"status": body.status}})
-    return await user_detail(user_id, admin)
+    billing = await _stop_billing(user_id) if body.status == "revoked" else None
+    return {**(await user_detail(user_id, admin)), "billing": billing}
 
 
 # ------------------------------------------------------------------ cases ----
@@ -382,9 +416,16 @@ async def jobs(_: dict = Admin):
 
 @router.post("/jobs/{name}/run")
 async def run_job(name: str, _: dict = Admin):
+    """Run now takes the same lock as the scheduler, so a job never runs twice at once."""
     if name not in registry.JOBS:
         raise HTTPException(status_code=404, detail={"code": "unknown_job", "msg": "Unknown job."})
-    r = await registry.run(db(), name)
+    owner = "admin-" + uuid.uuid4().hex[:12]
+    if not await registry.claim_lock(db(), name, owner=owner):
+        raise HTTPException(status_code=409, detail={"code": "job_running", "msg": "This job is running now. Try again in a few minutes."})
+    try:
+        r = await registry.run(db(), name)
+    finally:
+        await registry.release_lock(db(), name, owner=owner)
     return {"ok": r.get("ok"), "result": r.get("result") or r.get("error"), "ms": r.get("ms")}
 
 

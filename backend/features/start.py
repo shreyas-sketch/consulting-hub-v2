@@ -28,9 +28,10 @@ from growth.clock import utcnow
 from state import db
 from util import inr, iso
 
-from .common import clamp_int, run_metered, text
+from .common import NO_VENDOR, as_dict, as_list, clamp_int, run_metered, strip_providers, text
 
 router = APIRouter(prefix="/start", tags=["starting-point"])
+WEBINAR_QUEUE_WAIT = 45          # seconds a snapshot may wait for an AI slot when the whole webinar runs it at once
 
 SYSTEM = (
     "You help experienced Indian professionals, mostly still in jobs with 10-25 years of experience, find a consulting "
@@ -41,7 +42,7 @@ SYSTEM = (
     "credibility over passion alone. Push for specificity: never a vague consultant title (say 'B2B Sales Growth "
     "Consultant for engineering MSMEs', not 'Business Consultant'). Fees in Indian rupees only, realistic for India: "
     "beginner consultants typically ₹10,000-₹50,000 per client, established ₹50,000-₹2,00,000, specialists "
-    "₹2,00,000-₹10,00,000+; adjust for the niche and audience. Use plain English. Never promise income."
+    "₹2,00,000-₹10,00,000+; adjust for the niche and audience. Use plain English. Never promise income. " + NO_VENDOR
 )
 INCOME_NOTE = "Actual income depends on expertise, positioning, proof of results, sales ability, and client acquisition effectiveness."
 
@@ -86,7 +87,7 @@ def _fake(body: SnapshotIn) -> dict:
 
 def _clean_options(raw: dict, body: SnapshotIn) -> list[dict]:
     opts = []
-    for o in (raw.get("options") or [])[:3]:
+    for o in as_list(as_dict(raw).get("options"))[:3]:
         if not isinstance(o, dict) or not text(o.get("niche"), 120):
             continue
         lo, hi = clamp_int(o.get("fee_low"), 5000, 5_000_000, 20000), clamp_int(o.get("fee_high"), 5000, 10_000_000, 60000)
@@ -98,7 +99,7 @@ def _clean_options(raw: dict, body: SnapshotIn) -> list[dict]:
                "enjoyment": clamp_int(o.get("enjoyment"), 1, 10, 5)}
         row["total"] = row["experience"] + row["demand"] + row["enjoyment"]
         row["yearly_low"], row["yearly_high"] = row["fee_low"] * 4 * 12, row["fee_high"] * 4 * 12   # 4 clients a month
-        opts.append(row)
+        opts.append(strip_providers(row))
     if len(opts) < 3:
         raise llm.LLMError("snapshot: fewer than 3 options")
     return sorted(opts, key=lambda r: -r["total"])
@@ -142,11 +143,12 @@ async def snapshot(body: SnapshotIn, user: dict = Depends(user_dep())):
     body.enjoy = sorted({i for i in body.enjoy if 0 <= i < len(body.experiences)})
 
     async def work(plan: str):
-        raw = await llm.complete_json(task="niche_snapshot", system=SYSTEM, prompt=_prompt(body),
-                                      fake=lambda: _fake(body), model="fast", max_tokens=1200)
+        raw = as_dict(await llm.complete_json(task="niche_snapshot", system=SYSTEM, prompt=_prompt(body),
+                                              fake=lambda: _fake(body), model="fast", max_tokens=1200,
+                                              queue_wait=WEBINAR_QUEUE_WAIT))
         opts = _clean_options(raw, body)
         doc = {"_id": uuid.uuid4().hex, "user_id": uid, "input": body.model_dump(), "options": opts, "chosen": 0,
-               "note": text(raw.get("note"), 300), "at": utcnow()}
+               "note": strip_providers(text(raw.get("note"), 300)), "at": utcnow()}
         await db().snapshots.insert_one(doc)
         await events.track(db(), "snapshot_run", user_id=uid, props={"top_niche": opts[0]["niche"]})
         return _public(doc)
@@ -181,6 +183,7 @@ def goal_map(g: dict) -> dict:
     return {"clients_per_month": clients, "discovery_calls_per_month": calls, "conversations_per_month": convos,
             "conversations_per_week": math.ceil(convos / 4.3), "monthly_goal_inr": g["monthly_goal_inr"],
             "fee_inr": g["fee_inr"], "months": g["months"],
+            "close_rate_pct": g["close_rate_pct"], "calls_per_lead": g["calls_per_lead"],     # the saved assumptions
             "assumptions": [f"{g['close_rate_pct']}% of discovery calls become clients",
                             f"{g['calls_per_lead']} conversations for every discovery call",
                             "Fee is per client per month"],

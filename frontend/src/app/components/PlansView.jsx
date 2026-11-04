@@ -77,15 +77,30 @@ export default function PlansView({ inShell = false }) {
   if (cat.isError) return <ErrorCard error={cat.error} onRetry={() => cat.refetch()} what="the plans" />;
   const plans = (cat.data?.plans || []).filter((p) => p.id !== "free");
   const current = user ? plan?.plan || "free" : null;
+  const l2End = plan?.l2?.ends_at ? ` on ${hdate(plan.l2.ends_at)}` : "";
   return (
     <div className="space-y-4">
       {done && (
         <Card className="border-bz-gold" role="status">
-          <OkLine>Payment received. You're on the {done.label || PLAN_LABEL[done.plan] || "new plan"}{done.paid_until ? ` until ${hdate(done.paid_until)}` : ""}.</OkLine>
+          {done.scheduled ? (
+            <OkLine>Done. Your {done.scheduled.label || PLAN_LABEL[done.scheduled.plan]} starts on {hdate(done.scheduled.starts_at)}, when your current plan ends. The first payment is taken that day.</OkLine>
+          ) : (
+            <OkLine>Payment received. You're on the {done.label || PLAN_LABEL[done.plan] || "new plan"}{done.paid_until ? ` until ${hdate(done.paid_until)}` : ""}.</OkLine>
+          )}
           <Link to="/app" className="text-sm font-bold text-bz-gold">Back to home</Link>
         </Card>
       )}
-      {current === "l2" && <Card inset><p className="text-[15px]">You're on <b>L2 Mentorship</b>. Everything is open. L1 continues by itself when L2 ends.</p></Card>}
+      {current === "l2" && (
+        <Card inset>
+          <p className="text-[15px]">
+            You're on <b>L2 Mentorship</b>. Everything is open.{" "}
+            {plan?.paused_for_l2 ? `Your L1 is paused. It restarts by itself when L2 ends${l2End}.` : `When L2 ends${l2End}, you can start L1 again here.`}
+          </p>
+        </Card>
+      )}
+      {current !== "l2" && plan?.scheduled && !done && (
+        <Card inset><p className="text-[15px]">Your <b>{plan.scheduled.label || PLAN_LABEL[plan.scheduled.plan]}</b> starts on <b className="text-bz-gold">{hdate(plan.scheduled.starts_at)}</b>.</p></Card>
+      )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {plans.map((p) => <PlanCard key={p.id} p={p} current={current} highlight={want ? want === p.id : p.id === "l1"} onBuy={current === "l2" ? null : onBuy} busy={busy} />)}
       </div>

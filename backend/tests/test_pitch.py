@@ -187,11 +187,12 @@ def test_pitch_locked_for_member(seeded_client):
     assert r.status_code == 403 and r.json()["detail"]["code"] == "locked"
 
 
-def test_pitch_limit(seeded_client, tmpdir_env):
+def test_pitch_limit(seeded_client, mdb, tmpdir_env):
     c = seeded_client
     qa_login(c, plan="l1")
     for _ in range(4):
         assert upload(c, new_thread(c)["id"]).status_code == 200
+        run(mdb.pitch_threads.update_many({}, {"$set": {"last_upload_at": utcnow() - timedelta(minutes=31)}}))  # the pause is per member
     r = upload(c, new_thread(c)["id"])
     assert r.status_code == 402 and r.json()["detail"]["code"] == "limit"
     assert os.listdir(tmpdir_env) == []

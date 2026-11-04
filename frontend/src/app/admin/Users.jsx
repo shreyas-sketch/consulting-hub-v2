@@ -38,8 +38,18 @@ function Detail({ id, onClose }) {
   const run = async (kind, path, body) => {
     setMsg(""); setErr(""); setBusy(kind);
     try {
-      await api.post(`/admin/users/${id}/${path}`, body);
-      setMsg("Saved."); q.refetch(); qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      const { data } = await api.post(`/admin/users/${id}/${path}`, body);
+      const b = data?.billing;
+      if (b) {
+        // Revoke also stops every subscription renewing. Say what happened, and what still needs a hand.
+        const plural = (n) => (n === 1 ? "subscription" : "subscriptions");
+        const parts = ["Access revoked."];
+        if (b.stopped) parts.push(`${b.stopped} ${plural(b.stopped)} stopped from renewing.`);
+        if (!b.stopped && !b.failed) parts.push("No subscription was renewing.");
+        setMsg(parts.join(" "));
+        if (b.failed) setErr(`${b.failed} ${plural(b.failed)} couldn't be stopped. The app tries again every hour; check the payment dashboard if it stays marked "cancel failed".`);
+      } else setMsg("Saved.");
+      q.refetch(); qc.invalidateQueries({ queryKey: ["admin", "users"] });
     } catch (e) { setErr(apiError(e)); } finally { setBusy(null); }
   };
   const d = q.data || {};
@@ -77,7 +87,7 @@ function Detail({ id, onClose }) {
             <div>
               <Label>Access</Label>
               {revoked ? <Button variant="secondary" onClick={() => run("status", "status", { status: "active" })} loading={busy === "status"}>Restore access</Button>
-                : <Button variant="danger" onClick={() => { if (window.confirm("Revoke this account's access?")) run("status", "status", { status: "revoked" }); }} loading={busy === "status"} data-testid="admin-revoke">Revoke access</Button>}
+                : <Button variant="danger" onClick={() => { if (window.confirm("Revoke this account's access? Their subscriptions stop renewing (each runs to the end of the period already paid).")) run("status", "status", { status: "revoked" }); }} loading={busy === "status"} data-testid="admin-revoke">Revoke access</Button>}
             </div>
             {msg && <p className="text-sm text-bz-gold font-bold">{msg}</p>}
             {err && <p className="text-sm text-bz-miss">{err}</p>}
@@ -88,8 +98,15 @@ function Detail({ id, onClose }) {
               <Table rows={d.subscriptions} cols={[
                 { key: "plan", label: "Plan", render: (r) => PLAN_LABEL[r.plan] || r.plan },
                 { key: "period", label: "Period" },
-                { key: "status", label: "Status", render: (r) => `${r.status}${r.paused_for_l2 ? " (L2)" : ""}${r.cancel_at_cycle_end ? " · cancelling" : ""}` },
-                { key: "current_end", label: "Paid to", render: (r) => (r.current_end ? hdate(r.current_end) : "—") },
+                { key: "status", label: "Status", wrap: true, render: (r) => (
+                  <span>
+                    {`${r.status}${r.paused_for_l2 ? " (L2)" : ""}${r.cancel_at_cycle_end ? " · cancelling" : ""}`}
+                    {r.cancel_failed && <Chip tone="miss" className="ml-1">cancel failed</Chip>}
+                    {r.resume_failed && <Chip tone="miss" className="ml-1">restart failed</Chip>}
+                    {(r.cancel_failed || r.resume_failed) && r.error && <span className="block text-[11px] text-bz-muted break-words">{r.error}</span>}
+                  </span>
+                ) },
+                { key: "current_end", label: "Paid to", render: (r) => (r.current_end ? hdate(r.current_end) : r.starts_at ? `starts ${hdate(r.starts_at)}` : "—") },
                 { key: "resume_at", label: "Resumes", render: (r) => (r.resume_at ? hdate(r.resume_at) : "—") },
               ]} />
             </div>

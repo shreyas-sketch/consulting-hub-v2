@@ -29,9 +29,9 @@ from research import search
 from state import db
 from util import iso
 
-from .common import text
+from .common import NO_VENDOR, as_dict, strip_providers, text
 from .knowledge import knowledge, system_block
-from .network import NO_VENDOR, run_metered_n
+from .network import run_metered_n
 
 router = APIRouter(prefix="/radar", tags=["opportunity-radar"])
 
@@ -141,9 +141,9 @@ async def run_radar(body: RunIn, user: dict = Depends(user_dep())):
                 "code": "no_news", "msg": "No news came back for that search. Try a wider industry or leave the city empty. This didn't use up any of your companies."})
         have = [c["company"] async for c in d.radar_companies.find({"user_id": uid}, {"company": 1}).sort("at", -1).limit(500)]
         have_keys = {company_key(x) for x in have}
-        raw = await llm.complete_json(task="radar_pick", system=SYSTEM,
-                                      prompt=_prompt(k, niche, industry, city, results, have, n),
-                                      fake=lambda: _fake(results, n, industry, city), model="fast", max_tokens=1400)
+        raw = as_dict(await llm.complete_json(task="radar_pick", system=SYSTEM,
+                                              prompt=_prompt(k, niche, industry, city, results, have, n),
+                                              fake=lambda: _fake(results, n, industry, city), model="fast", max_tokens=1400))
         if not isinstance(raw.get("companies"), list):
             raise llm.LLMError("radar: no companies list")
         run_id, now = uuid.uuid4().hex, utcnow()
@@ -152,9 +152,9 @@ async def run_radar(body: RunIn, user: dict = Depends(user_dep())):
             if len(found) >= n or not isinstance(p, dict):
                 continue
             try:
-                r = results[int(p.get("i")) - 1]
                 if int(p.get("i")) < 1:
                     continue
+                r = results[int(p.get("i")) - 1]
             except (TypeError, ValueError, IndexError):
                 continue
             name = text(p.get("company"), 120)
@@ -164,8 +164,9 @@ async def run_radar(body: RunIn, user: dict = Depends(user_dep())):
             have_keys.add(key)
             sig = str(p.get("signal") or "").lower().strip()
             found.append({"_id": uuid.uuid4().hex, "user_id": uid, "run_id": run_id, "company": name, "key": key,
-                          "signal": sig if sig in SIGNALS else "other", "summary": text(p.get("summary"), 300),
-                          "why": text(p.get("why"), 300), "angle": text(p.get("angle"), 300),
+                          "signal": sig if sig in SIGNALS else "other",
+                          **strip_providers({"summary": text(p.get("summary"), 300), "why": text(p.get("why"), 300),
+                                             "angle": text(p.get("angle"), 300)}),
                           "news": {"title": r["title"], "url": r["url"], "source": r["source"], "published": r["published"]},
                           "test": bool(r.get("test")), "status": "new", "at": now})
         if found:

@@ -47,10 +47,14 @@ function Profile() {
 
 function Offer({ offer, onClose }) {
   const { buy, busy, error, done } = useCheckout();
+  const starts = done?.scheduled?.starts_at || offer.starts_at;
   return (
     <Sheet open onClose={onClose} title="Before you go">
       {done ? (
-        <div><OkLine>You're on the ₹1,999 plan. Your L1 runs to the end of the month you paid for.</OkLine><Button className="w-full mt-4" onClick={onClose}>Done</Button></div>
+        <div>
+          <OkLine>Done. Your L1 runs to the end of the month you paid for. The ₹1,999 plan starts {starts ? `on ${hdate(starts)}` : "when it ends"}, and the first payment is taken that day.</OkLine>
+          <Button className="w-full mt-4" onClick={onClose}>Done</Button>
+        </div>
       ) : (
         <div data-testid="downsell">
           <p className="text-[16px]">{offer.msg}</p>
@@ -76,13 +80,25 @@ function PlanDetails() {
   const [err, setErr] = useState("");
   const [offer, setOffer] = useState(null);
   const p = plan || {};
+  // POST /billing/cancel stops, in order: the running plan (at the end of the paid period), a plan that starts later,
+  // or an L1 paused for L2. Each button below is shown only when that one is next in line.
+  const running = p.source === "paid" && !p.cancelling;
+  const scheduled = !running && p.scheduled;
+  const pausedL1 = !running && !scheduled && p.paused_for_l2;
   const cancel = async () => {
-    if (!window.confirm("Cancel your subscription? You keep your plan until the end of the period you paid for.")) return;
+    const ask = pausedL1 ? "Cancel your paused L1? It won't restart after L2, and you won't be charged for it again."
+      : scheduled ? `Cancel the ${scheduled.label || "plan"} that starts on ${hdate(scheduled.starts_at)}? Nothing will be charged.`
+        : "Cancel your subscription? You keep your plan until the end of the period you paid for.";
+    if (!window.confirm(ask)) return;
     setErr(""); setMsg(""); setBusy(true);
     try {
       const { data } = await api.post("/billing/cancel");
-      const until = data?.access_until ? hdate(data.access_until) : null;
-      setMsg(`Cancelled. You keep the ${p.label || "plan"}${until ? ` until ${until}` : " to the end of the paid period"} and won't be charged again.`);
+      if (data?.kind === "paused") setMsg("Cancelled. Your L1 won't restart after L2 ends. You keep L2 until then.");
+      else if (data?.kind === "scheduled") setMsg("Cancelled. That plan won't start and nothing will be charged.");
+      else {
+        const until = data?.access_until ? hdate(data.access_until) : null;
+        setMsg(`Cancelled. You keep the ${p.label || "plan"}${until ? ` until ${until}` : " to the end of the paid period"} and won't be charged again.`);
+      }
       if (data?.offer) setOffer(data.offer);
       refreshMe();
     } catch (e) { setErr(apiError(e)); } finally { setBusy(false); }
@@ -99,7 +115,8 @@ function PlanDetails() {
         {SOURCE[p.source] || ""}
         {p.paid_until && p.source === "paid" ? (p.cancelling ? ` · cancelled, ends ${hdate(p.paid_until)}` : ` · renews ${hdate(p.paid_until)}`) : ""}
       </p>
-      {p.l2?.active && <p className="text-[14.5px] mt-2">L2 runs until <b className="text-bz-gold">{hdate(p.l2.ends_at)}</b>.{p.paused_for_l2 ? " Your L1 is paused and restarts by itself after that." : ""}</p>}
+      {p.l2?.active && <p className="text-[14.5px] mt-2">L2 runs until <b className="text-bz-gold">{hdate(p.l2.ends_at)}</b>.{p.paused_for_l2 ? " Your L1 is paused and restarts by itself after that." : " After that you can start L1 again from Plans."}</p>}
+      {p.scheduled && <p className="text-[14.5px] mt-2" data-testid="plan-scheduled">Your <b>{p.scheduled.label || PLAN_LABEL[p.scheduled.plan]}</b>{p.scheduled.period === "yearly" ? " (yearly)" : ""} starts on <b className="text-bz-gold">{hdate(p.scheduled.starts_at)}</b>. The first payment is taken that day.</p>}
       {limits.length > 0 && (
         <div className="mt-5 space-y-3" data-testid="usage-meters">
           <Label className="mb-0">{p.plan === "free" ? "Your free goes" : "This month"}</Label>
@@ -120,7 +137,9 @@ function PlanDetails() {
       )}
       <div className="mt-5 flex flex-col sm:flex-row gap-2">
         {p.plan !== "l2" && <LinkButton to="/app/plans" variant="secondary" className="sm:flex-1">See plans</LinkButton>}
-        {p.source === "paid" && !p.cancelling && <Button variant="danger" onClick={cancel} loading={busy} data-testid="billing-cancel">Cancel subscription</Button>}
+        {running && <Button variant="danger" onClick={cancel} loading={busy} data-testid="billing-cancel">Cancel subscription</Button>}
+        {scheduled && <Button variant="danger" onClick={cancel} loading={busy} data-testid="billing-cancel-scheduled">Cancel the plan that starts later</Button>}
+        {pausedL1 && <Button variant="danger" onClick={cancel} loading={busy} data-testid="billing-cancel-paused">Cancel my paused L1</Button>}
       </div>
       <OkLine>{msg}</OkLine>
       {err && <p className="text-sm text-bz-miss mt-2" role="alert">{err}</p>}

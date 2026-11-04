@@ -21,17 +21,18 @@ from typing import Awaitable, Callable, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
 from growth import events
-from growth.clock import utcnow
+from growth.clock import ist_month_key, utcnow
 from state import db
 from util import iso
 
-from .common import busy_error, clamp_int, text
+from .common import NO_VENDOR, as_dict, as_list, busy_error, clamp_int, strip_providers, text
 from .knowledge import knowledge, system_block
 
 router = APIRouter(prefix="/network", tags=["network-finder"])
@@ -41,8 +42,6 @@ METER = "contacts"
 CAP = 5000
 MAX_FILE = 5 * 1024 * 1024
 PICK_MAX = 10
-NO_VENDOR = ("Never name or hint at any AI company, model or tool behind this; you are simply the hub's assistant. "
-             "No emojis.")
 
 events.register("network_imported", "Warm Network Finder: contacts imported (props.added, source)")
 events.register("contacts_scored", "Warm Network Finder: contacts scored by AI (props.n)")
@@ -58,24 +57,53 @@ def _limit_error(meter: str, used: int, limit: int, left: int) -> HTTPException:
         "msg": f"You have {left} {unit} left this month. Choose {left} or fewer, or wait for the 1st."})
 
 
+def _used_up(meter: str, used: int, cap: int, plan: str) -> HTTPException:
+    """Nothing left this month: the same 402 plans.consume() gives."""
+    unit = plans.LIMIT_UNITS.get(meter, plans.FEATURE_NAMES.get(meter, meter) + " uses")
+    nxt = {"free": "member", "member": "l1"}.get(plan)
+    msg = f"You've used all {cap} {unit} this month." + (f" {plans.LABELS[nxt]} gives you more." if nxt else " It resets on the 1st.")
+    return HTTPException(status_code=402, detail={"code": "limit", "feature": meter, "used": used, "limit": cap,
+                                                  "plan_needed": nxt, "once": plan == "free", "msg": msg})
+
+
 async def reserve(d, user: dict, meter: str, n: int, *, access: str, partial: bool = False) -> tuple[str, int]:
     """Check the plan opens `access`, then count `n` uses of `meter` at once.
-    partial=True takes what is left (at least 1) instead of refusing. Returns (plan, n taken)."""
+    partial=True takes what is left (at least 1) instead of refusing. Returns (plan, n taken).
+
+    The take is one conditional write ("add n only while used <= limit - n"), so parallel calls can never pass
+    the limit together: when two race for the last units, one write matches and the other doesn't."""
     plan = await plans.require(d, user, access)
     n = max(1, int(n))
+    uid = str(user["_id"])
     limit = plans.limit_for(meter, plan)
-    key = plans.usage_key(str(user["_id"]), plan)
-    if limit:
+    if limit == 0:
+        await plans.consume(d, user, meter, plan)    # raises 403 locked (the plan has none of this) before any write
+    cap = limit if limit is not None else plans.FAIR_USE.get(meter)
+    key = plans.usage_key(uid, plan)
+    setoi = {"user_id": uid} if plan == "free" else {"user_id": uid, "month": ist_month_key()}
+    if cap is None:
+        await d.usage.update_one({"_id": key}, {"$inc": {meter: n}, "$setOnInsert": setoi}, upsert=True)
+        return plan, n
+    try:
+        await d.usage.update_one({"_id": key}, {"$setOnInsert": setoi}, upsert=True)     # make sure the row exists
+    except DuplicateKeyError:
+        pass                                                                              # a parallel call made it
+    for _ in range(5):
+        cond: list[dict] = [{meter: {"$lte": cap - n}}]
+        if n <= cap:
+            cond.append({meter: {"$exists": False}})
+        r = await d.usage.update_one({"_id": key, "$or": cond}, {"$inc": {meter: n}})
+        if r.modified_count:
+            return plan, n
         used = int((await d.usage.find_one({"_id": key}) or {}).get(meter, 0))
-        left = limit - used
-        if 0 < left < n:
-            if not partial:
-                raise _limit_error(meter, used, limit, left)
-            n = left
-    await plans.consume(d, user, meter, plan)        # 403 when the plan has none, 402 when nothing is left
-    if n > 1:
-        await d.usage.update_one({"_id": key}, {"$inc": {meter: n - 1}})
-    return plan, n
+        left = cap - used
+        if left <= 0:
+            await events.track(d, "limit_hit", user_id=uid, props={"feature": meter, "plan": plan})
+            raise _used_up(meter, used, cap, plan)
+        if left < n and not partial:
+            raise _limit_error(meter, used, cap, left)
+        n = min(n, left)
+    raise _limit_error(meter, cap, cap, 0)
 
 
 async def give_back(d, user: dict, meter: str, n: int, plan: str) -> None:
@@ -133,12 +161,30 @@ def _row(first: str, last: str, url: str = "", email: str = "", company: str = "
             "position": _clean(position, 200), "connected_on": _clean(connected_on, 20)}
 
 
+def decode_csv(raw: bytes) -> str:
+    """UTF-8 (with or without BOM) strictly first; UTF-16 when the file starts with its BOM (Excel "Unicode text");
+    else Windows-1252, which Excel uses for "CSV" on Indian Windows PCs, so Zoë and Désai survive."""
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return raw.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
+    try:
+        return raw.decode("cp1252")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
+
+
 def parse_connections_csv(raw: str) -> list[dict]:
     """LinkedIn's Connections.csv: skip the note lines above the 'First Name,Last Name,...' header."""
     raw = raw.lstrip("﻿")
     lines = raw.splitlines()
     start = next((i for i, ln in enumerate(lines)
-                  if ln.lstrip('﻿"').lower().startswith("first name") and "last name" in ln.lower()), None)
+                  if ln.lstrip('﻿" \t').lower().startswith("first name") and "last name" in ln.lower()), None)
     if start is None:
         raise ValueError("no header")
     reader = csv.reader(io.StringIO("\n".join(lines[start:])))
@@ -155,15 +201,23 @@ def parse_connections_csv(raw: str) -> list[dict]:
     return out
 
 
+HEADER_LINE = re.compile(r"^\W*first\s*name\s*[,\t]\s*\W*last\s*name", re.I)
+
+
 def parse_pasted(raw: str) -> list[dict]:
     """One person per line: 'Name, Role, Company' (comma or tab), or 'Name - Role at Company'.
-    A pasted copy of the CSV (with its header) is read as the CSV."""
+    A pasted copy of the CSV (with its header) is read as the CSV; if that fails, line by line."""
     if re.search(r"first name\s*,\s*last name", raw, re.I):
-        return parse_connections_csv(raw)
+        try:
+            rows = parse_connections_csv(raw)
+        except (ValueError, StopIteration, csv.Error):
+            rows = []
+        if rows:
+            return rows
     out = []
     for line in raw.splitlines():
         line = line.strip().strip("•-* ").strip()
-        if not line:
+        if not line or HEADER_LINE.match(line):
             continue
         parts = [p.strip() for p in (line.split("\t") if "\t" in line else line.split(","))]
         if len(parts) == 1:
@@ -274,21 +328,21 @@ async def _store(user: dict, rows: list[dict], source: str) -> dict:
     have = await d.contacts.count_documents({"user_id": uid})
     keys = {c["key"] async for c in d.contacts.find({"user_id": uid}, {"key": 1})}
     room = max(0, CAP - have)
-    docs, dupes, over = [], 0, 0
+    fresh, dupes = [], 0
     now = utcnow()
     for r in rows:
         key = _key(r)
         if key in keys:
             dupes += 1
             continue
-        if len(docs) >= room:
-            over += 1
-            continue
         keys.add(key)
         score, why, level = pre_score(r, terms)
-        docs.append({"_id": uuid.uuid4().hex, "user_id": uid, "key": key, **r, "source": source, "pre_score": score,
-                     "pre_why": why, "seniority": level, "fit": None, "why": "", "angle": "", "status": "new",
-                     "notes": "", "at": now})
+        fresh.append({"_id": uuid.uuid4().hex, "user_id": uid, "key": key, **r, "source": source, "pre_score": score,
+                      "pre_why": why, "seniority": level, "fit": None, "why": "", "angle": "", "status": "new",
+                      "notes": "", "at": now})
+    # Over the cap, keep the best matches, not whoever comes first in the file (LinkedIn lists newest first).
+    fresh.sort(key=lambda c: -c["pre_score"])                       # stable: file order among equal scores
+    docs, over = fresh[:room], max(0, len(fresh) - room)
     if docs:
         await d.contacts.insert_many(docs)
     await events.track(d, "network_imported", user_id=uid, props={"added": len(docs), "source": source})
@@ -304,7 +358,7 @@ async def import_csv(file: UploadFile = File(...), user: dict = Depends(user_dep
     if len(raw) > MAX_FILE:
         raise HTTPException(status_code=400, detail={"code": "too_large", "msg": "That file is over 5 MB. Upload Connections.csv only."})
     try:
-        rows = parse_connections_csv(raw.decode("utf-8-sig", errors="ignore"))
+        rows = parse_connections_csv(decode_csv(raw))
     except (ValueError, StopIteration, csv.Error):
         raise HTTPException(status_code=400, detail={
             "code": "bad_csv", "msg": "This doesn't look like LinkedIn's Connections.csv. It needs the columns First Name, Last Name and Company."})
@@ -320,7 +374,10 @@ class PasteIn(BaseModel):
 @router.post("/paste")
 async def paste(body: PasteIn, user: dict = Depends(user_dep())):
     await plans.require(db(), user, FEATURE)
-    rows = parse_pasted(body.text)
+    try:
+        rows = parse_pasted(body.text)
+    except (ValueError, StopIteration, csv.Error):
+        rows = []
     if not rows:
         raise HTTPException(status_code=400, detail={"code": "empty", "msg": "Put one person on each line: Name, Role, Company."})
     return await _store(user, rows, "paste")
@@ -409,14 +466,14 @@ async def score(body: ScoreIn, user: dict = Depends(user_dep())):
         raw = await llm.complete_json(task="network_score", system=SYSTEM, prompt=_prompt(k, rows),
                                       fake=lambda: _fake_scores(rows), model="fast", max_tokens=1600)
         got: dict[int, dict] = {}
-        for s in raw.get("scores") or []:
+        for s in as_list(as_dict(raw).get("scores")):
             if not isinstance(s, dict):
                 continue
             i = clamp_int(s.get("i"), -1, 10_000, -1)
             if not 1 <= i <= len(rows) or i in got or s.get("fit") is None or not text(s.get("why"), 300):
                 continue
-            got[i] = {"fit": clamp_int(s.get("fit"), 1, 10, 5), "why": text(s.get("why"), 300),
-                      "angle": text(s.get("angle"), 300)}
+            got[i] = strip_providers({"fit": clamp_int(s.get("fit"), 1, 10, 5), "why": text(s.get("why"), 300),
+                                      "angle": text(s.get("angle"), 300)})
         if not got:
             raise llm.LLMError("network_score: no scores")
         now = utcnow()

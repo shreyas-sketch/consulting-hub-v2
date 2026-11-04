@@ -6,7 +6,7 @@ import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { hdate } from "@/lib/format";
 import { BackLink, LockCard, Para, ScoreRing, UsageLine } from "../components/common";
-import { AiFrame, Button, Card, Chip, ErrorLine, Label, Loadable, Meter, PageHeader, Textarea, Thinking } from "../components/ui";
+import { AiFrame, Button, Card, Chip, ErrorLine, Label, Loadable, Meter, Note, PageHeader, Textarea, Thinking } from "../components/ui";
 
 function Score({ a, criteria }) {
   return (
@@ -124,7 +124,9 @@ export default function CaseView() {
       <Loadable q={q} what="this case" lines={8}>
         {({ case: c, answers }) => {
           const last = answers?.[0];
-          const showForm = !last || writing;
+          // Free account, case no longer live: read-only (their score and the model answer stay theirs to read).
+          const readOnly = !!c.read_only;
+          const showForm = !readOnly && (!last || writing);
           return (
             <>
               <PageHeader kicker={c.live ? "Live case" : "Practice case"} title={c.title} sub={`${c.company} · ${c.industry}${c.city ? ` · ${c.city}` : ""}`} />
@@ -155,13 +157,14 @@ export default function CaseView() {
                   <UsageLine usage={usage} what="case answers" className="mt-2 text-center" />
                   {last && <button type="button" onClick={() => setWriting(false)} className="mt-1 w-full text-[14px] font-bold text-bz-muted min-h-[44px]">Back to my score</button>}
                 </Card>
-              ) : (
+              ) : !last ? null : (
                 <>
+                  {readOnly && <Note>The live case has changed. Your score and the model answer stay here for you to read.</Note>}
                   <Score a={last} criteria={c.criteria} />
                   {c.model_answer && <ModelAnswer m={c.model_answer} />}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    {canRun && <Button variant="secondary" onClick={() => setWriting(true)} data-testid="case-again">Answer again</Button>}
-                    <UsageLine usage={usage} what="case answers" />
+                    {canRun && !readOnly && <Button variant="secondary" onClick={() => setWriting(true)} data-testid="case-again">Answer again</Button>}
+                    {!readOnly && <UsageLine usage={usage} what="case answers" />}
                     {answers.length > 1 && <Chip>{answers.length} answers so far</Chip>}
                   </div>
                 </>

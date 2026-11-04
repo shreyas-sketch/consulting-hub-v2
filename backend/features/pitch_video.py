@@ -10,7 +10,9 @@ GEMINI_POLL_MAX_S (default 300). Written against the public Gemini API docs (ai.
        → upload URL in the `x-goog-upload-url` response header
        POST <upload url>  X-Goog-Upload-Command: "upload, finalize", X-Goog-Upload-Offset: 0, the bytes
        → {"file": {"name": "files/…", "uri": "…", "state": "PROCESSING" | "ACTIVE" | "FAILED"}}
-  2. Poll GET /v1beta/files/… until state is ACTIVE (FAILED → error).
+  2. Poll GET /v1beta/files/… until state is ACTIVE (FAILED → error). The ACTIVE File carries
+     videoMetadata.videoDuration ("123.4s", a google.protobuf.Duration string): when the caller passes max_seconds,
+     a longer clip raises TooLong before any analysis (and the file is still deleted).
   3. POST /v1beta/models/{model}:generateContent with the file (fileData {mimeType, fileUri}), the prompt, a system
      instruction and generationConfig.responseMimeType "application/json"; text from candidates[0].content.parts.
   4. DELETE /v1beta/files/… right after (best effort; the vendor also drops files after 48 hours).
@@ -46,6 +48,32 @@ class VideoError(RuntimeError):
 
 class BadOutput(VideoError):
     """The engine answered, but not with one JSON object."""
+
+
+class TooLong(VideoError):
+    """The engine measured the clip as longer than the caller allows."""
+
+    def __init__(self, seconds: float):
+        super().__init__(f"clip is {seconds:.1f} s")
+        self.seconds = seconds
+
+
+def video_seconds(f: dict) -> Optional[float]:
+    """Length of an ACTIVE File from its videoMetadata.videoDuration ("123.4s"); None when not reported."""
+    vm = f.get("videoMetadata") or (f.get("metadata") or {}).get("videoMetadata") or {}
+    v = vm.get("videoDuration") if isinstance(vm, dict) else None
+    try:
+        if isinstance(v, dict):                                 # {"seconds": "123", "nanos": 400000000}
+            secs = float(v.get("seconds") or 0) + float(v.get("nanos") or 0) / 1e9
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            secs = float(v)
+        elif isinstance(v, str) and v.strip():
+            secs = float(v.strip().rstrip("s"))
+        else:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return secs if secs > 0 else None
 
 
 def mode() -> str:
@@ -151,8 +179,11 @@ async def _delete(c: httpx.AsyncClient, key: str, name: Optional[str]) -> None:
 
 
 async def analyse(path: str, *, mime: str, system: str, prompt: str, fake: Callable[[], Any],
-                  client: Optional[httpx.AsyncClient] = None, poll_s: float = 3.0) -> dict:
-    """Upload → wait until ACTIVE → generate JSON → delete. Returns the parsed JSON object."""
+                  client: Optional[httpx.AsyncClient] = None, poll_s: float = 3.0,
+                  max_seconds: Optional[float] = None, info: Optional[dict] = None) -> dict:
+    """Upload → wait until ACTIVE → check the engine's own duration → generate JSON → delete.
+    Returns the parsed JSON object. `info["seconds"]` gets the engine's measured length (None when not reported).
+    A clip longer than `max_seconds` raises TooLong (the file is deleted all the same)."""
     m = mode()
     if m == "fake":
         return fake()
@@ -166,6 +197,11 @@ async def analyse(path: str, *, mime: str, system: str, prompt: str, fake: Calla
         f = await _upload(c, key, path, mime)
         name = f["name"]
         f = await _wait_active(c, key, f, poll_s, max_wait)
+        secs = video_seconds(f)
+        if info is not None:
+            info["seconds"] = secs
+        if max_seconds is not None and secs is not None and secs > max_seconds:
+            raise TooLong(secs)
         return parse_json(await _generate(c, key, f, mime, system, prompt))
     except httpx.HTTPError as e:
         raise VideoError(f"network: {type(e).__name__}") from e

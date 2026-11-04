@@ -8,14 +8,19 @@ else with the setting and audience typed in). English only.
 Flow per practice thread:
   POST /pitch                      new practice (type + optional setting/audience); the intro message is the first turn
   POST /pitch/{id}/take            the video as the raw request body (Content-Type video/*), streamed to a temp file in
-                                   1 MB chunks, checked (type by magic bytes, ≤ 100 MB, ≤ 8 min: browser duration, plus
-                                   the file's own header for MP4/MOV), analysed by the video engine (features/pitch_video),
-                                   then the temp file is deleted. We never keep the video.
+                                   1 MB chunks, checked (type by magic bytes, ≤ 100 MB, ≤ 8 min), analysed by the video
+                                   engine (features/pitch_video), then the temp file is deleted. We never keep the video.
+                                   Length: the MP4/MOV header when it has one (a 0 duration counts as unknown), else the
+                                   browser's duration_s, which is then required; in live mode the engine's own measured
+                                   length (File videoMetadata) is checked too and a longer clip is refused + deleted.
                                    First take → "initial" report (A1). Later takes → "comparison" report (A1 comparison
                                    instruction) with previous_score and delta per metric (computed by us from the stored
                                    prior report). Strict validation; bad output → llm.LLMError so the use is refunded.
-  POST /pitch/{id}/chat            follow-up questions about the report: Markdown, not JSON (A8 wrapper), not metered.
-  30-minute pause between takes in a thread: every read returns can_upload, next_upload_at, cooldown_seconds_remaining.
+  POST /pitch/{id}/chat            follow-up questions about the report: Markdown, not JSON (A8 wrapper). Not on the plan
+                                   meter; fair use: MAX_CHAT per practice and MONTHLY_CHAT per member a month.
+  New practices: MONTHLY_PRACTICES per member a month (fair use).
+  30-minute pause between takes, per member across all practices (reference §3.1): every read returns can_upload,
+  next_upload_at, cooldown_seconds_remaining. One take in analysis at a time per member.
 
 Confidentiality: no member-facing text names a provider: the rule is in every prompt and provider words are stripped
 from every returned string.
@@ -23,6 +28,8 @@ from every returned string.
 pitch_threads {_id, user_id, pitch_type, setting, audience, title, takes: [{n, kind, at, duration_s, size, overall,
                report}], messages: [{id, role, kind intro|text, content, at}], last_upload_at, busy_until, created_at,
                updated_at}
+pitch_members {_id: user_id, busy_until}                                  one take in analysis per member
+pitch_usage   {_id: "<uid>:<YYYY-MM>" (IST), user_id, chats, practices}   monthly fair use
 """
 from __future__ import annotations
 
@@ -39,13 +46,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
 from growth import events
-from growth.clock import as_utc, utcnow
+from growth.clock import as_utc, ist_month_key, utcnow
 from state import db
 from util import iso
 
@@ -65,6 +73,8 @@ COOLDOWN_MIN = 30
 MAX_BYTES = 100 * 1024 * 1024
 MAX_SECONDS = 8 * 60
 MAX_CHAT = 40                       # follow-up messages per practice (fair use; not metered)
+MONTHLY_CHAT = 150                  # follow-up messages per member a month, across practices (fair use)
+MONTHLY_PRACTICES = 20              # new practices per member a month (fair use)
 CHUNK = 1024 * 1024
 VIDEO_TYPES = {  # extension → MIME sent to the engine (MKV is Matroska, the same container family as WebM)
     "mp4": "video/mp4", "m4v": "video/mp4", "mov": "video/mov", "webm": "video/webm", "mkv": "video/webm"}
@@ -262,9 +272,9 @@ def _setting(t: dict) -> tuple[str, str]:
     return (t.get("setting") or preset["setting"]), (t.get("audience") or preset["audience"])
 
 
-def _cooldown(t: dict, now=None) -> dict:
+def _cooldown(last, now=None) -> dict:
+    """`last`: the member's latest analysed take, in any practice (the pause is per member)."""
     now = now or utcnow()
-    last = t.get("last_upload_at")
     if not last:
         return {"can_upload": True, "next_upload_at": None, "cooldown_seconds_remaining": 0}
     nxt = as_utc(last) + timedelta(minutes=COOLDOWN_MIN)
@@ -272,33 +282,68 @@ def _cooldown(t: dict, now=None) -> dict:
     return {"can_upload": left == 0, "next_upload_at": iso(nxt) if left else None, "cooldown_seconds_remaining": left}
 
 
+async def _last_upload(uid: str):
+    t = await db().pitch_threads.find_one({"user_id": uid, "last_upload_at": {"$ne": None}}, {"last_upload_at": 1},
+                                          sort=[("last_upload_at", -1)])
+    return (t or {}).get("last_upload_at")
+
+
+# ---- monthly fair use (not the plan meter: a separate counter per member and IST month)
+def _usage_key(uid: str) -> str:
+    return f"{uid}:{ist_month_key()}"
+
+
+async def _use(uid: str, field: str, cap: int) -> bool:
+    """Take one of this month's `field` (chats | practices) if fewer than `cap` are used. Atomic."""
+    key = _usage_key(uid)
+    try:
+        await db().pitch_usage.update_one({"_id": key}, {"$setOnInsert": {"user_id": uid, "chats": 0, "practices": 0}},
+                                          upsert=True)
+    except DuplicateKeyError:
+        pass
+    r = await db().pitch_usage.update_one({"_id": key, field: {"$lt": cap}}, {"$inc": {field: 1}})
+    return bool(r.matched_count)
+
+
+async def _give_back(uid: str, field: str) -> None:
+    await db().pitch_usage.update_one({"_id": _usage_key(uid), field: {"$gt": 0}}, {"$inc": {field: -1}})
+
+
+async def _member(uid: str) -> dict:
+    u = await db().pitch_usage.find_one({"_id": _usage_key(uid)}) or {}
+    return {"last": await _last_upload(uid), "chats_left": max(0, MONTHLY_CHAT - int(u.get("chats") or 0)),
+            "practices_left": max(0, MONTHLY_PRACTICES - int(u.get("practices") or 0))}
+
+
 def _take_public(x: dict) -> dict:
     return {"n": x["n"], "kind": x["kind"], "at": iso(x["at"]), "duration_s": x.get("duration_s"),
             "overall": x.get("overall"), "report": strip_providers(x["report"])}
 
 
-def _public(t: dict) -> dict:
+def _public(t: dict, m: dict) -> dict:
     setting, audience = _setting(t)
     takes = t.get("takes") or []
+    thread_left = max(0, MAX_CHAT - sum(1 for x in t.get("messages") or [] if x["role"] == "user"))
     return {"id": t["_id"], "pitch_type": t["pitch_type"], "type_label": TYPES[t["pitch_type"]]["label"],
             "title": t.get("title"), "setting": setting, "audience": audience,
             "takes": [_take_public(x) for x in takes],
-            "messages": [{"id": m["id"], "role": m["role"], "kind": m.get("kind", "text"),
-                          "content": strip_providers(m["content"]) if m["role"] == "assistant" else m["content"],
-                          "after_take": m.get("after_take", 0),
-                          "at": iso(m["at"])} for m in t.get("messages") or []],
+            "messages": [{"id": x["id"], "role": x["role"], "kind": x.get("kind", "text"),
+                          "content": strip_providers(x["content"]) if x["role"] == "assistant" else x["content"],
+                          "after_take": x.get("after_take", 0),
+                          "at": iso(x["at"])} for x in t.get("messages") or []],
             "metrics": [{"key": k, "label": lbl} for k, lbl in METRICS],
-            "chat_left": max(0, MAX_CHAT - sum(1 for m in t.get("messages") or [] if m["role"] == "user")),
-            **_cooldown(t), "created_at": iso(t["created_at"]), "updated_at": iso(t.get("updated_at") or t["created_at"])}
+            "chat_left": min(thread_left, m["chats_left"]), "chat_month_left": m["chats_left"],
+            **_cooldown(m["last"]), "created_at": iso(t["created_at"]),
+            "updated_at": iso(t.get("updated_at") or t["created_at"])}
 
 
-def _card(t: dict) -> dict:
+def _card(t: dict, m: dict) -> dict:
     takes = t.get("takes") or []
     return {"id": t["_id"], "title": t.get("title"), "pitch_type": t["pitch_type"],
             "type_label": TYPES[t["pitch_type"]]["label"], "takes": len(takes),
             "last_score": takes[-1].get("overall") if takes else None,
             "first_score": takes[0].get("overall") if takes else None,
-            **_cooldown(t), "updated_at": iso(t.get("updated_at") or t["created_at"])}
+            **_cooldown(m["last"]), "updated_at": iso(t.get("updated_at") or t["created_at"])}
 
 
 async def _own(tid: str, uid: str) -> dict:
@@ -315,12 +360,22 @@ def _msg(role: str, content: str, kind: str = "text", after_take: int = 0) -> di
 
 @router.get("")
 async def mine(user: dict = Depends(user_dep())):
-    rows = [_card(t) async for t in db().pitch_threads.find({"user_id": str(user["_id"])}).sort("updated_at", -1).limit(50)]
+    uid = str(user["_id"])
+    m = await _member(uid)
+    rows = [_card(t, m) async for t in db().pitch_threads.find({"user_id": uid}).sort("updated_at", -1).limit(50)]
     return {"items": rows, "types": [{"key": k, "label": v["label"], "setting": v["setting"], "audience": v["audience"]}
                                      for k, v in TYPES.items()],
             "limits": {"cooldown_minutes": COOLDOWN_MIN, "max_minutes": MAX_SECONDS // 60, "max_mb": MAX_BYTES // (1024 * 1024),
-                       "formats": ["MP4", "MOV", "WEBM", "MKV"]},
+                       "formats": ["MP4", "MOV", "WEBM", "MKV"], "practices_left": m["practices_left"],
+                       "chats_left": m["chats_left"]},
             "available": pitch_video.mode() != "off"}
+
+
+def _fair_use(what: str) -> HTTPException:
+    msg = {"practices": f"You've started {MONTHLY_PRACTICES} practices this month. Keep going in one you already have. "
+                        "New practices open again on the 1st.",
+           "chats": f"You've asked your coach {MONTHLY_CHAT} questions this month. Questions open again on the 1st."}[what]
+    return HTTPException(status_code=429, detail={"code": "fair_use", "msg": msg})
 
 
 @router.post("")
@@ -330,6 +385,8 @@ async def start(body: ThreadIn, user: dict = Depends(user_dep())):
     setting, audience = text(body.setting, 300), text(body.audience, 300)
     if body.pitch_type == "other" and not setting:
         raise HTTPException(status_code=422, detail={"code": "no_setting", "msg": "Tell us where you'll use this pitch."})
+    if not await _use(uid, "practices", MONTHLY_PRACTICES):
+        raise _fair_use("practices")
     label = TYPES[body.pitch_type]["label"]
     title = label if body.pitch_type != "other" else (setting[:60] or label)
     t = {"pitch_type": body.pitch_type, "setting": setting, "audience": audience}
@@ -342,12 +399,13 @@ async def start(body: ThreadIn, user: dict = Depends(user_dep())):
            "busy_until": None, "created_at": now, "updated_at": now}
     await db().pitch_threads.insert_one(doc)
     await events.track(db(), "pitch_thread_started", user_id=uid, props={"pitch_type": body.pitch_type})
-    return _public(doc)
+    return _public(doc, await _member(uid))
 
 
 @router.get("/{tid}")
 async def one(tid: str, user: dict = Depends(user_dep())):
-    return _public(await _own(tid, str(user["_id"])))
+    uid = str(user["_id"])
+    return _public(await _own(tid, uid), await _member(uid))
 
 
 @router.delete("/{tid}")
@@ -407,10 +465,13 @@ def mp4_duration(path: str) -> Optional[float]:
                         if ver == 1:
                             f.seek(b2 + 4 + 16)
                             ts, dur = struct.unpack(">IQ", f.read(12))
+                            unknown = 0xFFFFFFFFFFFFFFFF
                         else:
                             f.seek(b2 + 4 + 8)
                             ts, dur = struct.unpack(">II", f.read(8))
-                        return dur / ts if ts else None
+                            unknown = 0xFFFFFFFF
+                        # 0 (fragmented / streamed recordings) and all-ones mean "length not written here"
+                        return dur / ts if ts and dur and dur != unknown else None
                 return None
     except (OSError, struct.error, IndexError):
         return None
@@ -635,13 +696,30 @@ def _framing(t: dict, k: dict, prior: Optional[dict], duration_s: Optional[float
             f"{json.dumps(prior, ensure_ascii=False)}")
 
 
-def _check_cooldown(t: dict) -> None:
-    cd = _cooldown(t)
+def _check_cooldown(last) -> None:
+    cd = _cooldown(last)
     if not cd["can_upload"]:
         mins = max(1, -(-cd["cooldown_seconds_remaining"] // 60))
         raise HTTPException(status_code=429, detail={
             "code": "cooldown", "seconds": cd["cooldown_seconds_remaining"], "next_upload_at": cd["next_upload_at"],
             "msg": f"Give the feedback time to land. You can upload your next take in {mins} min."})
+
+
+TOO_LONG = {"code": "too_long", "msg": "Keep your video under 8 minutes."}
+NO_LENGTH = {"code": "no_duration", "msg": "We couldn't tell how long this video is. Record it here, or upload it as "
+                                          "an MP4 or MOV file."}
+
+
+async def _lock_member(uid: str, now) -> bool:
+    """One take in analysis per member (the 30-minute pause is per member, so two practices can't race it)."""
+    try:
+        await db().pitch_members.update_one({"_id": uid}, {"$setOnInsert": {"busy_until": None}}, upsert=True)
+    except DuplicateKeyError:
+        pass
+    got = await db().pitch_members.update_one(
+        {"_id": uid, "$or": [{"busy_until": None}, {"busy_until": {"$lt": now}}]},
+        {"$set": {"busy_until": now + timedelta(minutes=15)}})
+    return bool(got.matched_count)
 
 
 @router.post("/{tid}/take")
@@ -650,7 +728,8 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
     """One take: the raw video is the request body. Metered (`pitch`), refunded on any failure."""
     uid = str(user["_id"])
     await plans.require(db(), user, "pitch")
-    _check_cooldown(await _own(tid, uid))
+    await _own(tid, uid)
+    _check_cooldown(await _last_upload(uid))
     if pitch_video.mode() == "off":
         raise HTTPException(status_code=503, detail={"code": "paused", "msg": "Pitch Practice is paused right now. Try again later."})
     ext = _ext(request.headers.get("content-type", ""), filename)
@@ -661,18 +740,30 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
     if declared > MAX_BYTES:
         raise HTTPException(status_code=413, detail={"code": "too_large", "msg": "That video is larger than 100 MB."})
     if duration_s is not None and duration_s > MAX_SECONDS + 2:
-        raise HTTPException(status_code=413, detail={"code": "too_long", "msg": "Keep your video under 8 minutes."})
+        raise HTTPException(status_code=413, detail=TOO_LONG)
+    if duration_s is None and ext in ("webm", "mkv"):          # we don't read a length from these containers
+        raise HTTPException(status_code=422, detail=NO_LENGTH)
     now = utcnow()
     got = await db().pitch_threads.update_one(
         {"_id": tid, "user_id": uid, "$or": [{"busy_until": None}, {"busy_until": {"$lt": now}}]},
         {"$set": {"busy_until": now + timedelta(minutes=15)}})
     if not got.matched_count:
         raise HTTPException(status_code=409, detail={"code": "busy", "msg": "A take is already being analysed. Wait for it to finish."})
-    try:
-        t = await _own(tid, uid)          # read again under the lock: a take may have finished in between
-        _check_cooldown(t)
-    except HTTPException:
+    member_locked = False
+
+    async def unlock() -> None:
         await db().pitch_threads.update_one({"_id": tid}, {"$set": {"busy_until": None}})
+        if member_locked:
+            await db().pitch_members.update_one({"_id": uid}, {"$set": {"busy_until": None}})
+    try:
+        member_locked = await _lock_member(uid, now)
+        if not member_locked:
+            raise HTTPException(status_code=409, detail={
+                "code": "busy", "msg": "Your last take is still being analysed. Wait for it to finish."})
+        t = await _own(tid, uid)          # read again under the locks: a take may have finished in between
+        _check_cooldown(await _last_upload(uid))
+    except HTTPException:
+        await unlock()
         raise
 
     path: Optional[str] = None
@@ -688,8 +779,10 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
             raise HTTPException(status_code=415, detail={"code": "bad_type", "msg": "That file doesn't look like a video. Use MP4, MOV, WEBM or MKV."})
         secs = mp4_duration(path) if ext in ("mp4", "m4v", "mov") else None
         if secs is not None and secs > MAX_SECONDS + 2:
-            raise HTTPException(status_code=413, detail={"code": "too_long", "msg": "Keep your video under 8 minutes."})
+            raise HTTPException(status_code=413, detail=TOO_LONG)
         length = secs if secs is not None else duration_s
+        if length is None:
+            raise HTTPException(status_code=422, detail=NO_LENGTH)
         takes = t.get("takes") or []
         prior = takes[-1]["report"] if takes else None
         k = await knowledge(db(), user)
@@ -698,10 +791,15 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
             await asyncio.wait_for(sem.acquire(), timeout=60)
         except (asyncio.TimeoutError, TimeoutError):
             raise HTTPException(status_code=503, detail={"code": "busy", "msg": "Many people are practising right now. Try again in a few minutes. This didn't use up your go."})
+        info: dict = {}
         try:
             raw = await pitch_video.analyse(
                 path, mime=VIDEO_TYPES[ext], system=SYSTEM, prompt=_framing(t, k, prior, length),
-                fake=lambda: _fake_comparison(t, prior) if prior else _fake_initial(t, size))
+                fake=lambda: _fake_comparison(t, prior) if prior else _fake_initial(t, size),
+                max_seconds=MAX_SECONDS + 2, info=info)
+        except pitch_video.TooLong as e:
+            log.info("pitch take refused by the engine's length: %.1f s", e.seconds)
+            raise HTTPException(status_code=413, detail=TOO_LONG)
         except pitch_video.BadOutput as e:
             raise llm.LLMError(str(e))
         except pitch_video.VideoError as e:
@@ -712,6 +810,8 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
         finally:
             sem.release()
             _drop(path)                 # the video is gone from our side before we even save the report
+        if info.get("seconds"):
+            length = info["seconds"]    # the engine's own measurement beats the header and the browser
         report = validate_report(raw, prior)
         n = len(takes) + 1
         entry = {"n": n, "kind": report["kind"], "at": utcnow(), "duration_s": round(length, 1) if length else None,
@@ -721,13 +821,13 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
                                                            "$set": {"last_upload_at": now2, "updated_at": now2}})
         await events.track(db(), "pitch_take_analysed", user_id=uid,
                            props={"kind": report["kind"], "overall": report["overall"], "take": n})
-        return _public(await _own(tid, uid))
+        return _public(await _own(tid, uid), await _member(uid))
 
     try:
         return await run_metered(db(), user, "pitch", work)
     finally:
         _drop(path)
-        await db().pitch_threads.update_one({"_id": tid}, {"$set": {"busy_until": None}})
+        await unlock()
 
 
 # ------------------------------------------------------------------ follow-up chat ----
@@ -771,6 +871,16 @@ async def chat(tid: str, body: ChatIn, user: dict = Depends(user_dep())):
     msg = body.message.strip()
     if not msg:
         raise HTTPException(status_code=422, detail={"code": "empty", "msg": "Type your question."})
+    if not await _use(uid, "chats", MONTHLY_CHAT):
+        raise _fair_use("chats")
+    try:
+        return await _chat_reply(tid, uid, t, msg, user)
+    except BaseException:
+        await _give_back(uid, "chats")        # no reply, no question used
+        raise
+
+
+async def _chat_reply(tid: str, uid: str, t: dict, msg: str, user: dict) -> dict:
     takes = t.get("takes") or []
     setting, audience = _setting(t)
     reports = [{"take": x["n"], **x["report"]} for x in takes[-2:]]
@@ -797,4 +907,4 @@ async def chat(tid: str, body: ChatIn, user: dict = Depends(user_dep())):
         "$push": {"messages": {"$each": [_msg("user", msg, after_take=n), _msg("assistant", reply, after_take=n)]}},
         "$set": {"updated_at": utcnow()}})
     await events.track(db(), "pitch_chat", user_id=uid)
-    return _public(await _own(tid, uid))
+    return _public(await _own(tid, uid), await _member(uid))

@@ -7,10 +7,12 @@ LinkedIn Blueprint, Strategy Thinking, Credibility Code and Document Builder GPT
 """
 from __future__ import annotations
 
-from typing import Optional
+import re
+from typing import Any, Iterable, Optional
 
 from util import inr
 
+from .common import strip_links
 from .start import blueprint_text
 
 
@@ -41,3 +43,76 @@ def system_block(k: dict) -> str:
     if not filled:
         return ""
     return "PARTICIPANT KNOWLEDGE BASE (already known; don't ask for these again):\n" + "\n".join(filled)
+
+
+def offer_block(k: dict) -> str:
+    """Only the niche and offer wording. For prompts whose answer a prospect reads (Client Diagnostic thank-you):
+    never the income goal, fees or the full blueprint, so nothing private can be echoed back to an outsider."""
+    rows = [("Niche", k.get("niche")), ("Consultant title", k.get("consultant_title")),
+            ("Value proposition", k.get("value_proposition"))]
+    filled = [f"- {a}: {b}" for a, b in rows if b]
+    return ("THE CONSULTANT'S OFFER:\n" + "\n".join(filled)) if filled else ""
+
+
+# ---------------------------------------------------------------- the member's own links ----
+# AI text may only carry links the member really owns (or typed in themselves); common.strip_links removes the rest.
+_URL = re.compile(r"(https?://[^\s)<>\]]+|www\.[^\s)<>\]]+)", re.I)
+
+
+def link_variants(u: str) -> set[str]:
+    """The spellings of one link the AI might write: with https://, http:// or (for www. hosts) no scheme."""
+    u = (u or "").strip().rstrip(".,;:!?").rstrip("/")
+    if not u:
+        return set()
+    rest = re.sub(r"^https?://", "", u, flags=re.I)
+    out = {u, f"https://{rest}", f"http://{rest}"}
+    if rest.lower().startswith("www."):
+        out.add(rest)
+    return out
+
+
+def links_in(*texts: str) -> set[str]:
+    """Links the member typed into the tool themselves (call notes, context): theirs to keep."""
+    out: set[str] = set()
+    for t in texts:
+        for m in _URL.finditer(t or ""):
+            out |= link_variants(m.group(0))
+    return out
+
+
+async def own_links(db, user: dict) -> set[str]:
+    """The member's website address(es), booking link and published diagnostic links. Never raises."""
+    uid = str(user["_id"])
+    out: set[str] = set()
+    try:
+        from core.settings import settings
+
+        from .site_render import public_base, sites_domain
+        site = await db.sites.find_one({"user_id": uid}, {"slug": 1, "domain": 1, "domain_status": 1, "contact": 1})
+        if site:
+            if site.get("slug"):
+                out |= link_variants(f"{public_base()}/s/{site['slug']}")
+                if sites_domain():
+                    out |= link_variants(f"https://{site['slug']}.{sites_domain()}")
+            if site.get("domain") and site.get("domain_status") == "connected":
+                out |= link_variants(f"https://{site['domain']}")
+            out |= link_variants((site.get("contact") or {}).get("calendly") or "")
+        async for x in db.diagnostics.find({"user_id": uid}, {"cta_link": 1, "public_id": 1}).limit(50):
+            out |= link_variants(x.get("cta_link") or "")
+            if x.get("public_id"):
+                out |= link_variants(f"{settings.public_base_url}/d/{x['public_id']}")
+    except Exception:  # noqa: BLE001 — a missing collection just means fewer links are kept
+        pass
+    return out
+
+
+def no_links(v: Any, allowed: Iterable[str] = ()) -> Any:
+    """common.strip_links over every string in a dict / list (AI-written fields only, never search results)."""
+    allowed = list(allowed)
+    if isinstance(v, str):
+        return strip_links(v, allowed).strip()
+    if isinstance(v, list):
+        return [no_links(x, allowed) for x in v]
+    if isinstance(v, dict):
+        return {k: no_links(x, allowed) for k, x in v.items()}
+    return v

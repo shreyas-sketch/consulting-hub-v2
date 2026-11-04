@@ -27,7 +27,7 @@ from growth.clock import utcnow
 from state import db
 from util import iso
 
-from .common import run_metered, text, text_list
+from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text
 
 router = APIRouter(prefix="/linkedin", tags=["linkedin"])
 
@@ -96,7 +96,7 @@ SYSTEM = ("You are a personal branding expert helping experienced Indian profess
           "the scroll, their story and credibility (brief, not a CV), who they help and what problems they solve, what "
           "working with them looks like, social proof, a clear call to action. Write like a real person, not a press "
           "release. No emojis. Never invent facts or numbers: use only what is in their text, and write [number] where "
-          "a figure should go.")
+          "a figure should go. " + NO_VENDOR)
 
 
 def _fake_rewrite(h: str, niche: Optional[str]) -> dict:
@@ -148,18 +148,21 @@ async def check(body: CheckIn, user: dict = Depends(user_dep())):
                           "insight from their niche, a practical tip or mini-framework their ideal client would value).\n"
                           'JSON: {"headlines": [{"angle": "Authority", "text": ""}, {"angle": "Outcome", "text": ""}, '
                           '{"angle": "Niche", "text": ""}], "about": "", "posts": [{"hook": "", "summary": ""}]}')
-                raw = await llm.complete_json(task="linkedin_rewrite", system=SYSTEM, prompt=prompt,
-                                              fake=lambda: _fake_rewrite(body.headline, niche), model="strong", max_tokens=900)
+                # 3 headlines + a 300-400 word About + 3 post ideas is ~900-1,200 tokens of JSON: room for all of it
+                raw = as_dict(await llm.complete_json(task="linkedin_rewrite", system=SYSTEM, prompt=prompt,
+                                                      fake=lambda: _fake_rewrite(body.headline, niche), model="strong",
+                                                      max_tokens=1800))
                 heads = []
-                for x in (raw.get("headlines") or [])[:3]:
+                for x in as_list(raw.get("headlines"))[:3]:
                     if isinstance(x, dict) and text(x.get("text"), 220):
                         heads.append({"angle": text(x.get("angle"), 20) or "Option", "text": text(x.get("text"), 220)})
                     elif isinstance(x, str) and text(x, 220):
                         heads.append({"angle": "Option", "text": text(x, 220)})
                 posts = [{"hook": text(p.get("hook"), 160), "summary": text(p.get("summary"), 300)}
-                         for p in (raw.get("posts") or [])[:3] if isinstance(p, dict) and p.get("hook")]
-                rewrites = {"headlines": heads, "about": str(raw.get("about") or "")[:3500].strip(), "posts": posts,
-                            "note": text(raw.get("note"), 200) or None}
+                         for p in as_list(raw.get("posts"))[:3] if isinstance(p, dict) and p.get("hook")]
+                about = raw.get("about") if isinstance(raw.get("about"), str) else ""
+                rewrites = strip_providers({"headlines": heads, "about": about[:3500].strip(), "posts": posts,
+                                            "note": text(raw.get("note"), 200) or None})
                 if not rewrites["headlines"] or not rewrites["about"]:
                     raise llm.LLMError("linkedin: empty rewrite")
         doc = {"_id": uuid.uuid4().hex, "user_id": uid, "input": body.model_dump(exclude={"rewrite"}), **res,

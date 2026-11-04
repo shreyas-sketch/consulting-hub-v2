@@ -32,7 +32,7 @@ from research import search
 from state import db
 from util import iso
 
-from .common import run_metered, text, text_list
+from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text, text_list
 from .knowledge import knowledge, system_block
 
 router = APIRouter(prefix="/insights", tags=["insight-pack"])
@@ -50,7 +50,8 @@ SYSTEM = (
     "don't state it. Never invent statistics, company names or events; present general patterns as patterns "
     "('many mid-size firms are...'), not as cited figures. Opportunities must suit a consultant in the member's niche: "
     "a problem a business owner would pay to have solved. Plain, short, spoken English. Indian context (₹, lakh, crore). "
-    "No buzzwords, no hype, no emojis. Never promise income. Never mention or describe the AI or who makes it."
+    "No buzzwords, no hype, no emojis. Never promise income. Never mention or describe the AI or who makes it. "
+    + NO_VENDOR
 )
 
 
@@ -113,8 +114,12 @@ def _prompt(industry: str, k: dict, results: list[dict]) -> str:
 
 
 def _clean(raw: dict, results: list[dict]) -> dict:
+    """Wrong shapes → llm.LLMError (the use is refunded and the member sees the plain busy message)."""
+    if not isinstance(raw, dict):
+        raise llm.LLMError("insight_pack: not an object")
+    raw = strip_providers(as_dict(raw))
     trends = [{"trend": text(t.get("trend"), 160), "why_it_matters": text(t.get("why_it_matters"), 300)}
-              for t in (raw.get("trends") or [])[:3] if isinstance(t, dict) and text(t.get("trend"), 160)]
+              for t in as_list(raw.get("trends"))[:3] if isinstance(t, dict) and text(t.get("trend"), 160)]
     out = {"headline": text(raw.get("headline"), 200), "trends": trends,
            "opportunities": text_list(raw.get("opportunities"), 3, 300),
            "talking_points": text_list(raw.get("talking_points"), 5, 240),
@@ -123,7 +128,9 @@ def _clean(raw: dict, results: list[dict]) -> dict:
             or len(out["questions_to_ask_clients"]) < 3):
         raise llm.LLMError("insight_pack: incomplete")
     news = []
-    for n in (raw.get("news") or [])[:6]:
+    for n in as_list(raw.get("news"))[:6]:
+        if not isinstance(n, dict):
+            continue
         try:
             idx = int(n.get("i"))
             if idx < 1:

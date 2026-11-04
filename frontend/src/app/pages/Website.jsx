@@ -732,7 +732,10 @@ function DomainCard({ d }) {
   const check = async () => {
     setMsg("");
     const r = await call("check", () => api.post("/website/domain/check"));
-    if (r?.check) setMsg(r.check.ok ? "Connected. Your domain points to your site." : "We can't see the record yet. It can take a few hours after you save it. Check again later.");
+    if (!r?.check) return;
+    if (r.check.connected) setMsg("Connected. Your domain shows your site.");
+    else if (r.check.ok) setMsg("Your record is right. Our team will now connect your domain. You'll see Connected here when it's done.");
+    else setMsg("We can't see the record yet. It can take a few hours after you save it. Check again later.");
   };
   const remove = async () => {
     if (!window.confirm("Disconnect this domain? Your site stays on its own link.")) return;
@@ -754,8 +757,11 @@ function DomainCard({ d }) {
           <div className="flex items-center gap-2 flex-wrap">
             <Globe className="w-4 h-4 text-bz-gold" aria-hidden />
             <span className="font-bold break-all">{site.domain}</span>
-            <Chip tone={site.domain_status === "connected" ? "solid" : "muted"}>{site.domain_status === "connected" ? "Connected" : "Waiting for your record"}</Chip>
+            <Chip tone={site.domain_status === "connected" ? "solid" : "muted"}>{site.domain_status === "connected" ? "Connected" : "Not connected yet"}</Chip>
           </div>
+          {site.domain_status !== "connected" && (
+            <p className="text-[14px] text-bz-muted">Your site isn't on this domain yet. Add the record below. Then our team checks it and connects your domain.</p>
+          )}
           <Step n={1} title="Open your domain's DNS settings">Log in where you bought the domain (GoDaddy, Hostinger, BigRock or any other) and open DNS settings.</Step>
           <Step n={2} title="Add one CNAME record">
             <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[14px]">
@@ -764,9 +770,9 @@ function DomainCard({ d }) {
               <dt className="text-bz-muted">Points to</dt><dd className="font-bzmono text-bz-ink break-all">{dns.value}<CopyLink text={dns.value} /></dd>
             </dl>
           </Step>
-          <Step n={3} title="Save, then check here">Records can take a few hours to show. Our team finishes the set-up on our side once your record is in place.</Step>
+          <Step n={3} title="Save, then check it here">Records can take a few hours to show. Once your record is right, our team connects your domain. Then this card says Connected.</Step>
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={check} loading={busy === "check"} data-testid="site-domain-check">Check now</Button>
+            <Button variant="secondary" onClick={check} loading={busy === "check"} data-testid="site-domain-check">Check my record</Button>
             <Button variant="danger" onClick={remove} loading={busy === "rm"}>Disconnect</Button>
           </div>
           {msg && <p className="text-[14px]" role="status">{msg}</p>}

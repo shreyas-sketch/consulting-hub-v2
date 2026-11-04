@@ -3,6 +3,10 @@
 Each job: name → (label, schedule, coroutine fn(ctx)). Schedules are IST:
   ("daily", hour, minute) · ("weekly", weekday, hour, minute) · ("every", minutes)
 Every run writes `job_runs` {_id, name, at, ok, result|error, ms}.
+
+A job is done for its slot only when a run since the slot went OK. A failed run is tried again RETRY_MINUTES
+later (or sooner for jobs that run more often than that), at most MAX_TRIES runs per slot; then it waits for
+the next slot (Admin › Jobs shows the failure and has Run now).
 """
 from __future__ import annotations
 
@@ -11,7 +15,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from growth.clock import IST, as_utc, utcnow
@@ -20,7 +24,8 @@ log = logging.getLogger("jobs")
 
 # name → (label, schedule, "module:function")
 JOBS: dict[str, tuple[str, tuple, str]] = {
-    "l2_resume": ("Restart L1 billing for members whose L2 has ended", ("daily", 6, 0), "billing.l2:job_resume"),
+    # Hourly, so L1 restarts within the hour after L2 ends (plans.effective_plan bridges that hour).
+    "l2_resume": ("Restart L1 billing after L2 ends; retry failed cancels", ("every", 60), "billing.l2:job_resume"),
 }
 
 
@@ -83,14 +88,25 @@ def _last_slot(s: tuple, now: datetime) -> datetime:
     return local - timedelta(minutes=s[1])
 
 
+RETRY_MINUTES = 15
+MAX_TRIES = 4
+
+
 async def due(db, now: Optional[datetime] = None) -> list[str]:
-    now = now or utcnow()
+    now = as_utc(now or utcnow())
     out = []
     for name, (_, sched, _) in JOBS.items():
-        last = await db.job_runs.find_one({"name": name}, sort=[("at", -1)])
-        slot = _last_slot(sched, now)
-        if not last or as_utc(last["at"]) < slot.astimezone(as_utc(now).tzinfo):
-            out.append(name)
+        slot = _last_slot(sched, now).astimezone(timezone.utc)
+        if await db.job_runs.find_one({"name": name, "ok": True, "at": {"$gte": slot}}, {"_id": 1}):
+            continue                                  # done for this slot
+        fails = [r async for r in db.job_runs.find({"name": name, "ok": False, "at": {"$gte": slot}}, {"at": 1})
+                 .sort("at", -1).limit(MAX_TRIES)]
+        if len(fails) >= MAX_TRIES:
+            continue                                  # gave up on this slot
+        wait = min(RETRY_MINUTES, sched[1]) if sched[0] == "every" else RETRY_MINUTES
+        if fails and now - as_utc(fails[0]["at"]) < timedelta(minutes=wait):
+            continue                                  # back off before the next try
+        out.append(name)
     return out
 
 

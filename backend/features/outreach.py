@@ -24,9 +24,8 @@ from growth.clock import utcnow
 from state import db
 from util import iso
 
-from .common import run_metered, text
-from .knowledge import knowledge, system_block
-from .network import NO_VENDOR
+from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text
+from .knowledge import knowledge, links_in, no_links, own_links, system_block
 
 router = APIRouter(prefix="/outreach", tags=["outreach"])
 
@@ -51,7 +50,7 @@ SYSTEM = (
     "facts: use only what you are told; where a personal detail would help but is missing, write it as "
     "[square brackets] for the member to fill. One clear, easy next step at most. WhatsApp: no subject, very short "
     "lines. LinkedIn: no subject. Email: a short, plain subject line. Sign off with the sender's first name. "
-    + NO_VENDOR
+    "Never include links or web addresses; the sender adds their own if they want. " + NO_VENDOR
 )
 
 
@@ -137,17 +136,21 @@ async def draft(body: DraftIn, user: dict = Depends(user_dep())):
     async def work(plan: str):
         k = await knowledge(d, user)
         me = user.get("name") or ""
-        raw = await llm.complete_json(task="outreach_draft", system=SYSTEM, prompt=_prompt(c, body.channel, body.goal, me, k),
-                                      fake=lambda: _fake(c, body.channel, body.goal, me, k), model="fast", max_tokens=1400)
+        raw = as_dict(await llm.complete_json(task="outreach_draft", system=SYSTEM,
+                                              prompt=_prompt(c, body.channel, body.goal, me, k),
+                                              fake=lambda: _fake(c, body.channel, body.goal, me, k), model="fast",
+                                              max_tokens=1400))
+        allowed = (await own_links(d, user)) | links_in(c["context"], c["relationship"])
         got: dict[str, dict] = {}
-        for v in raw.get("variants") or []:
+        for v in as_list(raw.get("variants")):
             if not isinstance(v, dict):
                 continue
             style = str(v.get("style") or "").lower().strip()
-            body_text = _clean_text(v.get("text"), MAX_CHARS.get(style, 900))
+            body_text = no_links(strip_providers(_clean_text(v.get("text") if isinstance(v.get("text"), str) else "",
+                                                             MAX_CHARS.get(style, 900))), allowed)
             if style in STYLES and style not in got and len(body_text) >= 20:
-                got[style] = {"style": style, "subject": text(v.get("subject"), 120) if body.channel == "email" else "",
-                              "text": body_text}
+                subject = no_links(strip_providers(text(v.get("subject"), 120)), allowed) if body.channel == "email" else ""
+                got[style] = {"style": style, "subject": subject, "text": body_text}
         if len(got) < 3:
             raise llm.LLMError("outreach: fewer than 3 variants")
         now = utcnow()

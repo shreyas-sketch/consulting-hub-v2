@@ -1,6 +1,10 @@
 """Razorpay Subscriptions behind one interface (docs: razorpay.com/docs/api/payments/subscriptions).
 
-  create_subscription  POST /v1/subscriptions {plan_id, total_count, customer_notify, notes}
+  create_subscription  POST /v1/subscriptions {plan_id, total_count, customer_notify, notes, start_at?}
+                       start_at (Unix time) = "from when the Subscription should start". With a future start_at the
+                       checkout payment is only an authorisation (a small amount, refunded), the subscription becomes
+                       `authenticated`, and the first real charge is on start_at (subscription.activated + .charged).
+                       Without it the plan starts and is charged at once.
   fetch_subscription   GET  /v1/subscriptions/{id}
   cancel_subscription  POST /v1/subscriptions/{id}/cancel {cancel_at_cycle_end}
   Checkout signature   HMAC_SHA256(payment_id + "|" + subscription_id, key_secret)
@@ -46,7 +50,7 @@ class Razorpay(Protocol):
     mode: str
     key_id: str
 
-    async def create_subscription(self, plan: str, period: str, notes: dict) -> dict: ...
+    async def create_subscription(self, plan: str, period: str, notes: dict, start_at: Optional[int] = None) -> dict: ...
     async def fetch_subscription(self, sub_id: str) -> dict: ...
     async def cancel_subscription(self, sub_id: str, at_cycle_end: bool = True) -> dict: ...
     async def pause_subscription(self, sub_id: str) -> dict: ...
@@ -73,13 +77,15 @@ class LiveRazorpay:
             raise RazorpayError(f"{path}: HTTP {r.status_code} {(body.get('error') or {}).get('description', '')}")
         return body
 
-    async def create_subscription(self, plan, period, notes) -> dict:
+    async def create_subscription(self, plan, period, notes, start_at=None) -> dict:
         pid = plan_id_for(plan, period)
         if not pid:
             raise RazorpayError(f"no Razorpay plan id set for {plan}/{period}")
-        return await self._req("POST", "/subscriptions", json={
-            "plan_id": pid, "total_count": TOTAL_COUNT[period], "quantity": 1, "customer_notify": 1,
-            "notes": {k: str(v)[:250] for k, v in notes.items()}})
+        body = {"plan_id": pid, "total_count": TOTAL_COUNT[period], "quantity": 1, "customer_notify": 1,
+                "notes": {k: str(v)[:250] for k, v in notes.items()}}
+        if start_at:
+            body["start_at"] = int(start_at)
+        return await self._req("POST", "/subscriptions", json=body)
 
     async def fetch_subscription(self, sub_id) -> dict:
         return await self._req("GET", f"/subscriptions/{sub_id}")
@@ -109,12 +115,19 @@ class FakeRazorpay:
     webhook_secret = "fake_webhook_secret"
     subs: dict = {}
 
-    async def create_subscription(self, plan, period, notes) -> dict:
+    async def create_subscription(self, plan, period, notes, start_at=None) -> dict:
         sid = "sub_" + secrets.token_hex(7)
         self.subs[sid] = {"id": sid, "entity": "subscription", "status": "created", "plan": plan, "period": period,
                           "notes": notes, "paid_count": 0, "current_start": None, "current_end": None,
+                          "start_at": int(start_at) if start_at else None, "charge_at": int(start_at) if start_at else None,
                           "short_url": f"https://rzp.io/fake/{sid}"}
         return dict(self.subs[sid])
+
+    def authenticate(self, sub_id: str) -> dict:
+        """The checkout step for a subscription that starts later: card/UPI mandate set up, nothing charged yet."""
+        s = self.subs.setdefault(sub_id, {"id": sub_id, "period": "monthly", "paid_count": 0})
+        s["status"] = "authenticated"
+        return dict(s)
 
     async def fetch_subscription(self, sub_id) -> dict:
         if sub_id not in self.subs:

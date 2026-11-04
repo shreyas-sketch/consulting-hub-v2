@@ -35,7 +35,7 @@ from state import db
 from util import iso
 
 from . import kb
-from .common import run_metered, text, text_list
+from .common import NO_VENDOR, as_list, run_metered, strip_providers, text, text_list
 
 router = APIRouter(prefix="/docs", tags=["doc-reader"])
 
@@ -55,7 +55,7 @@ TYPES = {".pdf": "pdf", ".docx": "docx", ".txt": "txt", ".md": "md", ".markdown"
 TYPE_MSG = "Upload a PDF, a Word file (.docx), or a .txt or .md file."
 
 NO_PROVIDER = ("Never say which AI company or model you are and never name any AI provider or product. "
-               "If asked, you are the hub's AI.")
+               "If asked, you are the hub's AI. " + NO_VENDOR)
 
 
 def bad(code: str, msg: str, status: int = 400) -> HTTPException:
@@ -337,9 +337,9 @@ async def cited_answer(question: str, hits: list[dict], *, task: str, ref_key: s
               'JSON: {"covered": true, "answer": ""}')
     raw = await llm.complete_json(task=task, system=ASK_SYSTEM, prompt=prompt, fake=lambda: fake_answer(question, hits),
                                   model="strong", max_tokens=1200)
-    if not isinstance(raw, dict):
+    if not isinstance(raw, dict) or not isinstance(raw.get("answer"), str):
         raise llm.LLMError(f"{task}: bad shape")
-    answer, used = check_citations(tidy(raw.get("answer")), len(hits))
+    answer, used = check_citations(tidy(strip_providers(raw["answer"])), len(hits))
     covered = raw.get("covered") is not False
     if not answer:
         raise llm.LLMError(f"{task}: empty answer")
@@ -387,9 +387,10 @@ def fake_summary(title: str, body: str) -> dict:
 def check_summary(raw: dict, source: str) -> dict:
     if not isinstance(raw, dict):
         raise llm.LLMError("summary: bad shape")
+    raw = strip_providers(raw)
     seen = _nums(source)
     numbers = []
-    for x in (raw.get("numbers") or [])[:8]:
+    for x in as_list(raw.get("numbers"))[:8]:
         if not isinstance(x, dict):
             continue
         fig, meaning = text(x.get("figure"), 60), text(x.get("meaning"), 200)
@@ -440,25 +441,43 @@ async def listing(user: dict = Depends(user_dep())):
             "types": sorted(set(TYPES)), "questions": qs}
 
 
+async def claim_slot(coll, doc: dict, flt: dict, cap: int) -> bool:
+    """Insert `doc`, then recount everything matching `flt`. Over `cap` → take ours out again and return False.
+    Uploads that run at the same time can therefore never end above the cap (in a true tie both may be refused,
+    and the member simply tries again). Counting first and inserting later let parallel uploads all pass."""
+    await coll.insert_one(doc)
+    if await coll.count_documents(flt) > cap:
+        await coll.delete_one({"_id": doc["_id"]})
+        return False
+    return True
+
+
 @router.post("")
 async def upload(file: UploadFile = File(...), title: Optional[str] = Form(None), user: dict = Depends(user_dep())):
     d = db()
     uid = str(user["_id"])
     plan = await plans.require(d, user, "doc_reader")
     cap = plans.cap("docs", plan)
+    full = bad("cap", f"You can keep {cap} documents at a time. Delete one to add another.", 409)
     if await d.reader_docs.count_documents({"user_id": uid}) >= cap:
-        raise bad("cap", f"You can keep {cap} documents at a time. Delete one to add another.", 409)
+        raise full
     got = await read_upload(file)
     doc_id = uuid.uuid4().hex
     name = text(title, 120) or got["title"]
     parts = make_chunks(got["text"], got["page_starts"])
     rows = [{"_id": f"{doc_id}:{c['i']}", "doc_id": doc_id, "user_id": uid, "title": name, **c} for c in parts]
-    if rows:
-        await d.reader_chunks.insert_many(rows)
     doc = {"_id": doc_id, "user_id": uid, "title": name, "kind": got["kind"], "size": got["size"], "pages": got["pages"],
            "pages_estimated": got["pages_estimated"], "words": got["words"], "chunks": len(rows),
            "ntok": sum(c["n"] for c in parts), "truncated": got["truncated"], "at": utcnow()}
-    await d.reader_docs.insert_one(doc)
+    if not await claim_slot(d.reader_docs, doc, {"user_id": uid}, cap):
+        raise full
+    try:
+        if rows:
+            await d.reader_chunks.insert_many(rows)
+    except BaseException:
+        await d.reader_chunks.delete_many({"doc_id": doc_id})
+        await d.reader_docs.delete_one({"_id": doc_id})
+        raise
     await events.track(d, "doc_uploaded", user_id=uid, props={"kind": got["kind"], "pages": got["pages"], "words": got["words"]})
     return _public(doc)
 

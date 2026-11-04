@@ -37,9 +37,9 @@ from state import db
 from util import iso
 
 from . import kb
-from .common import run_metered, text, text_list
-from .docs import (MAX_WORDS, NO_PROVIDER, NOT_COVERED, bad, cited_answer, clean_text, first_sentence, make_chunks,
-                   not_found, read_upload, retrieve, sentences, spread, strip_markdown, tidy, _nums)
+from .common import as_list, run_metered, strip_providers, text, text_list
+from .docs import (MAX_WORDS, NO_PROVIDER, NOT_COVERED, bad, cited_answer, claim_slot, clean_text, first_sentence,
+                   make_chunks, not_found, read_upload, retrieve, sentences, spread, strip_markdown, tidy, _nums)
 
 router = APIRouter(prefix="/notebook", tags=["research-notebook"])
 
@@ -152,12 +152,14 @@ async def create(body: ProjectIn, user: dict = Depends(user_dep())):
     uid = str(user["_id"])
     plan = await plans.require(d, user, "research")
     cap = plans.cap("research_projects", plan)
+    full = bad("cap", f"You can keep {cap} projects at a time. Delete one to start another.", 409)
     if await d.nb_projects.count_documents({"user_id": uid}) >= cap:
-        raise bad("cap", f"You can keep {cap} projects at a time. Delete one to start another.", 409)
+        raise full
     now = utcnow()
     p = {"_id": uuid.uuid4().hex, "user_id": uid, "title": text(body.title, 120), "description": text(body.description, 600),
          "at": now, "updated_at": now}
-    await d.nb_projects.insert_one(p)
+    if not await claim_slot(d.nb_projects, p, {"user_id": uid}, cap):      # parallel creates can't pass the cap
+        raise full
     await events.track(d, "notebook_created", user_id=uid)
     return _pub_project(p)
 
@@ -200,9 +202,14 @@ async def remove(pid: str, user: dict = Depends(user_dep())):
 
 
 # ------------------------------------------------------------------ sources ----
+def _sources_full():
+    return bad("sources_full", f"A project holds up to {MAX_SOURCES} sources. Remove one to add another.", 409)
+
+
 async def _room(pid: str) -> None:
+    """Quick check before reading a file or a page. The real reservation is claim_slot in _add_source."""
     if await db().nb_sources.count_documents({"project_id": pid}) >= MAX_SOURCES:
-        raise bad("sources_full", f"A project holds up to {MAX_SOURCES} sources. Remove one to add another.", 409)
+        raise _sources_full()
 
 
 def _prep(raw: str, *, markdown: bool = False) -> tuple[str, int, bool]:
@@ -228,12 +235,18 @@ async def _add_source(user: dict, pid: str, *, kind: str, title: str, body: str 
     rows = [{"_id": f"{sid}:{c['i']}", "source_id": sid, "project_id": pid, "user_id": uid, "title": title,
              "i": c["i"], "page": c.get("page"), "text": c["text"], "tokens": c["tokens"], "n": c.get("n") or len(c["tokens"])}
             for c in parts]
-    if rows:
-        await d.nb_chunks.insert_many(rows)
     s = {"_id": sid, "project_id": pid, "user_id": uid, "kind": kind, "title": title, "url": url, "doc_id": doc_id,
          "words": words, "pages": pages, "chunks": len(rows), "ntok": sum(r["n"] for r in rows), "truncated": truncated,
          "test": test, "at": utcnow()}
-    await d.nb_sources.insert_one(s)
+    if not await claim_slot(d.nb_sources, s, {"project_id": pid}, MAX_SOURCES):
+        raise _sources_full()
+    try:
+        if rows:
+            await d.nb_chunks.insert_many(rows)
+    except BaseException:
+        await d.nb_chunks.delete_many({"source_id": sid})
+        await d.nb_sources.delete_one({"_id": sid})
+        raise
     await _touch(pid)
     await events.track(d, "notebook_source_added", user_id=uid, props={"kind": kind, "words": words})
     return _pub_source(s)
@@ -425,10 +438,11 @@ def _check_gen(kind: str, raw: dict, block: str) -> tuple[str, str]:
     """Validate the AI's JSON and render it as Markdown. Returns (title, body)."""
     if not isinstance(raw, dict):
         raise llm.LLMError(f"{kind}: bad shape")
+    raw = strip_providers(raw)
     if kind == "briefing":
         summary = text(raw.get("summary"), 900)
         secs = [{"heading": text(x.get("heading"), 120), "points": text_list(x.get("points"), 6, 320)}
-                for x in (raw.get("sections") or [])[:6] if isinstance(x, dict)]
+                for x in as_list(raw.get("sections"))[:6] if isinstance(x, dict)]
         secs = [x for x in secs if x["heading"] and x["points"]]
         if not summary or not secs:
             raise llm.LLMError("briefing: incomplete")
@@ -438,16 +452,16 @@ def _check_gen(kind: str, raw: dict, block: str) -> tuple[str, str]:
             body += f"\n\n### What to do with this\n{_bullets(take)}"
         return text(raw.get("title"), 120) or KINDS[kind], body
     if kind == "faq":
-        items = [(text(x.get("q"), 240), text(x.get("a"), 700)) for x in (raw.get("items") or [])[:10] if isinstance(x, dict)]
+        items = [(text(x.get("q"), 240), text(x.get("a"), 700)) for x in as_list(raw.get("items"))[:10] if isinstance(x, dict)]
         items = [x for x in items if x[0] and x[1]]
         if len(items) < 5:
             raise llm.LLMError("faq: too few")
         return KINDS[kind], "\n\n".join(f"**{q}**\n\n{a}" for q, a in items)
     if kind == "study":
-        terms = [(text(x.get("term"), 80), text(x.get("meaning"), 300)) for x in (raw.get("key_terms") or [])[:12]
+        terms = [(text(x.get("term"), 80), text(x.get("meaning"), 300)) for x in as_list(raw.get("key_terms"))[:12]
                  if isinstance(x, dict)]
         terms = [x for x in terms if x[0] and x[1]]
-        quiz = [(text(x.get("q"), 300), text(x.get("answer"), 400)) for x in (raw.get("quiz") or [])[:10] if isinstance(x, dict)]
+        quiz = [(text(x.get("q"), 300), text(x.get("answer"), 400)) for x in as_list(raw.get("quiz"))[:10] if isinstance(x, dict)]
         quiz = [x for x in quiz if x[0] and x[1]]
         if len(terms) < 3 or len(quiz) < 3:
             raise llm.LLMError("study: incomplete")
@@ -458,7 +472,7 @@ def _check_gen(kind: str, raw: dict, block: str) -> tuple[str, str]:
     seen = _nums(block)
     low = block.lower()
     rows = []
-    for x in (raw.get("events") or [])[:20]:
+    for x in as_list(raw.get("events"))[:20]:
         if not isinstance(x, dict):
             continue
         date, what = text(x.get("date"), 60), text(x.get("event"), 300)
@@ -612,7 +626,7 @@ async def audio_overview(pid: str, user: dict = Depends(user_dep())):
         prompt = f"PROJECT: {p['title']}\n\nSOURCES:\n{block}\n\nWrite the script.\nJSON: {{\"title\": \"\", \"script\": \"\"}}"
         raw = await llm.complete_json(task="notebook_audio", system=AUDIO_SYSTEM, prompt=prompt,
                                       fake=lambda: _fake_script(p["title"], used, texts), model="strong", max_tokens=2000)
-        script = text(strip_markdown(str((raw or {}).get("script") or "")), 9000) if isinstance(raw, dict) else ""
+        script = text(strip_providers(strip_markdown(str(raw.get("script") or ""))), 9000) if isinstance(raw, dict) else ""
         words = len(script.split())
         if words < 250 or words > 1100:
             raise llm.LLMError("audio script: wrong length")

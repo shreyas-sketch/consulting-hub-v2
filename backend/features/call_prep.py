@@ -28,9 +28,8 @@ from research import search
 from state import db
 from util import iso
 
-from .common import clamp_int, run_metered, text, text_list
-from .knowledge import knowledge, system_block
-from .network import NO_VENDOR
+from .common import NO_VENDOR, as_dict, as_list, clamp_int, run_metered, strip_providers, text, text_list
+from .knowledge import knowledge, links_in, no_links, system_block
 
 router = APIRouter(prefix="/call-prep", tags=["discovery-call-prep"])
 
@@ -51,8 +50,8 @@ SYSTEM = (
     "to analyse it); Step 4 Generate Options (what they have tried, what others do); Step 5 Prioritize Options "
     "(business benefit x ease); Step 6 Implementation Charter (owner, stakeholders, who decides, budget, how "
     "progress is measured). Questions are open, conversational and non-threatening, one idea each. Use only what you "
-    "are told and the numbered news items; if unsure of a fact, don't state it. Plain English, short sentences. "
-    "No mention of courses or programs. " + NO_VENDOR
+    "are told and the numbered news items; if unsure of a fact, don't state it. Refer to news only by its number; "
+    "never write a link. Plain English, short sentences. No mention of courses or programs. " + NO_VENDOR
 )
 
 
@@ -125,26 +124,26 @@ async def make(body: PrepIn, user: dict = Depends(user_dep())):
     async def work(plan: str):
         results = await search.news(f"{body.company} India", max_results=5) if body.search else []
         k = await knowledge(d, user)
-        raw = await llm.complete_json(task="call_prep", system=SYSTEM, prompt=_prompt(body, k, results),
-                                      fake=lambda: _fake(body, results), model="strong", max_tokens=2200)
+        raw = as_dict(await llm.complete_json(task="call_prep", system=SYSTEM, prompt=_prompt(body, k, results),
+                                              fake=lambda: _fake(body, results), model="strong", max_tokens=2200))
         agenda = [{"minutes": clamp_int(a.get("minutes"), 1, 30, 5), "item": text(a.get("item"), 160)}
-                  for a in (raw.get("agenda") or [])[:6] if isinstance(a, dict) and text(a.get("item"), 160)]
+                  for a in as_list(raw.get("agenda"))[:6] if isinstance(a, dict) and text(a.get("item"), 160)]
         questions = []
-        for q in (raw.get("questions") or [])[:12]:
+        for q in as_list(raw.get("questions"))[:12]:
             if isinstance(q, dict) and text(q.get("question"), 240):
                 questions.append({"step": clamp_int(q.get("step"), 1, 6, 1), "question": text(q.get("question"), 240),
                                   "why": text(q.get("why"), 240)})
         questions.sort(key=lambda q: q["step"])
         problems = [{"problem": text(x.get("problem"), 160), "why": text(x.get("why"), 240)}
-                    for x in (raw.get("problems") or [])[:4] if isinstance(x, dict) and text(x.get("problem"), 160)]
+                    for x in as_list(raw.get("problems"))[:4] if isinstance(x, dict) and text(x.get("problem"), 160)]
         objections = [{"objection": text(x.get("objection"), 200), "answer": text(x.get("answer"), 400)}
-                      for x in (raw.get("objections") or [])[:4]
+                      for x in as_list(raw.get("objections"))[:4]
                       if isinstance(x, dict) and text(x.get("objection"), 200) and text(x.get("answer"), 400)]
         opening, next_step = text(raw.get("opening"), 400), text(raw.get("next_step"), 400)
         if len(agenda) < 3 or len(questions) < 6 or not opening or not next_step:
             raise llm.LLMError("call_prep: incomplete")
         news = []
-        for n in (raw.get("news") or [])[:8]:
+        for n in as_list(raw.get("news"))[:8]:
             if len(news) >= 2:
                 break
             try:
@@ -154,10 +153,13 @@ async def make(body: PrepIn, user: dict = Depends(user_dep())):
                 r = None
             if r and not any(x["url"] == r["url"] for x in news):
                 news.append({"title": r["title"], "url": r["url"], "source": r["source"], "published": r["published"],
-                             "why": text(n.get("why"), 240)})
-        doc = {"_id": uuid.uuid4().hex, "user_id": uid, "input": body.model_dump(), "news": news, "agenda": agenda,
-               "opening": opening, "questions": questions, "problems": problems, "objections": objections,
-               "avoid": text_list(raw.get("avoid"), 4, 200), "next_step": next_step, "live_news": bool(results),
+                             "why": strip_providers(text(n.get("why"), 240))})
+        ok_links = links_in(body.known, body.how_met, *(r["url"] for r in results))
+        written = no_links(strip_providers({"agenda": agenda, "opening": opening, "questions": questions,
+                                            "problems": problems, "objections": objections,
+                                            "avoid": text_list(raw.get("avoid"), 4, 200), "next_step": next_step}), ok_links)
+        doc = {"_id": uuid.uuid4().hex, "user_id": uid, "input": body.model_dump(), "news": news, **written,
+               "live_news": bool(results),
                "test": any(r.get("test") for r in results), "at": utcnow()}
         await d.call_preps.insert_one(doc)
         await events.track(d, "call_prep_made", user_id=uid, props={"company": body.company[:60], "news": len(news)})

@@ -1,6 +1,7 @@
 // /app/pitch and /app/pitch/:id — Pitch Practice: the hub's pitch coach watches a video of your pitch and gives a
 // senior-coach read (7-metric scorecard, strengths, weaknesses, top 5 changes, timestamped observations, a practice
-// assignment). A later take in the same practice shows what changed. 30-minute pause between takes. English only.
+// assignment). A later take in the same practice shows what changed. 30-minute pause between takes (per member,
+// across practices). Fair use: a monthly number of new practices and coach questions. English only.
 // The video is analysed and deleted; nothing is kept. No PDF download on this report (same as the Leadership hub).
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -213,26 +214,33 @@ export function Report({ take, metrics }) {
 }
 
 // ---------------------------------------------------------------- take capture ----
-function useCountdown(nextAt, onZero) {
-  const [left, setLeft] = useState(0);
+// Counts down from the server's cooldown_seconds_remaining, measured from when that answer arrived (fetchedAt, this
+// device's clock). So a phone clock that is ahead or behind doesn't matter. At zero it asks the server, then every 5 s
+// until the server says the next take can start.
+function useCountdown(seconds, fetchedAt, onZero) {
+  const [left, setLeft] = useState(seconds || 0);
   const cb = useRef(onZero);
   cb.current = onZero;
   useEffect(() => {
-    if (!nextAt) { setLeft(0); return undefined; }
+    const start = fetchedAt || Date.now();
+    let poll = null;
     const tick = () => {
-      const s = Math.max(0, Math.ceil((new Date(nextAt).getTime() - Date.now()) / 1000));
+      const s = Math.max(0, Math.ceil((seconds || 0) - (Date.now() - start) / 1000));
       setLeft(s);
-      if (s === 0) { clearInterval(t); cb.current?.(); }
+      if (s === 0 && !poll) {
+        cb.current?.();
+        poll = setInterval(() => cb.current?.(), 5000);
+      }
     };
     const t = setInterval(tick, 1000);
     tick();
-    return () => clearInterval(t);
-  }, [nextAt]);
+    return () => { clearInterval(t); if (poll) clearInterval(poll); };
+  }, [seconds, fetchedAt]);
   return left;
 }
 
-function Cooldown({ t, onReady }) {
-  const left = useCountdown(t.next_upload_at, onReady);
+function Cooldown({ t, fetchedAt, onReady }) {
+  const left = useCountdown(t.cooldown_seconds_remaining, fetchedAt, onReady);
   return (
     <Card className="border-bz-rule" data-testid="pitch-cooldown">
       <div className="flex items-start gap-3">
@@ -344,6 +352,12 @@ function Capture({ t, onDone }) {
 }
 
 // ---------------------------------------------------------------- follow-up chat ----
+function chatNote(t) {
+  const month = t.chat_month_left != null && t.chat_left >= t.chat_month_left;     // the monthly limit is the one that bites
+  if (t.chat_left > 0) return `${t.chat_left} question${t.chat_left > 1 ? "s" : ""} left ${month ? "this month" : "in this practice"}.`;
+  return month ? "You've used this month's questions. They open again on the 1st." : "Start a new practice to keep asking.";
+}
+
 function Chat({ t, onUpdate }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -379,7 +393,7 @@ function Chat({ t, onUpdate }) {
         <Textarea rows={3} value={msg} onChange={(e) => setMsg(e.target.value)} maxLength={2000} placeholder="e.g. How do I stop my voice dropping at the end?" disabled={busy || t.chat_left <= 0} data-testid="pitch-chat-input" />
         <ErrorLine>{err}</ErrorLine>
         <Button type="submit" variant="ai" className="w-full" disabled={busy || !msg.trim() || t.chat_left <= 0} data-testid="pitch-chat-send">Ask the coach</Button>
-        {t.chat_left <= 5 ? <Note className="text-center">{t.chat_left > 0 ? `${t.chat_left} questions left in this practice.` : "Start a new practice to keep asking."}</Note> : null}
+        {t.chat_left <= 5 ? <Note className="text-center">{chatNote(t)}</Note> : null}
       </form>
     </Card>
   );
@@ -422,7 +436,7 @@ function Thread({ id }) {
               </div>
             ) : null}
             {current ? <Report take={current} metrics={t.metrics} /> : null}
-            {t.can_upload ? <Capture t={t} onDone={update} /> : <Cooldown t={t} onReady={() => q.refetch()} />}
+            {t.can_upload ? <Capture t={t} onDone={update} /> : <Cooldown t={t} fetchedAt={q.dataUpdatedAt} onReady={() => q.refetch()} />}
             {t.takes.length ? <Chat t={t} onUpdate={update} /> : null}
             <div className="flex flex-wrap items-center gap-2 pt-2">
               {confirm ? (

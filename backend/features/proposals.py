@@ -33,9 +33,8 @@ from notify import service as notify
 from state import db
 from util import inr, iso
 
-from .common import clamp_int, run_metered, text, text_list
-from .knowledge import knowledge, system_block
-from .network import NO_VENDOR
+from .common import NO_VENDOR, as_dict, as_list, clamp_int, run_metered, strip_providers, text, text_list
+from .knowledge import knowledge, links_in, no_links, own_links, system_block
 
 router = APIRouter(prefix="/proposals", tags=["proposals"])
 
@@ -66,7 +65,8 @@ SYSTEM = (
     "consultant's fee range: a focused option, a recommended option and a fuller option (anchor with the fuller one; "
     "alternatives instead of discounts). Plain, confident English, short sentences, no buzzwords. Follow-up messages "
     "are short, warm and helpful, never pushy: day 2 checks it arrived and offers to walk through it, day 5 adds one "
-    "useful thought for their problem, day 10 makes it easy to say yes, no or not now. " + NO_VENDOR
+    "useful thought for their problem, day 10 makes it easy to say yes, no or not now. Never include links or web "
+    "addresses; the consultant adds their own. " + NO_VENDOR
 )
 
 
@@ -188,11 +188,11 @@ async def make(body: ProposalIn, user: dict = Depends(user_dep())):
     async def work(plan: str):
         k = await knowledge(d, user)
         me = user.get("name") or ""
-        raw = await llm.complete_json(task="proposal", system=SYSTEM, prompt=_prompt(body, k, me, prep),
-                                      fake=lambda: _fake(body), model="strong", max_tokens=2600)
+        raw = as_dict(await llm.complete_json(task="proposal", system=SYSTEM, prompt=_prompt(body, k, me, prep),
+                                              fake=lambda: _fake(body), model="strong", max_tokens=2600))
         lo, hi = body.fee_low_inr, body.fee_high_inr
-        o = raw.get("objective") if isinstance(raw.get("objective"), dict) else {}
-        phases_raw = [x for x in (raw.get("phases") or []) if isinstance(x, dict)]
+        o = as_dict(raw.get("objective"))
+        phases_raw = [x for x in as_list(raw.get("phases")) if isinstance(x, dict)]
         phases = []
         for i, (stage, step) in enumerate(STAGES):
             src = next((x for x in phases_raw if text(x.get("stage"), 60).lower() == stage.lower()),
@@ -202,7 +202,7 @@ async def make(body: ProposalIn, user: dict = Depends(user_dep())):
                 raise llm.LLMError(f"proposal: stage {stage} missing")
             phases.append({"stage": stage, "step": step, "what": what, "when": text(src.get("when"), 40)})
         options = []
-        for x in (raw.get("options") or [])[:3]:
+        for x in as_list(raw.get("options"))[:3]:
             if not isinstance(x, dict) or not text(x.get("name"), 60):
                 continue
             price = clamp_int(x.get("price_inr"), max(1000, lo // 2), hi * 3 // 2, (lo + hi) // 2)
@@ -210,21 +210,25 @@ async def make(body: ProposalIn, user: dict = Depends(user_dep())):
                             "includes": text(x.get("includes"), 300)})
         options.sort(key=lambda x: x["price_inr"])
         follow = {}
-        for f in raw.get("followups") or []:
+        for f in as_list(raw.get("followups")):
             if isinstance(f, dict) and clamp_int(f.get("day"), 0, 30, 0) in FOLLOW_DAYS:
                 day = clamp_int(f.get("day"), 0, 30, 0)
-                t = str(f.get("text") or "").strip()[:1200]
+                t = (f.get("text") if isinstance(f.get("text"), str) else "").strip()[:1200]
                 if len(t) >= 20 and day not in follow:
                     follow[day] = t
         data = {"context": text(raw.get("context"), 1200),
                 "objective": {"from": text(o.get("from"), 200), "to": text(o.get("to"), 200), "by_when": text(o.get("by_when"), 80)},
                 "phases": phases, "deliverables": text_list(raw.get("deliverables"), 6, 200),
                 "timeline": [{"when": text(t.get("when"), 40), "what": text(t.get("what"), 200)}
-                             for t in (raw.get("timeline") or [])[:5] if isinstance(t, dict) and text(t.get("what"), 200)],
+                             for t in as_list(raw.get("timeline"))[:5] if isinstance(t, dict) and text(t.get("what"), 200)],
                 "options": options, "next_steps": text_list(raw.get("next_steps"), 4, 200)}
         if not data["context"] or len(options) < 3 or len(follow) < 3 or not data["deliverables"] or not data["next_steps"]:
             raise llm.LLMError("proposal: incomplete")
-        title = text(raw.get("title"), 140) or f"Proposal for {body.company}"
+        # No invented links: only the member's own (site, booking link) or ones they typed in the call notes stay.
+        allowed = (await own_links(d, user)) | links_in(body.notes)
+        data = no_links(strip_providers(data), allowed)
+        follow = no_links(strip_providers(follow), allowed)
+        title = no_links(strip_providers(text(raw.get("title"), 140)), allowed) or f"Proposal for {body.company}"
         client = {"company": body.company.strip(), "person": body.person.strip(), "role": body.role.strip()}
         now = utcnow()
         doc = {"_id": uuid.uuid4().hex, "user_id": uid, "client": client,
@@ -279,7 +283,8 @@ class PatchIn(BaseModel):
 
 def apply_status(p: dict, status: str, now) -> dict:
     """Returns the $set for a status change: sending fixes the follow-up dates (day 2, 5, 10 after sending, IST);
-    fuN marks follow-ups 1..N done; back to draft clears them."""
+    fuN marks follow-ups 1..N done; back to draft clears them. "Still open" (won/lost back to sent) keeps the
+    follow-ups already done, so the member carries on from the next one."""
     s: dict = {"status": status}
     fus = [dict(f) for f in p["followups"]]
     if status == "draft":
@@ -291,6 +296,8 @@ def apply_status(p: dict, status: str, now) -> dict:
         s["sent_at"] = sent_at
         base = _ist_today(sent_at)
         done_upto = {"sent": 0, "fu1": 1, "fu2": 2, "fu3": 3}.get(status, None)
+        if status == "sent" and p.get("status") != "draft":
+            done_upto = None                    # "Still open" after won/lost: keep each follow-up's done flag as it was
         for f in fus:
             f["due"] = (base + timedelta(days=f["day"])).isoformat()
             if done_upto is not None:
@@ -351,6 +358,6 @@ async def job_followups(ctx) -> dict:
         r = await notify.alert(d, p["user_id"], "proposal", f"Follow up with {who} today",
                                f"It's day {nf['day']} since you sent the proposal to {p['client']['company']}. "
                                "Your follow-up message is ready to copy. You send it; then mark it done.",
-                               link=f"/app/proposals/{p['_id']}", dedupe=f"proposal:{p['_id']}:{nf['n']}")
+                               link=f"/app/proposals/{p['_id']}", dedupe=f"proposal:{p['_id']}:{nf['n']}:{nf['due']}")
         sent += 1 if r else 0
     return {"checked": checked, "alerts": sent}
