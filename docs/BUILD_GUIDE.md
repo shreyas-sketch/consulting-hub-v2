@@ -42,7 +42,7 @@ Reference files: `features/brief.py`, `features/cases.py`, `features/linkedin.py
   Errors: `audio.tts.TTSError`, `audio.stt.STTError` → answer 503 with a plain message and refund.
 - Files: `media.save_blob(db, user_id=, kind=, content_type=, data=, name=, public=)` → id; `media.blob_url(id)`;
   `media.TooLarge`. Served at `/api/blobs/{id}` to the owner/admin, or anyone when `public=True`.
-  Never store member video: it stays on their phone.
+  Never keep member video: Pitch Practice deletes it from the server and the vendor right after analysis.
 - Plug-ins at import time (don't edit the shared files):
   `growth.events.register("name", "description", client=False)` then `events.track(db, "name", user_id=..., props=...)`;
   `indexes.register("coll", [("field", 1)])`; `jobs.registry.register("name", "label", ("daily", h, m) | ("weekly", weekday, h, m) | ("every", minutes), "features.x:job_fn")`

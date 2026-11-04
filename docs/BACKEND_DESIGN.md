@@ -1,4 +1,4 @@
-# Backend design — stage 1
+# Backend design
 
 Short notes for the developer. Code comments carry the detail.
 
@@ -32,8 +32,33 @@ Short notes for the developer. Code comments carry the detail.
 
 ## AI (`llm.py`)
 
-One helper, a fake for tests, a queue (`LLM_MAX_CONCURRENCY` per worker, 15 s wait, then a clear "busy" message).
+- `complete_json()` for structured answers, `complete_chat()` for chats. Each has a fake for tests.
+- A queue: `LLM_MAX_CONCURRENCY` per worker, 15 s wait, then a clear "busy" message.
+- Time limit `LLM_TIMEOUT_S` (45 s); long answers get 120–150 s.
+- Every prompt says never to name the AI providers.
+
+## Vendors (`core/vendors.py`)
+
+One switch per vendor: `live`, `fake` (tests, never production) or `off` (the tool shows "paused").
+Vendors: razorpay, msg91, aisensy, anthropic, search (Tavily), gamma, openai (audio), gemini (video).
+
+## Stages 2–4 (`features/`, one file per tool)
+
+| Area | Files | Notes |
+|---|---|---|
+| ₹1,999 plan | `weekly`, `decks`, `visuals`, `website` (+ `site_*`), `listen`, `docs`, `progress`, `support` | Decks are made by Gamma and copied into our storage. Websites are served at `/s/<name>`, `<name>.SITES_DOMAIN` or the member's own domain. |
+| L1 | `program`, `calls`, `library`, `recaps`, `gpts`, `akshat_ai`, `offer_card`, `stories`, `insights`, `portfolio`, `pitch` + `pitch_video`, `notebook` | `gpts` runs the 52 prompts in `backend/gpts/` (18 Action Hub for L1, 34 Mentorship for L2). Akshat AI answers only from the knowledge base. |
+| L2 | `network`, `outreach`, `radar`, `call_prep`, `proposals`, `diagnostic`, `social`, `bootcamps` | The diagnostic has a public link the client fills without logging in. |
+
+Shared pieces:
+
+- `media.py`: files (images, audio, decks) in Mongo, served at `/api/blobs/{id}`, 15 MB each.
+- `audio/tts.py`, `audio/stt.py`: text to speech and speech to text.
+- `features/kb.py`: search over the knowledge base (Akshat AI, recaps).
+- `features/knowledge.py`: what the app knows about the member (niche, audience, goal), added to every tool's prompt.
+
+Modules plug themselves in at import: events, indexes, jobs and inbox message kinds each have a `register()`.
 
 ## Admin (`admin/routes.py`)
 
-Pulse, live (last 15 minutes), webinar report + group-session CSV, members (grant, start L2, disable), settings (live case, group session, support number), switches, vendors, jobs, knowledge base uploads.
+Pulse, live (last 15 minutes), webinar report + group-session CSV, members (grant, start L2, disable), settings (live case, group session), switches, vendors, jobs, knowledge base uploads. Each tool's own admin endpoints sit in its module under `/admin/<tool>`: support inbox, Akshat AI questions, program, calls, recaps, library, bootcamps, weekly case, website domains.

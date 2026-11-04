@@ -16,6 +16,7 @@ import AdminCalls from "./Calls";
 import AdminLibrary from "./Library";
 import AdminRecaps from "./Recaps";
 import AdminBootcamps from "./Bootcamps";
+import AdminDomains from "./Domains";
 import AdminKnowledge from "./Knowledge";
 import AdminFeatures from "./Features";
 import AdminSettings from "./Settings";
@@ -40,6 +41,7 @@ export const GROUPS = [
     { path: "settings", label: "Live case & group session", el: AdminSettings },
     { path: "weekly", label: "Weekly case", el: AdminWeekly },
     { path: "kb", label: "Knowledge base", el: AdminKnowledge },
+    { path: "domains", label: "Website domains", el: AdminDomains },
   ] },
   { name: "Control", pages: [
     { path: "features", label: "Switches", el: AdminFeatures },
