@@ -1,7 +1,7 @@
 // /app/brief and /app/brief/:id — Meeting Brief: company in, one-page brief out (news with real links, likely problems,
 // questions to ask, an opening line). Past briefs listed under the form.
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { api, apiError } from "@/lib/api";
@@ -72,7 +72,8 @@ export default function Brief() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const list = useQuery({ queryKey: ["briefs"], queryFn: async () => (await api.get("/briefs")).data });
-  const [f, setF] = useState({ company: "", website: "", meeting_with: "", purpose: "" });
+  const [params] = useSearchParams();
+  const [f, setF] = useState({ company: (params.get("company") || "").slice(0, 120), website: "", meeting_with: "", purpose: "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const usage = plan?.limits?.brief;

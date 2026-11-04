@@ -47,7 +47,7 @@ def _sem() -> asyncio.Semaphore:
     return _SEM["sem"]
 
 
-async def _guarded(coro_fn, task: str):
+async def _guarded(coro_fn, task: str, timeout: Optional[float] = None):
     sem = _sem()
     try:
         await asyncio.wait_for(sem.acquire(), timeout=float(os.environ.get("LLM_QUEUE_WAIT_S", "15") or 15))
@@ -55,7 +55,8 @@ async def _guarded(coro_fn, task: str):
         log.warning("LLM task %s: queue full, using fallback", task)
         raise LLMError("AI is busy right now.")
     try:
-        return await asyncio.wait_for(coro_fn(), timeout=float(os.environ.get("LLM_TIMEOUT_S", "25") or 25))
+        limit = timeout or float(os.environ.get("LLM_TIMEOUT_S", "45") or 45)
+        return await asyncio.wait_for(coro_fn(), timeout=limit)
     except (asyncio.TimeoutError, TimeoutError):
         log.warning("LLM task %s timed out", task)
         raise LLMError("AI took too long.")
@@ -98,11 +99,12 @@ def _parse(text: str) -> dict:
 
 async def complete_json(*, task: str, system: str, prompt: str, fake: Callable[[], Any], model: str = "fast",
                         max_tokens: int = 1200, images: Optional[list[tuple[str, bytes]]] = None,
-                        fallback_on_error: bool = False) -> dict:
-    """images: [(media_type, bytes)] for vision tasks. fallback_on_error: return fake() instead of raising."""
+                        fallback_on_error: bool = False, timeout: Optional[float] = None) -> dict:
+    """images: [(media_type, bytes)] for vision tasks. fallback_on_error: return fake() instead of raising.
+    timeout: seconds for this call (default LLM_TIMEOUT_S, 45); long documents pass more."""
     try:
         return await _complete_json(task=task, system=system, prompt=prompt, fake=fake, model=model,
-                                    max_tokens=max_tokens, images=images)
+                                    max_tokens=max_tokens, images=images, timeout=timeout)
     except LLMError:
         if fallback_on_error:
             return fake()
@@ -122,7 +124,7 @@ async def _fake_with_latency(fake: Callable[[], Any], task: str):
     return await _guarded(slow, task)
 
 
-async def _complete_json(*, task, system, prompt, fake, model, max_tokens, images) -> dict:
+async def _complete_json(*, task, system, prompt, fake, model, max_tokens, images, timeout=None) -> dict:
     m = mode()
     if m == "fake":
         return await _fake_with_latency(fake, task)
@@ -135,7 +137,8 @@ async def _complete_json(*, task, system, prompt, fake, model, max_tokens, image
                                                     "data": base64.b64encode(data).decode()}})
     content.append({"type": "text", "text": prompt + "\n\nReply with one JSON object only."})
     try:
-        text = await _guarded(lambda: _call_text(model=model, max_tokens=max_tokens, system=system, content=content), task)
+        text = await _guarded(lambda: _call_text(model=model, max_tokens=max_tokens, system=system, content=content), task,
+                              timeout or (120 if max_tokens > 3000 else None))
         return _parse(text)
     except LLMError:
         raise
@@ -162,7 +165,7 @@ async def complete_text(*, task: str, system: str, prompt: str, fake: Callable[[
 
 
 async def complete_chat(*, task: str, system: str, messages: list[dict], fake: Callable[[], str],
-                        model: str = "fast", max_tokens: int = 2048) -> str:
+                        model: str = "fast", max_tokens: int = 2048, timeout: Optional[float] = None) -> str:
     """Multi-turn chat: messages = [{"role": "user"|"assistant", "content": str}, ...] ending with a user turn.
     Returns the assistant's text. Same queue, timeout and fake rules as complete_json."""
     m = mode()
@@ -176,7 +179,7 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
         resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs)
         return "".join(getattr(b, "text", "") for b in resp.content)
     try:
-        return (await _guarded(call, task)).strip()
+        return (await _guarded(call, task, timeout or (150 if max_tokens > 3000 else None))).strip()
     except LLMError:
         raise
     except Exception as e:  # noqa: BLE001

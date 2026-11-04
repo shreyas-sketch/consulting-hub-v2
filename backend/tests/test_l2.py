@@ -82,5 +82,6 @@ def test_late_charge_event_does_not_wake_paused_l1(client, mdb):
 def test_resume_job_registered(client):
     qa_login(client, role="admin")
     items = client.get("/api/admin/jobs").json()["items"]
-    assert [j["name"] for j in items] == ["l2_resume"]
+    names = [j["name"] for j in items]
+    assert "l2_resume" in names and len(names) == len(set(names))
     assert client.post("/api/admin/jobs/l2_resume/run").json()["ok"]

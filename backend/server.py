@@ -51,7 +51,9 @@ def create_app(db=None, *, start_jobs: bool | None = None, seed: bool | None = N
         db = AsyncIOMotorClient(settings.mongo_url, tz_aware=True)[settings.db_name]
     state.set_db(db)
 
-    app = FastAPI(title=f"{settings.brand_name} API", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app = FastAPI(title=f"{settings.brand_name} API", docs_url="/api/swagger", openapi_url="/api/openapi.json")
+    from features.website import install_domain_middleware
+    install_domain_middleware(app)                    # member websites on their own domain / <slug>.SITES_DOMAIN
     origins = [o.strip() for o in (os.environ.get("CORS_ORIGINS") or "").split(",") if o.strip()]
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,

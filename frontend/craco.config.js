@@ -25,6 +25,6 @@ module.exports = {
   // Local dev: `yarn start` on :3000 proxies /api to the backend on :8001.
   devServer: (cfg) => ({
     ...cfg,
-    proxy: [{ context: ["/api"], target: process.env.DEV_API_TARGET || "http://localhost:8001" }],
+    proxy: [{ context: ["/api", "/s"], target: process.env.DEV_API_TARGET || "http://localhost:8001" }],
   }),
 };

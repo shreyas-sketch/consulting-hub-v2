@@ -2,12 +2,16 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, CalendarCheck, ClipboardList, CreditCard, Sparkles } from "lucide-react";
+import { Bell, BookOpen, BriefcaseBusiness, CalendarCheck, ClipboardList, CreditCard, FileText, Globe, LifeBuoy, MessageCircle, Sparkles, TrendingUp } from "lucide-react";
 import { api, apiError } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { Button, Empty, Loadable, PageHeader } from "../components/ui";
 
-const ICON = { weekly_case: ClipboardList, group_session: CalendarCheck, l2: Sparkles, billing: CreditCard };
+const ICON = {
+  weekly_case: ClipboardList, group_session: CalendarCheck, call: CalendarCheck, l2: Sparkles, billing: CreditCard,
+  recap: FileText, bootcamp: BookOpen, support: LifeBuoy, akshat_ai: MessageCircle, progress: TrendingUp,
+  proposal: BriefcaseBusiness, diagnostic: ClipboardList, site_lead: Globe,
+};
 
 function isInternal(link) {
   return link && link.startsWith("/") && !link.startsWith("//");
