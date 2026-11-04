@@ -32,13 +32,18 @@ Put every value in Railway settings. Never send keys on chat or email. Full list
 
 9. **Anthropic** (every text tool): `ANTHROPIC_API_KEY`. Check the account's rate limit; `LLM_MAX_CONCURRENCY` × workers must stay under it.
 
-10. **Tavily** (web search: Meeting Brief, weekly case, Research Notebook, Opportunity Radar): `SEARCH_API_KEY`.
+10. **Web search** (Meeting Brief, weekly case, Research Notebook, Opportunity Radar, Insight Pack, Call Prep): runs on the
+    same `ANTHROPIC_API_KEY` (Anthropic's server-side web search and web fetch tools). No extra key. Web search is
+    $10 per 1,000 searches plus tokens; check it is not switched off for the organisation in the Anthropic Console.
 
 11. **Gamma** (Presentation Builder): `GAMMA_API_KEY`. Needs a Gamma plan with API access.
 
-12. **OpenAI** (audio only: Listen mode, recaps and packs read aloud, Story Bank voice notes): `OPENAI_API_KEY`.
+12. (Audio no longer needs its own vendor: it runs on Google Gemini, below.)
 
-13. **Google Gemini** (Pitch Practice video analysis): `GEMINI_API_KEY`. Model `gemini-3.8-flash` by default (`GEMINI_MODEL`).
+13. **Google Gemini** (Pitch Practice video analysis, and audio: Listen mode, recaps and packs read aloud, Story Bank
+    voice notes): `GEMINI_API_KEY`. Video model `gemini-3.8-flash` (`GEMINI_MODEL`); text to speech
+    `gemini-3.8-flash-tts` (`GEMINI_TTS_MODEL`) with voice `Iapetus` (`GEMINI_TTS_VOICE`); speech to text
+    `gemini-3.8-flash` (`GEMINI_STT_MODEL`). Audio is saved as MP3 (needs the `lameenc` pip package).
 
 14. **Member websites**
     - Without anything extra, sites open at `<PUBLIC_BASE_URL>/s/<name>`.

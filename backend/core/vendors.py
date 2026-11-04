@@ -19,11 +19,11 @@ REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
     "razorpay": ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"),
     "aisensy": ("AISENSY_API_KEY",),
     "msg91": ("MSG91_AUTH_KEY", "MSG91_OTP_TEMPLATE_ID"),
-    "anthropic": ("ANTHROPIC_API_KEY",),
-    "search": ("SEARCH_API_KEY",),          # web search for Meeting Briefs (Tavily by default, SEARCH_PROVIDER)
-    "gamma": ("GAMMA_API_KEY",),            # Presentation Builder
-    "openai": ("OPENAI_API_KEY",),          # audio: text-to-speech (Listen mode, recaps) and speech-to-text (Story Bank)
-    "gemini": ("GEMINI_API_KEY",),          # Pitch Practice: video analysis (same approach as the Leadership hub's Confidence Coach)
+    "anthropic": ("ANTHROPIC_API_KEY",),    # every text tool
+    "search": ("ANTHROPIC_API_KEY",),       # web search + page reading via Anthropic's server-side web search / web
+                                            # fetch tools (research.search); SEARCH_MODE switches it on its own
+    "gemini": ("GEMINI_API_KEY",),          # Google Gemini: Pitch Practice video analysis (features.pitch_video) and
+                                            # audio — text-to-speech (audio.tts) and speech-to-text (audio.stt)
 }
 
 KEYLESS: set[str] = set()

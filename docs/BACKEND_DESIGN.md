@@ -40,7 +40,7 @@ Short notes for the developer. Code comments carry the detail.
 ## Vendors (`core/vendors.py`)
 
 One switch per vendor: `live`, `fake` (tests, never production) or `off` (the tool shows "paused").
-Vendors: razorpay, msg91, aisensy, anthropic, search (Tavily), gamma, openai (audio), gemini (video).
+Vendors: razorpay, msg91, aisensy, anthropic, search (Anthropic web search/fetch tools), gemini (video + audio).
 
 ## Stages 2–4 (`features/`, one file per tool)
 

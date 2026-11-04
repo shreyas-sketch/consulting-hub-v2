@@ -36,3 +36,8 @@ tzdata==2025.2
 pypdf==5.4.0
 python-docx==1.1.2
 jinja2==3.1.6
+
+# Presentation Builder: our own deck engine (PowerPoint and PDF from one layout; fonts in backend/assets/fonts)
+python-pptx==1.0.2
+reportlab==5.0.1
+lameenc==1.8.1

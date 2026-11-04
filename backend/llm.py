@@ -185,3 +185,39 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
     except Exception as e:  # noqa: BLE001
         log.warning("LLM task %s failed: %s", task, e)
         raise LLMError(f"AI call failed: {type(e).__name__}") from e
+
+
+async def complete_with_tools(*, task: str, system: str, prompt: str, tools: list[dict], model: str = "fast",
+                              max_tokens: int = 1200, timeout: Optional[float] = None, max_continues: int = 2) -> dict:
+    """One live call that uses Anthropic's server-side tools (web search, web fetch: the API runs them itself).
+
+    Returns the reply as plain JSON, not SDK objects, so newer block types (web_search_tool_result,
+    web_fetch_tool_result, …) reach the caller intact whatever SDK version is pinned:
+        {"content": [every block of every turn, in order], "stop_reason": str, "usage": [usage of each turn]}
+    A "pause_turn" stop (long tool turns) is continued by sending the assistant turn back unchanged, up to
+    max_continues times. The whole exchange holds one slot of the concurrency guard and one timeout
+    (default LLM_TIMEOUT_S). No fake here: the caller checks its own vendor switch first and keeps its own fake.
+    Raises LLMError on any failure."""
+    async def call():
+        msgs: list = [{"role": "user", "content": prompt}]
+        blocks: list = []
+        usage: list = []
+        stop = None
+        for _ in range(max(0, max_continues) + 1):
+            raw = await _client().messages.with_raw_response.create(
+                model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs, tools=tools)
+            data = raw.http_response.json() or {}
+            blocks.extend(b for b in (data.get("content") or []) if isinstance(b, dict))
+            usage.append(data.get("usage") or {})
+            stop = data.get("stop_reason")
+            if stop != "pause_turn":
+                break
+            msgs = [{"role": "user", "content": prompt}, {"role": "assistant", "content": list(blocks)}]
+        return {"content": blocks, "stop_reason": stop, "usage": usage}
+    try:
+        return await _guarded(call, task, timeout)
+    except LLMError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.warning("LLM task %s failed: %s", task, e)
+        raise LLMError(f"AI call failed: {type(e).__name__}") from e
