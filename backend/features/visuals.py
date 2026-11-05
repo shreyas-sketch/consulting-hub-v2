@@ -29,6 +29,7 @@ import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import BadRequest, NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -276,9 +277,8 @@ def _public(v: dict) -> dict:
 
 
 def need_numbers() -> HTTPException:
-    return HTTPException(status_code=400, detail={
-        "code": "need_numbers", "msg": "Paste the numbers for your chart, for example: Apr 12, May 15, Jun 19. "
-                                       "The chart uses only the numbers you give."})
+    return BadRequest("Paste the numbers for your chart, for example: Apr 12, May 15, Jun 19. "
+                                       "The chart uses only the numbers you give.", code="need_numbers")
 
 
 @router.post("")
@@ -328,7 +328,7 @@ async def _own(vid: str, user: dict) -> dict:
     await plans.require(db(), user, "visuals")
     v = await db().visuals.find_one({"_id": vid, "user_id": str(user["_id"])})
     if not v:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Visual not found."})
+        raise NotFound("Visual not found.")
     return v
 
 
@@ -344,7 +344,7 @@ async def save(vid: str, body: SpecIn, user: dict = Depends(user_dep())):
     try:
         spec = clean_spec(v["kind"], body.spec, given=None)
     except SpecError as e:
-        raise HTTPException(status_code=400, detail={"code": "bad_spec", "msg": f"This can't be saved: {e}."})
+        raise BadRequest(f"This can't be saved: {e}.", code="bad_spec")
     await db().visuals.update_one({"_id": vid}, {"$set": {"spec": spec, "title": spec["title"], "updated_at": utcnow()}})
     return _public(await db().visuals.find_one({"_id": vid}))
 

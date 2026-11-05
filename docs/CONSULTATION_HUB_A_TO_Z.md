@@ -246,7 +246,7 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 
 **Pieces**
 - **Backend:** Python (FastAPI) with a MongoDB database. One file per tool in `backend/features/`.
-- **Frontend:** React, in Akshat's design system: dark only, gold for the key thing, teal only for AI, red only for errors, Manrope font.
+- **Frontend:** React. Design (5 Nov): bottle-green and ivory, brass for the key thing, ink-blue only for AI, red only for errors; Newsreader serif for headlines and ₹ figures, Manrope for text. The menu works like a file: the page you're on sticks out as a brass tab. Downloaded decks keep Akshat's deck design.
 - **One Docker image** on Railway serves both. Health check `/api/health`.
 
 **Folders**
@@ -263,6 +263,12 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 **Settings**
 - Every setting is in `backend/.env.example`, with a note on each.
 - Keys go into Railway's settings, never into chat or email.
+
+**Structure** (details in `docs/ARCHITECTURE.md`)
+- Each tool splits into router (web requests), service (rules) and repository (database). `features/cases/` is the model; the other tools move to it as they are changed.
+- All settings are read in one file (`backend/core/settings.py`). In production the app refuses to start if a setting is unsafe (for example a weak `JWT_SECRET` or test mode left on).
+- Every error has a code and a plain message; every request has an id that appears in the logs.
+- GitHub runs the tests and the build on every push (`.github/workflows/ci.yml`).
 
 **Test mode**
 - `QA_MODE=true` runs the whole app with fake outside services and sample data, so anyone can try every screen without keys.
@@ -308,7 +314,7 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 
 ## 14. How it was tested (measured)
 
-- **Automated tests:** 347, all pass (`cd backend && pytest`). They cover every tool, billing, L2, public pages, decks, search, audio and messages.
+- **Automated tests:** 362, all pass (`cd backend && pytest`). They cover every tool, billing, L2, public pages, decks, search, audio and messages.
 - **Screen walk on a phone and a computer:** every screen and every admin page. No errors and no sideways scrolling.
 - **Decks:** the PowerPoint and PDF were compared side by side, and they match.
 - **Load test** (details in `docs/LOAD_TEST.md`), with 10,000 accounts in the database:
@@ -364,7 +370,9 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 | `docs/HANDOVER.md` | Step-by-step set-up for the developer |
 | `docs/WHATSAPP_TEMPLATES.md` | Every WhatsApp template, ready to submit |
 | `docs/QA_REPORT.md` | What was reviewed and tested, and what wasn't |
+| `docs/QA_RUN_2026-11-05.md` | Latest full QA and load test (5 Nov): results and launch recommendation |
 | `docs/LOAD_TEST.md` | Load test results and how to run it again |
+| `docs/ARCHITECTURE.md` | Layers, settings, errors, logging, module registry, quality gates |
 | `docs/BACKEND_DESIGN.md` | How the backend works |
 | `docs/BUILD_GUIDE.md` | Rules every tool follows (for anyone adding a tool) |
 | `docs/API_CONTRACT.md` | Every API route |

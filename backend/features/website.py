@@ -46,6 +46,7 @@ import indexes
 import media
 import plans
 from core.deps import admin_dep, optional_user, user_dep
+from core.errors import AppError, error
 from growth import events
 from growth.clock import as_utc, utcnow
 from jobs import registry
@@ -90,8 +91,8 @@ INFRA_SUFFIXES = ("railway.app", "up.railway.app", "railway.internal", "localhos
 DOMAIN_RELEASE_DAYS = 30
 
 
-def _err(status: int, code: str, msg: str, **extra) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code, "msg": msg, **extra})
+def _err(status: int, code: str, msg: str, **extra) -> AppError:
+    return error(status, code, msg, **extra)
 
 
 def _locked(plan_needed: str, msg: str) -> HTTPException:

@@ -20,6 +20,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
+import state
+
 from .clock import utcnow
 
 log = logging.getLogger("growth.events")
@@ -146,12 +148,6 @@ def ensure_anon_cookie(request: Request, response: Response) -> str:
 
 # ---------------------------------------------------------------- routes ----
 router = APIRouter(tags=["events"])
-_db = None
-
-
-def bind_db(db) -> None:
-    global _db
-    _db = db
 
 
 class ClientEvent(BaseModel):
@@ -174,5 +170,5 @@ async def post_event(body: ClientEvent, request: Request, response: Response):
         return {"accepted": False, "reason": "not a client event"}
     anon = ensure_anon_cookie(request, response)
     uid = await _optional_user_id(request)
-    await track(_db, body.name, user_id=uid, anon_id=anon, props=body.props, src="web")
+    await track(state.db(), body.name, user_id=uid, anon_id=anon, props=body.props, src="web")
     return {"accepted": True}

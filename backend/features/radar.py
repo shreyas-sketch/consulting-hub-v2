@@ -16,13 +16,14 @@ import re
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import Conflict, InvalidInput, NotFound
 from growth import events
 from growth.clock import utcnow
 from research import search
@@ -124,7 +125,7 @@ async def run_radar(body: RunIn, user: dict = Depends(user_dep())):
     industry = body.industry.strip() or k.get("target_industry") or ""
     city = body.city.strip()
     if len(industry) < 2:
-        raise HTTPException(status_code=422, detail={"code": "industry", "msg": "Type the industry to watch, e.g. pharma or auto parts."})
+        raise InvalidInput("Type the industry to watch, e.g. pharma or auto parts.", code="industry")
 
     async def work(plan: str, n: int):
         qs = queries_for(industry, city)
@@ -137,8 +138,7 @@ async def run_radar(body: RunIn, user: dict = Depends(user_dep())):
                     results.append(r)
         results = results[:20]
         if not results:
-            raise HTTPException(status_code=409, detail={
-                "code": "no_news", "msg": "No news came back for that search. Try a wider industry or leave the city empty. This didn't use up any of your companies."})
+            raise Conflict("No news came back for that search. Try a wider industry or leave the city empty. This didn't use up any of your companies.", code="no_news")
         have = [c["company"] async for c in d.radar_companies.find({"user_id": uid}, {"company": 1}).sort("at", -1).limit(500)]
         have_keys = {company_key(x) for x in have}
         raw = as_dict(await llm.complete_json(task="radar_pick", system=SYSTEM,
@@ -205,7 +205,7 @@ async def patch(cid: str, body: PatchIn, user: dict = Depends(user_dep())):
     await plans.require(db(), user, FEATURE)
     c = await db().radar_companies.find_one({"_id": cid, "user_id": str(user["_id"])})
     if not c:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Company not found."})
+        raise NotFound("Company not found.")
     await db().radar_companies.update_one({"_id": cid}, {"$set": {"status": body.status}})
     c["status"] = body.status
     return public(c)

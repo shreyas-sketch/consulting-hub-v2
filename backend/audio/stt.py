@@ -33,11 +33,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
-import os
 from typing import Optional
 
 import httpx
 
+from core.settings import settings
 from core.vendors import vendor_mode
 from features import pitch_video
 
@@ -74,7 +74,7 @@ def mode() -> str:
 
 
 def model_name() -> str:
-    return (os.environ.get("GEMINI_STT_MODEL") or DEFAULT_MODEL).strip()
+    return (settings.gemini.stt_model or DEFAULT_MODEL)
 
 
 def audio_mime(content_type: str) -> str:
@@ -136,7 +136,7 @@ async def transcribe(data: bytes, *, filename: str = "audio.webm", content_type:
         return fake_text or FAKE_TEXT
     if m == "off":
         raise STTError("Voice notes are not set up yet (GEMINI_API_KEY).")
-    key = os.environ["GEMINI_API_KEY"]
+    key = settings.gemini.api_key
     mime = audio_mime(content_type)
     c = client or httpx.AsyncClient(timeout=httpx.Timeout(150.0, connect=20.0))
     name = None

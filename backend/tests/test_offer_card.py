@@ -74,3 +74,13 @@ def test_offer_card_ai_failure_and_bad_shape_refund(seeded_client, monkeypatch):
     monkeypatch.setattr(llm, "complete_json", empty)
     assert c.post("/api/offer-card", json={}).status_code == 503
     assert used(c, "offer_card") == 0
+
+
+def test_fake_card_with_one_comma_separated_line_still_works(client):
+    """QA run 5 Nov: 'what you get' typed as one comma-separated line made test mode answer 'AI busy'."""
+    qa_login(client, plan="l1")
+    r = client.post("/api/offer-card", json={"offer_name": "90-day plant reset", "engagement": "90 days",
+                                             "what_you_get": "Diagnosis, plan, weekly reviews",
+                                             "fee_from_inr": 300000, "fee_to_inr": 600000})
+    assert r.status_code == 200, r.text
+    assert len(r.json()["what_you_get"]) >= 3

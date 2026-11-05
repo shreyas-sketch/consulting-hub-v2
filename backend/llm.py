@@ -14,18 +14,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 from typing import Any, Callable, Optional
 
+from core.settings import settings
 from core.vendors import vendor_mode
 
 log = logging.getLogger("llm")
 
 MODELS = {
-    "fast": lambda: os.environ.get("LLM_MODEL_FAST", "claude-haiku-5-5"),
-    "strong": lambda: os.environ.get("LLM_MODEL_STRONG", "claude-sonnet-5-5"),
-    "vision": lambda: os.environ.get("LLM_MODEL_VISION", "claude-opus-5-5"),
+    "fast": lambda: settings.llm.model("fast"),
+    "strong": lambda: settings.llm.model("strong"),
+    "vision": lambda: settings.llm.model("vision"),
 }
 
 
@@ -48,7 +48,7 @@ def _wait_kw(queue_wait: Optional[float]) -> dict:
 
 
 def _sem() -> asyncio.Semaphore:
-    n = int(os.environ.get("LLM_MAX_CONCURRENCY", "48") or 48)
+    n = settings.llm.max_concurrency
     if _SEM["sem"] is None or _SEM["n"] != n:
         _SEM["sem"], _SEM["n"] = asyncio.Semaphore(n), n
     return _SEM["sem"]
@@ -56,14 +56,14 @@ def _sem() -> asyncio.Semaphore:
 
 async def _guarded(coro_fn, task: str, timeout: Optional[float] = None, queue_wait: Optional[float] = None):
     sem = _sem()
-    wait = queue_wait or float(os.environ.get("LLM_QUEUE_WAIT_S", "15") or 15)
+    wait = queue_wait or settings.llm.queue_wait_s
     try:
         await asyncio.wait_for(sem.acquire(), timeout=wait)
     except (asyncio.TimeoutError, TimeoutError):
         log.warning("LLM task %s: queue full, using fallback", task)
         raise LLMError("AI is busy right now.")
     try:
-        limit = timeout or float(os.environ.get("LLM_TIMEOUT_S", "45") or 45)
+        limit = timeout or settings.llm.timeout_s
         return await asyncio.wait_for(coro_fn(), timeout=limit)
     except (asyncio.TimeoutError, TimeoutError):
         log.warning("LLM task %s timed out", task)
@@ -89,7 +89,7 @@ def _client():
     """One shared client per worker (connection pooling) instead of a new one per call."""
     if _CLIENT["c"] is None:
         import anthropic
-        _CLIENT["c"] = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"], max_retries=1)
+        _CLIENT["c"] = anthropic.AsyncAnthropic(api_key=settings.llm.api_key, max_retries=1)
     return _CLIENT["c"]
 
 
@@ -124,7 +124,7 @@ async def complete_json(*, task: str, system: str, prompt: str, fake: Callable[[
 async def _fake_with_latency(fake: Callable[[], Any], task: str, queue_wait: Optional[float] = None):
     """LLM_FAKE_LATENCY_MS (load tests only): make fake answers take as long as real ones and go through the
     same concurrency guard, so a load test shows what the real Anthropic latency does to queues."""
-    ms = int(os.environ.get("LLM_FAKE_LATENCY_MS", "0") or 0)
+    ms = settings.llm.fake_latency_ms
     if ms <= 0:
         return fake()
 

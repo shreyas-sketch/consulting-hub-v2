@@ -18,7 +18,7 @@ import re
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
 import indexes
@@ -26,6 +26,13 @@ import llm
 import plans
 from audio import stt
 from core.deps import user_dep
+from core.errors import (
+    InvalidInput,
+    NotFound,
+    PayloadTooLarge,
+    ServiceUnavailable,
+    UnsupportedMedia,
+)
 from growth import events
 from growth.clock import IST, as_utc, utcnow
 from state import db
@@ -177,13 +184,11 @@ async def _make(user: dict, story: str, question: str, source: str, transcribe=N
             try:
                 words = await transcribe()
             except stt.STTError:
-                raise HTTPException(status_code=503, detail={
-                    "code": "stt_failed", "msg": "We couldn't turn your voice note into text just now. Try again in a "
-                                                 "minute, or type your story. This didn't use up your go."})
+                raise ServiceUnavailable("We couldn't turn your voice note into text just now. Try again in a "
+                                                 "minute, or type your story. This didn't use up your go.", code="stt_failed")
             if len(words.strip()) < 40:
-                raise HTTPException(status_code=422, detail={
-                    "code": "too_short", "msg": "We could hear very little in that recording. Try again a little closer "
-                                                "to the phone, and speak for at least a minute. This didn't use up your go."})
+                raise InvalidInput("We could hear very little in that recording. Try again a little closer "
+                                                "to the phone, and speak for at least a minute. This didn't use up your go.", code="too_short")
         k = await knowledge(db(), user)
         raw = await llm.complete_json(task="career_story", system=SYSTEM, prompt=_prompt(words, question, k, source),
                                       fake=lambda: _fake(words, question), model="strong", max_tokens=1400)
@@ -205,8 +210,7 @@ def _audio_type(f: UploadFile) -> tuple[str, str]:
     if ext not in AUDIO_TYPES:
         ext = CT_EXT.get(ct, "")
     if ext not in AUDIO_TYPES:
-        raise HTTPException(status_code=415, detail={
-            "code": "bad_type", "msg": "Use a voice recording: webm, ogg, m4a, mp3 or wav."})
+        raise UnsupportedMedia("Use a voice recording: webm, ogg, m4a, mp3 or wav.")
     return ext, AUDIO_TYPES[ext]
 
 
@@ -226,13 +230,12 @@ async def from_voice(file: UploadFile = File(...), question: str = Form(""), dur
     await plans.require(db(), user, "story_bank")
     ext, ctype = _audio_type(file)
     if duration_s is not None and duration_s > MAX_AUDIO_SECONDS + 5:
-        raise HTTPException(status_code=413, detail={"code": "too_long", "msg": "Keep your voice note under 10 minutes."})
+        raise PayloadTooLarge("Keep your voice note under 10 minutes.", code="too_long")
     data = await file.read(MAX_AUDIO_BYTES + 1)
     if len(data) > MAX_AUDIO_BYTES:
-        raise HTTPException(status_code=413, detail={
-            "code": "too_large", "msg": "That recording is larger than 24 MB. Keep it under 10 minutes."})
+        raise PayloadTooLarge("That recording is larger than 24 MB. Keep it under 10 minutes.")
     if len(data) < 1000:
-        raise HTTPException(status_code=422, detail={"code": "empty", "msg": "That recording is empty. Try again."})
+        raise InvalidInput("That recording is empty. Try again.", code="empty")
     q = text(question, 300)
 
     async def transcribe() -> str:
@@ -249,7 +252,7 @@ async def from_text(body: TextIn, user: dict = Depends(user_dep())):
 async def _own(story_id: str, uid: str) -> dict:
     d = await db().stories.find_one({"_id": story_id, "user_id": uid})
     if not d:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Story not found."})
+        raise NotFound("Story not found.")
     return d
 
 
@@ -274,5 +277,5 @@ async def edit(story_id: str, body: StoryEdit, user: dict = Depends(user_dep()))
 async def remove(story_id: str, user: dict = Depends(user_dep())):
     res = await db().stories.delete_one({"_id": story_id, "user_id": str(user["_id"])})
     if not res.deleted_count:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Story not found."})
+        raise NotFound("Story not found.")
     return {"ok": True}

@@ -16,12 +16,13 @@ import uuid
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import NotFound
 from growth import events
 from growth.clock import IST, as_utc, ist_month_key, utcnow
 from jobs import registry
@@ -30,7 +31,8 @@ from state import db
 from util import inr, iso
 
 from .common import run_metered, text
-from .readiness import SKILLS, score as readiness_score
+from .readiness import SKILLS
+from .readiness import score as readiness_score
 from .start import goal_map
 
 router = APIRouter(prefix="/progress", tags=["progress-report"])
@@ -258,7 +260,7 @@ async def mine(user: dict = Depends(user_dep())):
 async def one(report_id: str, user: dict = Depends(user_dep())):
     r = await db().progress_reports.find_one({"_id": report_id, "user_id": str(user["_id"])})
     if not r:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Report not found."})
+        raise NotFound("Report not found.")
     return _public(r)
 
 

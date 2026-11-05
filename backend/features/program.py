@@ -17,13 +17,14 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import indexes
 import plans
 from accounts.phone import InvalidPhone, normalise_in_mobile
 from core.deps import admin_dep, user_dep
+from core.errors import AppError, error
 from growth import events
 from growth.clock import IST, as_utc, utcnow
 from state import db
@@ -49,8 +50,8 @@ events.register("program_task_done", "Ticked a 4-3-2-1 task (props.task_id, prop
 
 
 # ------------------------------------------------------------------ helpers ----
-def _err(status: int, code: str, msg: str) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code, "msg": msg})
+def _err(status: int, code: str, msg: str) -> AppError:
+    return error(status, code, msg)
 
 
 def ist_today() -> date:

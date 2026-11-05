@@ -24,7 +24,7 @@ The serious ones:
 
 ## 2. Automated tests
 
-- `pytest`: **347 passed** (measured), up from 234 before this round
+- `pytest`: **361 passed** (measured, 5 Nov: 347 plus 14 for the architecture changes: settings, errors, request ids, module registry, the cases service), up from 234 before the review round
 - Covers every tool: it works, a lower plan is locked, the limit stops it, an AI failure gives the go back
 - Plus billing, L2, webhooks, public pages, the deck engine (PowerPoint and PDF open with the right slide count, and text never runs past its box), the search and audio clients (with mocked replies), and the WhatsApp templates
 

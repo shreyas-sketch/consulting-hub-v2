@@ -8,14 +8,16 @@ side effects (tests override `auth.get_current_user` / `auth.require_admin`).
 from __future__ import annotations
 
 import hmac
-import os
 from typing import Optional
 
-from fastapi import Header, HTTPException, Request
+from fastapi import Header, Request
+
+from core.errors import Unauthorized
+from core.settings import settings
 
 
 def verify_ingest_key(provided: Optional[str]) -> bool:
-    expected = os.environ.get("INGEST_KEY", "")
+    expected = settings.app.ingest_key
     if not expected or not provided:
         return False
     return hmac.compare_digest(expected.encode(), provided.encode())
@@ -23,7 +25,7 @@ def verify_ingest_key(provided: Optional[str]) -> bool:
 
 async def require_ingest_key(x_ingest_key: Optional[str] = Header(default=None, alias="X-Ingest-Key")) -> bool:
     if not verify_ingest_key(x_ingest_key):
-        raise HTTPException(status_code=401, detail="bad ingest key")
+        raise Unauthorized("bad ingest key", code="bad_ingest_key")
     return True
 
 

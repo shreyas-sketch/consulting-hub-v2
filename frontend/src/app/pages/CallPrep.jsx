@@ -13,7 +13,7 @@ import {
   AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, Loadable, PageHeader, RowLink, Step, Textarea, Thinking,
 } from "../components/ui";
 
-const H = ({ children }) => <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2">{children}</p>;
+const H = ({ children }) => <p className="text-[12px] font-semibold text-bz-teal mb-2">{children}</p>;
 
 export function PrepBody({ p }) {
   const byStep = {};
@@ -21,7 +21,7 @@ export function PrepBody({ p }) {
   const total = (p.agenda || []).reduce((a, x) => a + (x.minutes || 0), 0);
   return (
     <AiFrame title="Discovery Call Prep" right={<span className="text-[12px] text-bz-muted">{hdate(p.at)}</span>} className="print-plain">
-      <p className="text-[24px] font-extrabold tracking-[-0.01em] leading-tight">{p.input.company}</p>
+      <p className="text-[24px] font-display font-[500] tracking-[-0.01em] leading-tight">{p.input.company}</p>
       {(p.input.person || p.input.role) && <p className="text-[14px] text-bz-muted mt-1">{[p.input.person, p.input.role].filter(Boolean).join(" · ")}</p>}
 
       <div className="mt-5">
@@ -86,7 +86,7 @@ export function PrepBody({ p }) {
       )}
 
       <div className="mt-5 rounded-bzcard border border-bz-gold bg-bz-gold-tint p-3.5">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-gold mb-1">The next step to propose</p>
+        <p className="text-[12px] font-semibold text-bz-gold mb-1">The next step to propose</p>
         <p className="text-[15px]">{p.next_step}</p>
       </div>
 
@@ -124,7 +124,7 @@ function View() {
             <div className="flex flex-col sm:flex-row gap-2 no-print">
               <Button variant="secondary" onClick={() => window.print()} data-testid="callprep-print">Print or save as PDF</Button>
               <Link to={`/app/proposals?prep=${p.id}&company=${encodeURIComponent(p.input.company)}&person=${encodeURIComponent(p.input.person || "")}&role=${encodeURIComponent(p.input.role || "")}`}
-                className="inline-flex items-center justify-center min-h-[52px] px-6 rounded-full border border-bz-rule font-bold text-[15px] hover:border-bz-gold" data-testid="callprep-to-proposal">
+                className="inline-flex items-center justify-center min-h-[52px] px-6 rounded-bzbtn border border-bz-rule font-bold text-[15px] hover:border-bz-gold" data-testid="callprep-to-proposal">
                 After the call: write the proposal
               </Link>
             </div>
@@ -168,7 +168,7 @@ function Form() {
             <Field label="How you met (optional)"><Input value={f.how_met} onChange={(e) => setF({ ...f, how_met: e.target.value })} maxLength={300} placeholder="e.g. Ex-colleague, replied to my LinkedIn post" /></Field>
             <Field label="What you know so far (optional)"><Textarea rows={4} value={f.known} onChange={(e) => setF({ ...f, known: e.target.value })} maxLength={2000} placeholder="What they told you, what you've read, numbers you know." data-testid="callprep-known" /></Field>
             <label className="flex items-center gap-3 min-h-[44px] cursor-pointer">
-              <input type="checkbox" checked={f.search} onChange={(e) => setF({ ...f, search: e.target.checked })} className="w-5 h-5 accent-[#c9a84c]" data-testid="callprep-search" />
+              <input type="checkbox" checked={f.search} onChange={(e) => setF({ ...f, search: e.target.checked })} className="w-5 h-5 accent-bz-gold" data-testid="callprep-search" />
               <span className="text-[15px]">Look up recent news on the company</span>
             </label>
             <ErrorLine>{err}</ErrorLine>

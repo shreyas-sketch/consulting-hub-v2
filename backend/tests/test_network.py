@@ -87,7 +87,7 @@ def test_cap_on_stored_contacts(client, mdb, monkeypatch):
 
 
 def test_ai_score_counts_each_contact_then_contacted_and_notes(client, mdb):
-    uid = l2(client, mdb)
+    l2(client, mdb)
     upload(client)
     ids = [x["id"] for x in client.get("/api/network").json()["items"][:2]]
     r = client.post("/api/network/score", json={"ids": ids})

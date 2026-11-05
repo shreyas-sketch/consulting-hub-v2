@@ -15,7 +15,7 @@ import uuid
 from typing import Literal, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ import indexes
 import media
 import plans
 from core.deps import admin_dep, user_dep
+from core.errors import AppError, Locked, error
 from growth.clock import utcnow
 from state import db
 from util import iso
@@ -39,8 +40,8 @@ YT_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 indexes.register("library_items", [("published", 1), ("section", 1), ("order", 1)])
 
 
-def _err(status: int, code: str, msg: str) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code, "msg": msg})
+def _err(status: int, code: str, msg: str) -> AppError:
+    return error(status, code, msg)
 
 
 def embed_of(url: str) -> Optional[dict]:
@@ -112,8 +113,7 @@ async def file(item_id: str, user: dict = Depends(user_dep())):
     if not it or not it.get("file_id") or (not it.get("published") and user.get("role") != "admin"):
         raise _err(404, "not_found", "File not found.")
     if plans.RANK[plan] < _rank(it.get("plan_min", "l1")):
-        raise HTTPException(status_code=403, detail={"code": "locked", "feature": "recordings", "plan_needed": "l2",
-                                                     "msg": "This workbook is part of the L2 Mentorship."})
+        raise Locked("This workbook is part of the L2 Mentorship.", feature="recordings", plan_needed="l2")
     b = await media.get_blob(d, it["file_id"])
     if not b:
         raise _err(404, "not_found", "File not found.")

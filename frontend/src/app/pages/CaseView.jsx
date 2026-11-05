@@ -1,8 +1,8 @@
 // /app/cases/:id — the case, your answer, the AI score on four criteria, then the model answer.
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, apiError } from "@/lib/api";
+import { apiError } from "@/lib/api";
+import { useAnswerCase, useCase } from "@/services/cases";
 import { useAuth } from "@/context/AuthContext";
 import { hdate } from "@/lib/format";
 import { BackLink, LockCard, Para, ScoreRing, UsageLine } from "../components/common";
@@ -24,8 +24,8 @@ function Score({ a, criteria }) {
       </div>
       {a.summary && <p className="mt-4 text-[15px]">{a.summary}</p>}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1.5">What worked</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.good.map((x) => <li key={x}>{x}</li>)}</ul></div>
-        <div><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1.5">To improve</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.improve.map((x) => <li key={x}>{x}</li>)}</ul></div>
+        <div><p className="text-[12px] font-semibold text-bz-teal mb-1.5">What worked</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.good.map((x) => <li key={x}>{x}</li>)}</ul></div>
+        <div><p className="text-[12px] font-semibold text-bz-teal mb-1.5">To improve</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.improve.map((x) => <li key={x}>{x}</li>)}</ul></div>
       </div>
       <details className="mt-4">
         <summary className="cursor-pointer text-[13px] font-bold text-bz-muted min-h-[40px] flex items-center">Your answer</summary>
@@ -38,7 +38,7 @@ function Score({ a, criteria }) {
 function Phase({ n, name, children }) {
   return (
     <div className="pt-5 mt-5 border-t border-bz-line first:mt-0 first:pt-0 first:border-0">
-      <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">Phase {n} · {name}</p>
+      <p className="text-[12px] font-semibold text-bz-gold">Phase {n} · {name}</p>
       <div className="mt-3 space-y-3">{children}</div>
     </div>
   );
@@ -55,7 +55,7 @@ function ModelAnswer({ m }) {
         <div className="grid grid-cols-3 gap-2">
           {[["From", o.from], ["To", o.to], ["In", o.by]].map(([k, v]) => (
             <div key={k} className="rounded-bzcard bg-bz-raised border border-bz-line p-3 min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted">{k}</p>
+              <p className="text-[12.5px] font-semibold text-bz-muted">{k}</p>
               <p className="text-[14px] font-extrabold text-bz-gold mt-1 leading-snug">{v}</p>
             </div>
           ))}
@@ -81,7 +81,7 @@ function ModelAnswer({ m }) {
         <div className="grid gap-2 sm:grid-cols-3">
           {[["Owner", m.charter?.owner], ["Leading metric", m.charter?.leading], ["Lagging metric", m.charter?.lagging]].map(([k, v]) => (
             <div key={k} className="rounded-bzcard bg-bz-raised border border-bz-line p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted">{k}</p>
+              <p className="text-[12.5px] font-semibold text-bz-muted">{k}</p>
               <p className="text-[14px] font-bold mt-1">{v}</p>
             </div>
           ))}
@@ -95,10 +95,10 @@ function ModelAnswer({ m }) {
 export default function CaseView() {
   const { id } = useParams();
   const { plan, refreshMe } = useAuth();
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["case", id], queryFn: async () => (await api.get(`/cases/${id}`, { _silentGate: true })).data });
+  const q = useCase(id);
+  const send = useAnswerCase(id, { onDone: refreshMe });
+  const busy = send.isPending;
   const [answer, setAnswer] = useState("");
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [writing, setWriting] = useState(false);
   const usage = plan?.limits?.case;
@@ -106,13 +106,11 @@ export default function CaseView() {
 
   const submit = async () => {
     if (answer.trim().length < 40) { setErr("Write a little more: at least a few sentences (40 characters)."); return; }
-    setErr(""); setBusy(true);
+    setErr("");
     try {
-      await api.post(`/cases/${id}/answer`, { answer });
+      await send.mutateAsync(answer);
       setAnswer(""); setWriting(false);
-      await qc.invalidateQueries({ queryKey: ["case", id] });
-      qc.invalidateQueries({ queryKey: ["cases"] }); qc.invalidateQueries({ queryKey: ["file"] }); refreshMe();
-    } catch (e) { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } finally { setBusy(false); }
+    } catch (e) { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); }
   };
 
   if (q.isError && q.error?.response?.status === 403) {

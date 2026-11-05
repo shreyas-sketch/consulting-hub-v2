@@ -8,11 +8,11 @@ from fastapi import HTTPException
 
 import llm
 import plans
+from core.errors import AIBusy
 
 
 def busy_error() -> HTTPException:
-    return HTTPException(status_code=503, detail={
-        "code": "ai_busy", "msg": "The AI is busy right now. Try again in a minute. This didn't use up your go."})
+    return AIBusy("The AI is busy right now. Try again in a minute. This didn't use up your go.")
 
 
 async def run_metered(db, user: dict, meter: str, work: Callable[[str], Awaitable], *, access: Optional[str] = None):

@@ -39,7 +39,7 @@ function Variant({ o, v, onSaved }) {
   return (
     <div className={`rounded-bzcard border bg-bz-panel p-3.5 ${chosen ? "border-bz-gold" : "border-bz-line"}`} data-testid={`outreach-variant-${v.style}`}>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal">{STYLE[v.style]}</span>
+        <span className="text-[12px] font-semibold text-bz-teal">{STYLE[v.style]}</span>
         <div className="flex items-center gap-1">
           {chosen && <Chip tone="gold">Sent</Chip>}
           {!edit && <CopyButton text={full} />}
@@ -130,7 +130,7 @@ function Form() {
       <form onSubmit={run} noValidate className="space-y-4">
         {c ? (
           <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3.5">
-            <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted">Writing to</p>
+            <p className="text-[12px] font-semibold text-bz-muted">Writing to</p>
             <p className="font-bold text-[16px] mt-1">{c.name}</p>
             <p className="text-[13px] text-bz-muted">{[c.position, c.company].filter(Boolean).join(" · ")}</p>
             {c.angle && <p className="text-[13px] text-bz-teal mt-1.5">Angle: {c.angle}</p>}

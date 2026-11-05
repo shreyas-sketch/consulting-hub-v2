@@ -58,12 +58,12 @@ function SideNav({ onGo }) {
     <div className="flex flex-col gap-4 h-full">
       <div className="px-2 flex flex-col gap-2">
         <Link to="/admin" onClick={onGo}><Logo /></Link>
-        <span className="text-[11px] font-medium uppercase tracking-kicker text-bz-gold">Admin</span>
+        <span className="text-[12.5px] font-semibold text-bz-gold">Admin</span>
       </div>
       <nav aria-label="Admin" className="flex flex-col gap-3 overflow-y-auto">
         {GROUPS.map((g) => (
           <div key={g.name}>
-            <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-bz-muted">{g.name}</div>
+            <div className="px-3 pb-1 text-[12.5px] font-semibold text-bz-muted">{g.name}</div>
             {g.pages.map((p) => (
               <NavLink key={p.path} to={`/admin${p.path ? `/${p.path}` : ""}`} end onClick={onGo} data-testid={`admin-nav-${p.path || "pulse"}`}
                 className={({ isActive }) => `relative block h-11 leading-[44px] px-3 rounded-bzbtn text-[14px] ${isActive ? "bg-bz-raised text-bz-gold font-extrabold" : "text-bz-muted font-bold hover:bg-bz-raised hover:text-bz-ink"}`}>
@@ -87,28 +87,28 @@ function Shell() {
   const page = ALL.find((p) => p.path === sub) || ALL[0];
   return (
     <div className="min-h-screen font-bz text-bz-ink antialiased lg:flex">
-      <aside className="hidden lg:flex flex-col w-[248px] shrink-0 border-r border-bz-line bg-bz-panel px-4 py-6 h-screen sticky top-0">
+      <aside className="hidden lg:flex flex-col w-[248px] shrink-0 border-r-2 border-bz-gold/80 bg-bz-spine px-4 py-6 h-screen sticky top-0">
         <SideNav />
       </aside>
-      <header className="lg:hidden sticky top-0 z-30 bg-bz-panel border-b border-bz-line h-14 px-4 flex items-center justify-between">
-        <button aria-label="Menu" onClick={() => setDrawer(true)} className="w-11 h-11 grid place-items-center rounded-full bg-bz-raised" data-testid="admin-menu">
+      <header className="lg:hidden sticky top-0 z-30 bg-bz-spine/95 backdrop-blur border-b border-bz-gold/50 h-14 px-4 flex items-center justify-between">
+        <button aria-label="Menu" onClick={() => setDrawer(true)} className="w-11 h-11 grid place-items-center rounded-bzbtn border border-bz-line bg-bz-raised/60" data-testid="admin-menu">
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
         <div className="text-[17px] font-extrabold">{page.label}</div>
-        <Link to="/admin/users" aria-label="Find a user" className="w-11 h-11 grid place-items-center rounded-full bg-bz-raised">
+        <Link to="/admin/users" aria-label="Find a user" className="w-11 h-11 grid place-items-center rounded-bzbtn border border-bz-line bg-bz-raised/60">
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
         </Link>
       </header>
       {drawer && (
         <div className="lg:hidden fixed inset-0 z-40">
           <button aria-label="Close menu" className="absolute inset-0 bg-bz-scrim" onClick={() => setDrawer(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-bz-panel border-r border-bz-line px-4 py-5 overflow-y-auto shadow-bzsheet flex flex-col">
+          <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-bz-spine border-r-2 border-bz-gold/80 px-4 py-5 overflow-y-auto shadow-bzsheet flex flex-col">
             <SideNav onGo={() => setDrawer(false)} />
           </div>
         </div>
       )}
       <main className="flex-1 min-w-0 px-4 lg:px-9 py-5 lg:py-7 max-w-[1240px]">
-        <h1 className="hidden lg:block text-[32px] font-extrabold tracking-[-0.02em] leading-[1.05] mb-6">{page.label}</h1>
+        <h1 className="font-display hidden lg:block text-[32px] font-[450] tracking-[-0.02em] leading-[1.05] mb-6">{page.label}</h1>
         <Routes>
           {ALL.map((p) => {
             const El = p.el;
@@ -131,7 +131,7 @@ export default function AdminApp() {
     return (
       <div className="min-h-screen font-bz text-bz-ink grid place-items-center p-5">
         <Card className="max-w-[440px] w-full text-center" data-testid="admin-denied">
-          <p className="text-[24px] font-extrabold">Team only</p>
+          <p className="text-[24px] font-display font-[500]">Team only</p>
           <p className="text-[15px] text-bz-muted mt-2">This account ({user.phone || user.email}) doesn't have admin access. Ask the team to add your number, or log in with a staff account.</p>
           <div className="flex flex-col gap-2 mt-5">
             <Button onClick={async () => { await logout(); nav("/admin/login", { replace: true }); }}>Log in as staff</Button>

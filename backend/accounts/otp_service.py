@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -27,6 +26,8 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 import indexes
+from core.errors import AppError
+from core.settings import settings
 from growth import events
 from growth.clock import as_utc, utcnow
 
@@ -40,7 +41,7 @@ MAX_PER_PHONE_DAY = 10
 # Per-IP cap is only a brake on scripted abuse. Indian mobile carriers (Jio, Airtel, Vi) put thousands of
 # phones behind one public IP (CGNAT), so a low cap blocks real webinar sign-ups: the load test showed 30/hour
 # let only 30 of 500 people behind one IP sign up. The per-phone limits below are the real protection.
-MAX_PER_IP_HOUR = int(os.environ.get("OTP_MAX_PER_IP_HOUR", "1000") or 1000)
+DEFAULT_MAX_PER_IP_HOUR = 1000       # settings.otp.max_per_ip_hour (read per request)
 MAX_ATTEMPTS = 5
 # Global brake on sends across the whole app, per clock minute (env OTP_MAX_PER_MINUTE, 0 = off). Stops a bot
 # farm from running up the SMS bill. 1,200 a minute lets a webinar QR rush (500+ people in a minute) straight through;
@@ -52,21 +53,19 @@ indexes.register("rate_counters", [("purge_at", 1)], {"expireAfterSeconds": 0})
 
 def max_per_minute() -> int:
     try:
-        return int(os.environ.get("OTP_MAX_PER_MINUTE", "") or DEFAULT_MAX_PER_MINUTE)
+        return settings.otp.max_per_minute
     except ValueError:
         return DEFAULT_MAX_PER_MINUTE
 
 Channel = Literal["auto", "sms", "whatsapp"]
 
 
-class OtpError(Exception):
-    def __init__(self, code: str, msg: str, status: int = 400, **extra):
-        super().__init__(msg)
-        self.code, self.status, self.extra = code, status, extra
+class OtpError(AppError):
+    """A login-code rule said no (cooldown, limits, wrong or expired code). Renders as {code, msg, ...extra}."""
 
-    @property
-    def detail(self) -> dict:
-        return {"code": self.code, "msg": str(self), **self.extra}
+    def __init__(self, code: str, msg: str, status: int = 400, **extra):
+        super().__init__(msg, code=code, status=status, **extra)
+        self.status = status
 
 
 @dataclass
@@ -79,7 +78,7 @@ class Challenge:
 
 
 def _secret() -> bytes:
-    key = os.environ.get("OTP_SECRET") or os.environ.get("JWT_SECRET")
+    key = settings.otp.secret
     if not key:
         raise RuntimeError("OTP_SECRET (or JWT_SECRET) must be set")
     return key.encode()
@@ -93,7 +92,7 @@ def _test_numbers() -> dict[str, str]:
     """OTP_TEST_NUMBERS='+919999900001:246810,...' — fixed codes for QA/app review.
     Nothing is sent to these numbers. Keep empty unless a reviewer needs it."""
     out = {}
-    for pair in (os.environ.get("OTP_TEST_NUMBERS") or "").split(","):
+    for pair in settings.otp.test_numbers.split(","):
         if ":" in pair:
             num, code = pair.split(":", 1)
             if code.strip().isdigit() and len(code.strip()) == OTP_LEN:
@@ -117,7 +116,7 @@ async def _check_limits(db, phone: str, ip: str, now: datetime) -> None:
         raise OtpError("phone_hourly_limit", "Too many codes requested. Try again in an hour.", 429)
     if await db.otp_challenges.count_documents({"phone": phone, "created_at": {"$gte": day}}) >= MAX_PER_PHONE_DAY:
         raise OtpError("phone_daily_limit", "Too many codes today. Try again tomorrow.", 429)
-    if ip and await db.otp_challenges.count_documents({"ip": ip, "created_at": {"$gte": hour}}) >= MAX_PER_IP_HOUR:
+    if ip and await db.otp_challenges.count_documents({"ip": ip, "created_at": {"$gte": hour}}) >= settings.otp.max_per_ip_hour:
         raise OtpError("ip_limit", "Too many requests from this network. Try again later.", 429)
     await _global_minute(db, now)
 

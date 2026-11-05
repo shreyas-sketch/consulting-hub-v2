@@ -148,7 +148,7 @@ function AddSource({ id, refresh }) {
 
   return (
     <div className="mt-4 pt-4 border-t border-bz-line">
-      <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-2">Add a source</p>
+      <p className="text-[12px] font-semibold text-bz-muted mb-2">Add a source</p>
       <Segmented value={kind} onChange={(v) => { setKind(v); setErr(""); setOk(""); }} label="Kind of source" testid="nb-source-kind"
         options={[{ value: "file", label: "File" }, { value: "text", label: "Text" }, { value: "url", label: "Web page" }, { value: "doc", label: "My documents" }]} />
       <div className="mt-3">
@@ -350,7 +350,7 @@ function NoteCard({ n, id, refresh }) {
   );
   const inner = <>{head}{body}<ErrorLine>{err}</ErrorLine></>;
   return ai
-    ? <section className="rounded-bzcard border border-[rgba(46,211,183,0.35)] bg-bz-card p-3.5 sm:p-4">{inner}</section>
+    ? <section className="rounded-bzcard border border-bz-teal/40 bg-bz-card p-3.5 sm:p-4">{inner}</section>
     : <Card inset className="!p-3.5 sm:!p-4">{inner}</Card>;
 }
 
@@ -484,7 +484,7 @@ function ProjectHead({ p, id, refresh }) {
   return (
     <header>
       <Label tone="teal">Research Notebook</Label>
-      <h1 className="text-[26px] sm:text-[34px] font-extrabold leading-[1.08] tracking-[-0.02em] break-words">{p.title}</h1>
+      <h1 className="font-display text-[26px] sm:text-[34px] font-[450] leading-[1.08] tracking-[-0.02em] break-words">{p.title}</h1>
       {p.description && <p className="text-[15px] font-light text-bz-muted mt-2">{p.description}</p>}
       <div className="flex flex-wrap gap-2 mt-3 no-print">
         <Button variant="small" onClick={() => setEdit({ title: p.title, description: p.description || "" })} data-testid="nb-rename">Rename</Button>

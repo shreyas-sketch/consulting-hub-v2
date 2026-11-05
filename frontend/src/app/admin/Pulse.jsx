@@ -14,7 +14,7 @@ export function Bars({ rows, labelKey, valueKey = "count", label }) {
       {list.map((r) => (
         <li key={r[labelKey]}>
           <div className="flex justify-between text-[13.5px]"><span className="truncate pr-2">{r.__label || r[labelKey] || "—"}</span><span className="tabular font-bold text-bz-gold">{Number(r[valueKey] || 0).toLocaleString("en-IN")}</span></div>
-          <div className="h-2 rounded-full bg-bz-line mt-1 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-[#8F7635] to-[#F0D98A]" style={{ width: `${((Number(r[valueKey]) || 0) / max) * 100}%` }} /></div>
+          <div className="h-2 rounded-full bg-bz-line mt-1 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-bz-rule to-bz-gold-light" style={{ width: `${((Number(r[valueKey]) || 0) / max) * 100}%` }} /></div>
         </li>
       ))}
     </ul>

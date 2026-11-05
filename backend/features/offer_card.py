@@ -16,13 +16,14 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -116,9 +117,12 @@ def _fake(body: OfferIn, k: dict, proof: list[str]) -> dict:
     niche = k.get("niche") or "Operations consulting"
     lo = body.fee_from_inr or 25000
     hi = body.fee_to_inr or max(lo, 75000)
-    items = [x.strip(" -•") for x in body.what_you_get.replace(";", "\n").split("\n") if x.strip(" -•")] or [
-        "A two-week diagnosis of where the money and time go", "One clear 90-day plan with owners and dates",
-        "A weekly 60-minute working session with your team", "One page of numbers to track every week"]
+    defaults = ["A two-week diagnosis of where the money and time go", "One clear 90-day plan with owners and dates",
+                "A weekly 60-minute working session with your team", "One page of numbers to track every week"]
+    typed = body.what_you_get.replace(";", "\n").replace(",", "\n")
+    items = [x.strip(" -•") for x in typed.split("\n") if x.strip(" -•")]
+    # A real AI always writes 4-6 deliverables; the fake tops up the member's list so test mode never fails on it.
+    items = items + [d for d in defaults if d not in items][:max(0, 4 - len(items))]
     return {"offer_name": body.offer_name or f"The 90-Day {niche.split(' for ')[0].title()} Reset",
             "ideal_client": who, "problem": prob[0].upper() + prob[1:],
             "outcome": "A clear plan and a team that runs it, with one number moving in the right direction in 90 days.",
@@ -181,7 +185,7 @@ def _public(d: dict) -> dict:
 async def _own(card_id: str, uid: str) -> dict:
     d = await db().offer_cards.find_one({"_id": card_id, "user_id": uid})
     if not d:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Offer Card not found."})
+        raise NotFound("Offer Card not found.")
     return d
 
 

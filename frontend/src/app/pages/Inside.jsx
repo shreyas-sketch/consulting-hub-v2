@@ -32,7 +32,7 @@ function SkillBars() {
       {rows.map(([n, v]) => (
         <div key={n}>
           <div className="flex justify-between text-[12.5px]"><span className="text-bz-muted">{n}</span><span className="font-extrabold text-bz-gold tabular">{v}</span></div>
-          <div className="h-2 rounded-full bg-bz-line mt-1 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-[#8F7635] to-[#F0D98A]" style={{ width: `${v * 10}%` }} /></div>
+          <div className="h-2 rounded-full bg-bz-line mt-1 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-bz-rule to-bz-gold-light" style={{ width: `${v * 10}%` }} /></div>
         </div>
       ))}
     </div>
@@ -46,9 +46,9 @@ export default function Inside() {
     <PublicLayout wide>
       <section className="px-4 md:px-8 pt-10 sm:pt-16 pb-12 max-w-[1120px] mx-auto grid gap-10 lg:grid-cols-[1.15fr_0.85fr] items-center">
         <div className="rise-in">
-          <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">What's inside</p>
-          <h1 className="mt-4 text-[36px] sm:text-[52px] leading-[1.03] font-extrabold tracking-[-0.02em]">
-            Your years of experience, <span className="text-bz-gold">ready for clients.</span>
+          <p className="text-[12px] font-semibold text-bz-gold">What's inside</p>
+          <h1 className="font-display mt-4 text-[36px] sm:text-[52px] leading-[1.03] font-[450] tracking-[-0.02em]">
+            Your years of experience, ready for clients.
           </h1>
           <p className="mt-5 text-[17px] font-light leading-relaxed text-bz-muted max-w-[560px]">
             The tools you use live on Akshat's webinar: score your readiness, find your niche, solve a real case and prepare for a client meeting. Everything you make is saved in your Consulting File.
@@ -61,7 +61,7 @@ export default function Inside() {
         </div>
         <Card className="shadow-float rounded-bzframe p-6" aria-label="Example Readiness Score">
           <div className="flex items-center justify-between">
-            <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">Readiness Score</p>
+            <p className="text-[12px] font-semibold text-bz-gold">Readiness Score</p>
             <Chip>Example</Chip>
           </div>
           <div className="mt-4 flex items-center gap-6">
@@ -73,12 +73,12 @@ export default function Inside() {
       </section>
 
       <section className="px-4 md:px-8 pb-14 max-w-[1120px] mx-auto">
-        <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">On the webinar</p>
-        <h2 className="mt-3 text-[28px] sm:text-[34px] font-extrabold tracking-[-0.02em] leading-tight">Six tools you <span className="text-bz-gold">use live.</span></h2>
+        <p className="text-[12px] font-semibold text-bz-gold">On the webinar</p>
+        <h2 className="mt-3 text-[28px] sm:text-[34px] font-[500] tracking-[-0.02em] leading-tight">Six tools you use live.</h2>
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {WEBINAR.map(({ key, icon: Icon }, i) => (
             <Card key={key} className="flex gap-3.5">
-              <span className="w-[34px] h-[34px] shrink-0 rounded-full border border-bz-gold text-bz-gold grid place-items-center text-[14px] font-extrabold">{i + 1}</span>
+              <span className="font-display w-[34px] h-[34px] shrink-0 rounded-bzbtn border border-bz-rule text-bz-gold grid place-items-center text-[18px] font-[500]">{i + 1}</span>
               <div className="min-w-0">
                 <p className="font-bold text-[16px] flex items-center gap-2"><Icon className="w-4 h-4 text-bz-gold" strokeWidth={1.9} aria-hidden />{FEATURES[key].name}</p>
                 <p className="text-[14px] text-bz-muted mt-1 leading-relaxed">{FEATURES[key].what}</p>
@@ -89,8 +89,8 @@ export default function Inside() {
       </section>
 
       <section className="px-4 md:px-8 pb-16 max-w-[1120px] mx-auto">
-        <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">After the webinar</p>
-        <h2 className="mt-3 text-[28px] sm:text-[34px] font-extrabold tracking-[-0.02em] leading-tight">Keep going, <span className="text-bz-gold">every week.</span></h2>
+        <p className="text-[12px] font-semibold text-bz-gold">After the webinar</p>
+        <h2 className="mt-3 text-[28px] sm:text-[34px] font-[500] tracking-[-0.02em] leading-tight">Keep going, every week.</h2>
         <div className="mt-6 grid gap-3 lg:grid-cols-3">
           {TIERS.map((t) => (
             <Card key={t.plan} className={t.plan === "l1" ? "border-bz-gold" : ""}>

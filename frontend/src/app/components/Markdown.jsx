@@ -46,7 +46,7 @@ function StepsCard({ text }) {
   if (!items.length) return null;
   return (
     <div className="my-4 rounded-bzcard border border-bz-line bg-bz-panel p-3.5" data-testid="md-steps">
-      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-2.5">The six steps{current ? ` · step ${current} of ${items.length}` : ""}</p>
+      <p className="text-[12.5px] font-semibold text-bz-muted mb-2.5">The six steps{current ? ` · step ${current} of ${items.length}` : ""}</p>
       <ol className="space-y-2">
         {items.map((s) => {
           const done = current && s.n < current;
@@ -80,7 +80,7 @@ function YouCard({ text }) {
   return (
     <div className="my-4 rounded-bzcard border border-bz-gold bg-bz-gold-tint p-4" data-testid="md-you">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">{label || "You say"}</p>
+        <p className="text-[12px] font-semibold text-bz-gold">{label || "You say"}</p>
         <CopyButton text={body.replace(/^"|"$/g, "")} />
       </div>
       <p className="whitespace-pre-line text-[15.5px] leading-relaxed">{body}</p>
@@ -105,7 +105,7 @@ function NextButton({ text }) {
   return (
     <div className="my-4 no-print">
       <button type="button" disabled={busy} onClick={() => onNext(label)} data-testid="md-next"
-        className="inline-flex items-center gap-2 min-h-[48px] px-5 rounded-full border border-bz-teal text-bz-teal font-bold text-[15px] hover:bg-bz-teal-tint disabled:opacity-50 text-left">
+        className="inline-flex items-center gap-2 min-h-[48px] px-5 rounded-bzbtn border border-bz-teal text-bz-teal font-bold text-[15px] hover:bg-bz-teal-tint disabled:opacity-50 text-left">
         {label}<ArrowRight className="w-4 h-4 shrink-0" aria-hidden />
       </button>
     </div>
@@ -116,7 +116,7 @@ function Fence({ lang, text }) {
   if (lang === "ask") {
     return (
       <div className="my-4 rounded-bzcard border border-bz-gold bg-bz-gold-tint p-4">
-        <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold mb-1.5">Your turn — I need this from you</p>
+        <p className="text-[12px] font-semibold text-bz-gold mb-1.5">Your turn — I need this from you</p>
         <div className="text-[15px]"><Markdown text={text} /></div>
       </div>
     );
@@ -132,7 +132,7 @@ function Fence({ lang, text }) {
   return (
     <div className="my-4 rounded-bzcard border border-bz-line bg-bz-panel overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1 border-b border-bz-line">
-        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted">{isText ? "Ready to copy" : lang}</span>
+        <span className="text-[12.5px] font-semibold text-bz-muted">{isText ? "Ready to copy" : lang}</span>
         <CopyButton text={text} />
       </div>
       <pre className={`p-3.5 overflow-x-auto text-[14px] leading-relaxed whitespace-pre-wrap ${isText ? "font-bz" : "font-bzmono text-[13px]"}`}>{text}</pre>
@@ -149,7 +149,7 @@ function TaskBox({ checked }) {
 }
 
 const components = {
-  h1: ({ children }) => <h2 className="text-[22px] font-extrabold tracking-[-0.01em] mt-6 mb-2">{children}</h2>,
+  h1: ({ children }) => <h2 className="text-[22px] font-[500] tracking-[-0.01em] mt-6 mb-2">{children}</h2>,
   h2: ({ children }) => <h3 className="text-[19px] font-extrabold mt-6 mb-2">{children}</h3>,
   h3: ({ children }) => <h4 className="text-[16px] font-bold mt-5 mb-1.5 text-bz-gold">{children}</h4>,
   h4: ({ children }) => <h5 className="text-[15px] font-bold mt-4 mb-1">{children}</h5>,

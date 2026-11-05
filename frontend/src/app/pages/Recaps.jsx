@@ -13,7 +13,7 @@ const apiHref = (path) => (path ? `${API_BASE}${path.replace(/^\/api/, "")}` : n
 function Section({ title, children }) {
   return (
     <div className="mt-6 first:mt-0">
-      <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2.5">{title}</p>
+      <p className="text-[12px] font-semibold text-bz-teal mb-2.5">{title}</p>
       {children}
     </div>
   );
@@ -22,7 +22,7 @@ function Section({ title, children }) {
 function RecapBody({ r }) {
   return (
     <AiFrame title="Session recap" right={<span className="text-[12px] text-bz-muted">{hdate(r.date)}</span>} className="print-plain">
-      <p className="text-[24px] font-extrabold tracking-[-0.01em] leading-tight" data-testid="recap-title">{r.title}</p>
+      <p className="text-[24px] font-display font-[500] tracking-[-0.01em] leading-tight" data-testid="recap-title">{r.title}</p>
       {r.audio_url && (
         <div className="mt-4 rounded-bzcard border border-bz-line bg-bz-panel p-3.5 no-print" data-testid="recap-audio">
           <p className="text-[13px] font-bold flex items-center gap-1.5 mb-2"><Headphones className="w-4 h-4 text-bz-teal" aria-hidden /> Listen: summary and action points</p>
@@ -82,7 +82,7 @@ function One({ id }) {
             <div className="flex flex-col sm:flex-row gap-2 no-print">
               {r.call?.recording_url && (
                 <a href={r.call.recording_url} target="_blank" rel="noopener noreferrer" data-testid="recap-recording"
-                  className="inline-flex items-center justify-center gap-2 min-h-[52px] px-6 rounded-full border border-bz-rule text-bz-ink font-bold text-[15px] hover:border-bz-gold">
+                  className="inline-flex items-center justify-center gap-2 min-h-[52px] px-6 rounded-bzbtn border border-bz-rule text-bz-ink font-bold text-[15px] hover:border-bz-gold">
                   <PlayCircle className="w-5 h-5 text-bz-gold" aria-hidden /> Watch the session
                 </a>
               )}

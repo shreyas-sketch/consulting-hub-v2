@@ -25,13 +25,14 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 import indexes
 import llm
 import plans
 from core.deps import admin_dep
+from core.errors import NotFound, ServiceUnavailable
 from growth import events
 from growth.clock import IST, as_utc, utcnow
 from jobs import registry
@@ -304,7 +305,7 @@ async def admin_generate(_: dict = Admin):
     if not res.get("published"):
         msg = {"no_news": "No news came back from the search. Try again in a few minutes.",
                "bad_ai_output": "The case didn't pass the checks, so it wasn't published. Try again."}.get(res["skipped"], "Not published.")
-        raise HTTPException(status_code=503, detail={"code": res["skipped"], "msg": msg})
+        raise ServiceUnavailable(msg, code=res["skipped"])
     c = await d.cases.find_one({"_id": res["published"]})
     return {"item": _row(c, 0), "alerts": res["alerts"]}
 
@@ -318,6 +319,6 @@ async def admin_active(case_id: str, body: ActiveIn, _: dict = Admin):
     d = db()
     res = await d.cases.update_one({"_id": case_id, "origin": "news"}, {"$set": {"active": body.active}})
     if not res.matched_count:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Weekly case not found."})
+        raise NotFound("Weekly case not found.")
     c = await d.cases.find_one({"_id": case_id})
     return {"item": _row(c, await d.case_answers.count_documents({"case_id": case_id}))}

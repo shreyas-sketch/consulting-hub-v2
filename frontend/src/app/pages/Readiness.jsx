@@ -12,7 +12,7 @@ function Slider({ id, label, ask, value, onChange, min = 1, max = 10 }) {
     <div className="py-3 border-b border-bz-line last:border-0">
       <div className="flex items-baseline justify-between gap-3">
         <label htmlFor={id} className="font-bold text-[15px]">{label}</label>
-        <span className="text-[22px] font-extrabold text-bz-gold tabular w-8 text-right">{value}</span>
+        <span className="text-[22px] font-display font-[500] text-bz-gold tabular w-8 text-right">{value}</span>
       </div>
       {ask && <p className="text-[13px] text-bz-muted">{ask}</p>}
       <input id={id} type="range" min={min} max={max} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))}
@@ -29,7 +29,7 @@ function Result({ r }) {
         <ScoreRing value={r.total} max={60} size={150} label="Readiness Score" sub="out of 60" />
         <div className="min-w-0 flex-1">
           <Label className="mb-1">Your readiness</Label>
-          <p className="text-[26px] font-extrabold leading-tight">{r.band}</p>
+          <p className="text-[26px] font-display font-[500] leading-tight">{r.band}</p>
           <p className="text-[15px] text-bz-muted mt-1">{r.band_note}</p>
           {r.change != null && <p className="text-[14px] mt-2 font-bold text-bz-gold">{r.change >= 0 ? `Up ${r.change}` : `Down ${-r.change}`} since last time</p>}
           <p className="text-[13px] text-bz-muted mt-2">Your gut check on potential: <b className="text-bz-ink">{r.potential}/10</b>{r.at ? ` · ${hdate(r.at)}` : ""}</p>

@@ -36,7 +36,7 @@ function Thread({ id, onBack, onChanged }) {
       <button type="button" onClick={onBack} className="lg:hidden text-[13px] font-bold text-bz-gold min-h-[40px]">Back to the inbox</button>
       <Card>
         <div className="flex flex-wrap items-center gap-2"><Chip tone={TONE[t.status]}>{t.status}</Chip><Chip>{CAT[t.category] || t.category}</Chip></div>
-        <p className="text-[22px] font-extrabold leading-tight mt-2">{t.subject}</p>
+        <p className="text-[22px] font-display font-[500] leading-tight mt-2">{t.subject}</p>
         <div className="mt-2 text-[14px] text-bz-muted space-y-0.5">
           <p><b className="text-bz-ink">{t.member?.name || "Member"}</b> · {t.member?.phone || t.member?.email || "—"}</p>
           <p>{t.member?.plan_label} · opened {dt(t.created_at)}</p>

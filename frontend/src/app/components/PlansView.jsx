@@ -21,7 +21,7 @@ function Price({ per }) {
   const yearly = per.period === "yearly";
   return (
     <div className="mt-2">
-      <span className="text-[34px] font-extrabold tracking-[-0.03em] text-bz-gold tabular">{inr(per.price_inr)}</span>
+      <span className="text-[34px] font-display font-[500] tracking-[-0.03em] text-bz-gold tabular">{inr(per.price_inr)}</span>
       <span className="text-bz-muted text-[14px]"> + GST / {yearly ? "year" : "month"}</span>
       <div className="text-[13px] text-bz-muted tabular">{inr(per.total_inr)} {yearly ? "a year" : "a month"} with 18% GST{yearly ? ` · works out to ${inr(Math.round(per.price_inr / 12))} a month` : ""}</div>
     </div>
@@ -37,7 +37,7 @@ function PlanCard({ p, current, highlight, onBuy, busy }) {
   return (
     <Card className={`flex flex-col ${highlight ? "border-bz-gold shadow-goldglow" : ""}`} data-testid={`plan-${p.id}`}>
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[22px] font-extrabold tracking-[-0.01em] leading-tight">{p.name || PLAN_LABEL[p.id]}</h3>
+        <h3 className="text-[22px] font-display font-[500] tracking-[-0.01em] leading-tight">{p.name || PLAN_LABEL[p.id]}</h3>
         {isCur ? <Chip tone="solid">Your plan</Chip> : p.id === "l1" ? <Chip tone="gold">With 4-3-2-1</Chip> : null}
       </div>
       {(p.periods || []).length > 1 && (

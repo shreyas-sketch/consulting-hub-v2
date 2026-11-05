@@ -40,12 +40,12 @@ import asyncio
 import base64
 import io
 import logging
-import os
 import re
 import wave
 
 import httpx
 
+from core.settings import settings
 from core.vendors import vendor_mode
 
 log = logging.getLogger("tts")
@@ -70,11 +70,11 @@ def mode() -> str:
 
 
 def model_name() -> str:
-    return (os.environ.get("GEMINI_TTS_MODEL") or DEFAULT_MODEL).strip()
+    return (settings.gemini.tts_model or DEFAULT_MODEL)
 
 
 def voice_name() -> str:
-    return (os.environ.get("GEMINI_TTS_VOICE") or DEFAULT_VOICE).strip()
+    return (settings.gemini.tts_voice or DEFAULT_VOICE)
 
 
 def _silent_wav(seconds: float = 1.0) -> bytes:
@@ -206,7 +206,7 @@ async def speak(text: str, *, client: httpx.AsyncClient | None = None) -> tuple[
     parts = split_text(text)
     if not parts:
         raise TTSError("TTS: no text")
-    key = os.environ["GEMINI_API_KEY"]
+    key = settings.gemini.api_key
     c = client or httpx.AsyncClient(timeout=httpx.Timeout(150.0, connect=20.0))
     gate = asyncio.Semaphore(PARALLEL)
 

@@ -4,6 +4,6 @@
   "icons": [{ "src": "logo.svg", "type": "image/svg+xml", "sizes": "any" }],
   "start_url": "/app",
   "display": "standalone",
-  "theme_color": "#14151A",
-  "background_color": "#14151A"
+  "theme_color": "#0E2620",
+  "background_color": "#0E2620"
 }

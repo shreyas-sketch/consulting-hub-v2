@@ -20,7 +20,7 @@ import uuid
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,7 @@ import media
 import plans
 from audio import tts
 from core.deps import admin_dep, user_dep
+from core.errors import AppError, error
 from growth import events
 from growth.clock import IST, utcnow
 from notify import service as notify
@@ -66,8 +67,8 @@ SYSTEM = (
 )
 
 
-def _err(status: int, code: str, msg: str) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code, "msg": msg})
+def _err(status: int, code: str, msg: str) -> AppError:
+    return error(status, code, msg)
 
 
 def _sentences(t: str) -> list[str]:

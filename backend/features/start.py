@@ -18,17 +18,26 @@ import math
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
 import llm
 from core.deps import user_dep
+from core.errors import NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
 from util import inr, iso
 
-from .common import NO_VENDOR, as_dict, as_list, clamp_int, run_metered, strip_providers, text
+from .common import (
+    NO_VENDOR,
+    as_dict,
+    as_list,
+    clamp_int,
+    run_metered,
+    strip_providers,
+    text,
+)
 
 router = APIRouter(prefix="/start", tags=["starting-point"])
 WEBINAR_QUEUE_WAIT = 45          # seconds a snapshot may wait for an AI slot when the whole webinar runs it at once
@@ -163,7 +172,7 @@ class ChooseIn(BaseModel):
 async def choose(snap_id: str, body: ChooseIn, user: dict = Depends(user_dep())):
     res = await db().snapshots.update_one({"_id": snap_id, "user_id": str(user["_id"])}, {"$set": {"chosen": body.index}})
     if not res.matched_count:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Snapshot not found."})
+        raise NotFound("Snapshot not found.")
     return _public(await db().snapshots.find_one({"_id": snap_id}))
 
 

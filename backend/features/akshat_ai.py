@@ -19,13 +19,14 @@ import uuid
 from typing import Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 import indexes
 import llm
 import plans
 from core.deps import admin_dep, user_dep
+from core.errors import NotFound
 from growth import events
 from growth.clock import utcnow
 from notify import service as notify
@@ -111,7 +112,7 @@ def _public_msg(m: dict, q: Optional[dict] = None) -> dict:
 async def _thread(thread_id: str, uid: str) -> dict:
     t = await db().akshat_threads.find_one({"_id": thread_id, "user_id": uid})
     if not t:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Chat not found."})
+        raise NotFound("Chat not found.")
     return t
 
 
@@ -258,7 +259,7 @@ async def admin_answer(qid: str, body: AnswerIn, admin: dict = Depends(admin_dep
     d = db()
     q = await d.akshat_questions.find_one({"_id": qid})
     if not q:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Question not found."})
+        raise NotFound("Question not found.")
     answer = body.answer.strip()
     now = utcnow()
     first = q.get("status") != "answered"

@@ -17,6 +17,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Depends
 
+import state
 from core.deps import user_dep
 from growth import events
 from growth.clock import IST, utcnow
@@ -31,10 +32,6 @@ _state = {"db": None, "wa": None, "wa_built": False}
 
 def register_kind(kind: str) -> None:
     KINDS.add(kind)
-
-
-def bind(db) -> None:
-    _state["db"] = db
 
 
 def _wa():
@@ -132,7 +129,7 @@ router = APIRouter(tags=["inbox"])
 
 @router.get("/inbox")
 async def inbox(user: dict = Depends(user_dep())):
-    db = _state["db"]
+    db = state.db()
     uid = str(user["_id"])
     rows = [_row(d) async for d in db.inbox.find({"user_id": uid}).sort("at", -1).limit(60)]
     unread = await db.inbox.count_documents({"user_id": uid, "read": False})
@@ -141,5 +138,5 @@ async def inbox(user: dict = Depends(user_dep())):
 
 @router.post("/inbox/read-all")
 async def read_all(user: dict = Depends(user_dep())):
-    await _state["db"].inbox.update_many({"user_id": str(user["_id"]), "read": False}, {"$set": {"read": True}})
+    await state.db().inbox.update_many({"user_id": str(user["_id"]), "read": False}, {"$set": {"read": True}})
     return {"ok": True}

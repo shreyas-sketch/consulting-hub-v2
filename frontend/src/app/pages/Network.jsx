@@ -139,13 +139,13 @@ function ContactRow({ c, picked, onPick, onChanged }) {
           </div>
           {c.pre_why?.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{c.pre_why.map((w) => <Chip key={w}>{w}</Chip>)}</div>}
           {c.fit != null && (
-            <div className="mt-2.5 rounded-bzcard border border-[rgba(46,211,183,0.4)] bg-bz-panel p-2.5 text-[14px] space-y-1">
+            <div className="mt-2.5 rounded-bzcard border border-bz-teal/40 bg-bz-panel p-2.5 text-[14px] space-y-1">
               <p>{c.why}</p>
               {c.angle && <p className="text-bz-teal">Angle: {c.angle}</p>}
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Link to={`/app/outreach?contact=${c.id}`} className="inline-flex items-center min-h-[40px] px-4 rounded-full border border-bz-line bg-bz-raised text-[13px] font-bold hover:border-bz-line-strong" data-testid={`contact-draft-${c.id}`}>Draft a message</Link>
+            <Link to={`/app/outreach?contact=${c.id}`} className="inline-flex items-center min-h-[40px] px-4 rounded-bzbtn border border-bz-line bg-bz-raised text-[13px] font-bold hover:border-bz-line-strong" data-testid={`contact-draft-${c.id}`}>Draft a message</Link>
             <Button variant="small" onClick={toggleContacted} loading={busy} data-testid={`contact-contacted-${c.id}`}>{c.status === "contacted" ? "Not contacted yet" : "Mark contacted"}</Button>
           </div>
           <Notes c={c} onSaved={onChanged} />
@@ -211,7 +211,7 @@ function Body() {
                   </div>
                 </Card>
 
-                <div className="sticky top-2 z-20 rounded-bzcard border border-bz-line backdrop-blur p-3 flex flex-col sm:flex-row sm:items-center gap-2" style={{ backgroundColor: "rgba(30,32,39,0.96)" }}>
+                <div className="sticky top-2 z-20 rounded-bzcard border border-bz-line backdrop-blur p-3 flex flex-col sm:flex-row sm:items-center gap-2 bg-bz-card/95">
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] font-bold">{picked.length ? `${picked.length} picked` : "Pick up to 10 people"}</p>
                     <UsageLine usage={usage} what="contacts scored" />

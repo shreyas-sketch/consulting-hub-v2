@@ -581,7 +581,8 @@ def test_group_session_csv_escapes_formulas(client, mdb):
 # ---------------------------------------------------------------- 17. staff lockout + bcrypt off the loop ----
 def test_staff_lockout_counts_atomically(mdb):
     import auth
-    auth.bind_db(mdb)
+    import state
+    state.set_db(mdb)
 
     async def go():
         res = await asyncio.gather(*(auth._count_attempt("x@example.com") for _ in range(12)))

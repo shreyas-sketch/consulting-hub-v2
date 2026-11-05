@@ -16,12 +16,24 @@ label estimates as estimates. Say what a button does ("Make my deck", not "Submi
 
 ## Backend (FastAPI + Motor/Mongo)
 
-Reference files: `features/brief.py`, `features/cases.py`, `features/linkedin.py`, `features/start.py`, `plans.py`.
+Read `docs/ARCHITECTURE.md` first. Reference: `features/cases/` (the layered layout every new tool copies), plus
+`features/brief.py`, `features/linkedin.py`, `features/start.py`, `plans.py`.
+
+- New tools are packages: `features/<name>/` with `router.py` (HTTP only), `service.py` (rules, metering, AI),
+  `repository.py` (subclass `core.repository.Repository`; the only code that queries the tool's collections),
+  `prompts.py` (system prompt, prompt builder, fake) and `schemas.py` (request bodies, response mappers).
+  List the module in `core/modules.py` under its plan level. Single-file tools still work and move to this layout when
+  they are next changed substantially.
+- Errors: raise from `core.errors` (`NotFound`, `InvalidInput`, `Conflict`, `PayloadTooLarge`, `UnsupportedMedia`,
+  `TooManyRequests`, `UpstreamError`, `ServiceUnavailable`, or `error(status, code, msg)`), always with a plain `msg`.
+  Never a bare `HTTPException`. The wire shape `{detail: {code, msg}}` is fixed.
+- Configuration: add new environment variables to `core/settings.py` (typed, with a default and a note) and to
+  `backend/.env.example`. Never read `os.environ` anywhere else.
 
 - One module per tool in `backend/features/<name>.py` exposing `router = APIRouter(prefix="/<name>", tags=[...])`.
-  It is already listed in `server.py`; just replace the stub. Admin endpoints for the tool live in the same module under
+  It is listed in `core/modules.py`. Admin endpoints for the tool live in the same module under
   `/admin/<name>...` with `Depends(admin_dep())` (`core.deps`). A page outside `/api` (public website) goes on `public_router`.
-- Database: `from state import db` then `db()`. Ids are `uuid.uuid4().hex` strings; `user_id` is `str(user["_id"])`.
+- Database: in a repository, `self.db`; elsewhere `from state import db` then `db()`. Ids are `uuid.uuid4().hex` strings; `user_id` is `str(user["_id"])`.
   Return plain dicts; datetimes through `util.iso()`; never return raw Mongo docs.
 - Access and metering (do not edit `plans.py`; all features, limits and caps already exist there):
   - `plans.require(db, user, "<feature>")` → 403 locked when the plan doesn't include it.
@@ -60,7 +72,7 @@ Reference files: `features/brief.py`, `features/cases.py`, `features/linkedin.py
   an `llm.LLMError` refunds the use.
 - Run `cd backend && python3 -m pytest -q tests/test_<area>.py` and then the whole suite before you finish.
 
-## Frontend (React 19, Tailwind, Akshat Dani design system, dark only)
+## Frontend (React 19, Tailwind, "the chamber" design: bottle green, brass, ivory, ink-blue)
 
 Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; pages `Brief.jsx`, `LinkedIn.jsx`,
 `CaseView.jsx`, `Start.jsx`, `File.jsx`.
@@ -68,15 +80,21 @@ Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; page
 - One page file per route, already stubbed in `src/app/pages/` (and `src/app/admin/`); replace the stub, keep the default
   export. Routes `/app/<path>` and `/app/<path>/:id` both open your page (use `useParams().id`).
 - Wrap the page body in `<Gate feature="...">` (common.jsx) so lower plans see the lock card with the upgrade button.
-- Look: `PageHeader` (kicker + headline with one key phrase in gold, or teal on AI screens via `ai`), `Card`,
-  `Button` (`primary` = gold pill, one per screen; `secondary`; `ai` = teal, only for buttons that call AI), `AiFrame`
-  around anything the AI wrote, `Thinking` while AI works, `Stat` for numbers, `Step` for numbered steps, `Chip`, `Field`,
-  `Input`, `Textarea`, `Select`, `Segmented`, `Meter`, `Loadable`, `Empty`, `ErrorLine`, `OkLine`, `Note`.
-  Gold = the signal (₹ figures, key phrase, primary action). Teal = AI only. Red = errors/destructive only.
-  Manrope only (JetBrains Mono for code/prompts). No new colours, no light mode, no emojis.
+- Look (tokens in `src/index.css`, names kept as `bz-*`): `PageHeader` (the tool's name, a serif headline in one colour,
+  a short brass rule, a sub-line; ink-blue rule on AI screens via `ai`), `Card`, `Button` (`primary` = brass plate, one per
+  screen; `secondary`; `ai` = ink-blue, only for buttons that call AI), `AiFrame` (ink-blue margin rule) around anything the
+  AI wrote, `Thinking`, `Stat` (serif figure), `Step` (only for real sequences), `Chip`, `Field`, `Input`, `Textarea`,
+  `Select`, `Segmented`, `Meter`, `Loadable`, `Empty`, `ErrorLine`, `OkLine`, `Note`.
+  Brass (`bz-gold`) = the one signal (₹ figures, primary action, where you are). Ink-blue (`bz-teal`) = AI only.
+  Sindoor (`bz-miss`) = errors/destructive only. Newsreader (`font-display`, and every h1/h2) for headlines, tool names and
+  figures; Manrope for everything read and tapped. Labels in sentence case, never all caps or letter-spaced; no
+  single-phrase colour accents in headlines. Radius follows role: `rounded-bzframe` 12, `rounded-bzcard` 8,
+  `rounded-bzbtn` 6 (buttons, inputs), `rounded-bztag` 4 (chips); round only for dots, avatars and toggles.
+  No new colours, no light mode, no emojis. Downloaded decks keep Akshat's deck design (`backend/features/deck_*`).
 - `Markdown` (components/Markdown.jsx) renders AI Markdown with copy cards. `UsageLine` shows the plan limit.
   After a metered action call `refreshMe()` from `useAuth()` so limits update.
-- API: `api` / `get` from `@/lib/api`, React Query (`useQuery`, `useQueryClient`), errors through `apiError(e)`.
+- API: for a domain that has a module in `src/services/` (cases, file), use its hooks and add keys to
+  `services/queryKeys.js`; new domains get a service module. Otherwise `api` / `get` from `@/lib/api`, React Query (`useQuery`, `useQueryClient`), errors through `apiError(e)`.
   402/403 open the global upgrade sheet automatically; don't show your own error for those.
 - Formats: `inr()`, `hdate()`, `ago()` from `@/lib/format`.
 - Phone first (390 px): no sideways scroll, tap targets ≥ 44 px, inputs 16 px. Tables scroll inside their own box.
@@ -87,7 +105,7 @@ Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; page
 
 ## Rules for parallel work
 
-- Only edit the files you own. Shared files (`plans.py`, `server.py`, `llm.py`, `media.py`, `audio/*`, `conftest.py`,
+- Only edit the files you own. Shared files (`plans.py`, `server.py`, `core/*`, `llm.py`, `media.py`, `audio/*`, `conftest.py`,
   `App.js`, `AppShell.jsx`, `ui.jsx`, `common.jsx`, `features.js`, `index.css`) are read-only for you. If you need a
   change there, say so in your final report.
 - Don't start servers, don't run Playwright, don't run `git` commands.

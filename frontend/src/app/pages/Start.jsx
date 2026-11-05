@@ -17,7 +17,7 @@ function NicheOption({ o, i, chosen, onChoose, busy }) {
     <div className={`rounded-bzcard border p-4 ${chosen ? "border-bz-teal bg-bz-teal-tint" : "border-bz-line bg-bz-panel"}`} data-testid={`niche-${i}`}>
       <div className="flex items-start justify-between gap-3">
         <p className="text-[17px] font-extrabold leading-snug">{o.niche}</p>
-        <span className="text-[22px] font-extrabold text-bz-teal tabular shrink-0">{o.total}<span className="text-[13px] text-bz-muted">/30</span></span>
+        <span className="text-[22px] font-display font-[500] text-bz-teal tabular shrink-0">{o.total}<span className="text-[13px] text-bz-muted">/30</span></span>
       </div>
       {o.title && <p className="text-[13px] font-bold text-bz-teal mt-0.5">{o.title}</p>}
       {o.value_prop && <p className="text-[14px] mt-2 italic">“{o.value_prop}”</p>}
@@ -107,7 +107,7 @@ function Snapshot({ data }) {
             <Input value={x.t} placeholder={["e.g. Supply chain for FMCG", "e.g. Building sales teams", "e.g. Cutting costs in plants", "Another strength", "One more"][i]}
               maxLength={80} onChange={(e) => setItems(items.map((y, j) => (j === i ? { ...y, t: e.target.value } : y)))} aria-label={`Experience ${i + 1}`} data-testid={`exp-${i}`} />
             <button type="button" aria-pressed={x.e} onClick={() => setItems(items.map((y, j) => (j === i ? { ...y, e: !y.e } : y)))}
-              className={`shrink-0 min-h-[48px] px-3.5 rounded-full border text-[13px] font-bold ${x.e ? "border-bz-teal text-bz-teal bg-bz-teal-tint" : "border-bz-line text-bz-muted"}`}>
+              className={`shrink-0 min-h-[48px] px-3.5 rounded-bzbtn border text-[13px] font-bold ${x.e ? "border-bz-teal text-bz-teal bg-bz-teal-tint" : "border-bz-line text-bz-muted"}`}>
               {x.e ? "Enjoy ✓" : "Enjoy?"}
             </button>
             {items.length > 1 && (

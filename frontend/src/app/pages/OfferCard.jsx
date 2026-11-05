@@ -16,7 +16,7 @@ function Block({ label, children }) {
   if (!children) return null;
   return (
     <div className="min-w-0">
-      <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-1">{label}</p>
+      <p className="text-[12.5px] font-semibold text-bz-muted mb-1">{label}</p>
       <div className="text-[15.5px] leading-relaxed">{children}</div>
     </div>
   );
@@ -25,13 +25,13 @@ function Block({ label, children }) {
 export function OfferSheet({ c, name }) {
   return (
     <section className="print-plain rounded-bzframe border border-bz-rule bg-bz-card overflow-hidden shadow-goldglow" data-testid="offer-card">
-      <div className="h-1.5 bg-gradient-to-r from-[#8F7635] via-[#F0D98A] to-[#8F7635]" aria-hidden />
+      <div className="h-1.5 bg-gradient-to-r from-bz-rule via-bz-gold-light to-bz-rule" aria-hidden />
       <div className="p-5 sm:p-7">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">Consulting offer{name ? ` · ${name}` : ""}</p>
+          <p className="text-[12px] font-semibold text-bz-gold">Consulting offer{name ? ` · ${name}` : ""}</p>
           {c.edited ? <Chip className="no-print">Edited by you</Chip> : null}
         </div>
-        <h2 className="mt-2 text-[28px] sm:text-[34px] font-extrabold leading-[1.08] tracking-[-0.02em]">{c.offer_name}</h2>
+        <h2 className="mt-2 text-[28px] sm:text-[34px] font-[500] leading-[1.08] tracking-[-0.02em]">{c.offer_name}</h2>
         <p className="mt-2 text-[16px] text-bz-muted">For {c.ideal_client}</p>
 
         <div className="mt-6 grid gap-5 sm:grid-cols-2">
@@ -40,7 +40,7 @@ export function OfferSheet({ c, name }) {
         </div>
 
         <div className="mt-6">
-          <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-2">What you get</p>
+          <p className="text-[12.5px] font-semibold text-bz-muted mb-2">What you get</p>
           <ul className="space-y-2">
             {(c.what_you_get || []).map((x) => (
               <li key={x} className="flex gap-2.5 text-[15.5px] leading-snug"><span className="text-bz-gold font-extrabold" aria-hidden>•</span><span className="min-w-0">{x}</span></li>
@@ -50,21 +50,21 @@ export function OfferSheet({ c, name }) {
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <div className="rounded-bzcard border border-bz-line bg-bz-raised px-4 py-3.5 min-w-0">
-            <p className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-bz-muted">Investment</p>
-            <p className="text-[24px] sm:text-[28px] font-extrabold tracking-[-0.02em] text-bz-gold tabular mt-1 leading-tight" data-testid="offer-fee">
+            <p className="text-[12.5px] font-semibold text-bz-muted">Investment</p>
+            <p className="text-[24px] sm:text-[28px] font-display font-[500] tracking-[-0.02em] text-bz-gold tabular mt-1 leading-tight" data-testid="offer-fee">
               {c.fee_from_inr === c.fee_to_inr ? inr(c.fee_from_inr) : `${inr(c.fee_from_inr)} – ${inr(c.fee_to_inr)}`}
             </p>
             {c.fee_basis ? <p className="text-[13px] text-bz-muted mt-0.5">{c.fee_basis}</p> : null}
           </div>
           <div className="rounded-bzcard border border-bz-line bg-bz-raised px-4 py-3.5 min-w-0">
-            <p className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-bz-muted">Engagement</p>
+            <p className="text-[12.5px] font-semibold text-bz-muted">Engagement</p>
             <p className="text-[15.5px] font-bold mt-1 leading-snug">{c.engagement}</p>
           </div>
         </div>
 
         {c.proof ? (
           <blockquote className="mt-6 border-l-[3px] border-bz-gold pl-4 text-[15px] leading-relaxed">
-            <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-1 not-italic">Why me</p>
+            <p className="text-[12.5px] font-semibold text-bz-muted mb-1 not-italic">Why me</p>
             {c.proof}
           </blockquote>
         ) : null}

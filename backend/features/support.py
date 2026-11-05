@@ -13,12 +13,13 @@ import uuid
 from typing import Literal, Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 import indexes
 import plans
 from core.deps import admin_dep, user_dep
+from core.errors import InvalidInput, NotFound, TooManyRequests
 from growth import events
 from growth.clock import utcnow
 from notify import service as notify
@@ -72,15 +73,14 @@ def _public(t: dict, team_view: bool = False) -> dict:
 async def _mine(ticket_id: str, user: dict) -> dict:
     t = await db().support_tickets.find_one({"_id": ticket_id, "user_id": str(user["_id"])})
     if not t:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Ticket not found."})
+        raise NotFound("Ticket not found.")
     return t
 
 
 # ------------------------------------------------------------------ member ----
 async def _room_to_open(d, uid: str) -> None:
     if await d.support_tickets.count_documents({"user_id": uid, "status": {"$ne": "closed"}}) >= MAX_OPEN:
-        raise HTTPException(status_code=429, detail={"code": "too_many", "msg": (
-            f"You have {MAX_OPEN} open questions with the team. Close one you no longer need, or add to an open one.")})
+        raise TooManyRequests(f"You have {MAX_OPEN} open questions with the team. Close one you no longer need, or add to an open one.")
 
 
 @router.post("/support/tickets")
@@ -116,7 +116,7 @@ async def member_reply(ticket_id: str, body: ReplyIn, user: dict = Depends(user_
     t = await _mine(ticket_id, user)
     msg = body.text.strip()
     if not msg:
-        raise HTTPException(status_code=422, detail={"code": "empty", "msg": "Type your message first."})
+        raise InvalidInput("Type your message first.", code="empty")
     if t.get("status") == "closed":
         await _room_to_open(d, str(user["_id"]))            # replying reopens it: same limit as a new question
     now = utcnow()
@@ -151,7 +151,7 @@ def _member(u: Optional[dict], plan: str) -> dict:
 async def _ticket(ticket_id: str) -> dict:
     t = await db().support_tickets.find_one({"_id": ticket_id})
     if not t:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Ticket not found."})
+        raise NotFound("Ticket not found.")
     return t
 
 
@@ -194,7 +194,7 @@ async def admin_reply(ticket_id: str, body: ReplyIn, admin: dict = Depends(admin
     t = await _ticket(ticket_id)
     msg = body.text.strip()
     if not msg:
-        raise HTTPException(status_code=422, detail={"code": "empty", "msg": "Type the reply first."})
+        raise InvalidInput("Type the reply first.", code="empty")
     now = utcnow()
     await d.support_tickets.update_one({"_id": t["_id"]}, {
         "$push": {"messages": {"from": "team", "text": msg, "at": now, "by": str(admin["_id"]),

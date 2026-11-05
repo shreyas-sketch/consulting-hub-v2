@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiError } from "@/lib/api";
-import { PLAN_LABEL } from "@/lib/features";
+import { PLAN_LABEL, usageName } from "@/lib/features";
 import { hdate } from "@/lib/format";
 import { Button, Card, Chip, Field, Input, Label, Select, Sheet, Skeleton } from "../components/ui";
 import { AdminLoadable, dt, Table, useAdmin } from "./shared";
 
 const PLAN_TONE = { free: "muted", member: "gold", l1: "solid", l2: "solid" };
 
-const USAGE_NAME = { readiness: "Readiness Score", start: "Niche Snapshot", goal: "Goal Map", case: "Case answers", brief: "Meeting Briefs", linkedin: "LinkedIn checks" };
 
 function Usage({ usage }) {
   if (!usage || typeof usage !== "object") return <p className="text-sm text-bz-muted">No usage yet.</p>;
@@ -20,7 +19,7 @@ function Usage({ usage }) {
     <ul className="divide-y divide-bz-line text-[14px]">
       {rows.map(({ key, v }) => (
         <li key={key} className="py-1.5 flex justify-between gap-2">
-          <span>{USAGE_NAME[key] || key}</span>
+          <span>{usageName(key)}</span>
           <span className="tabular text-bz-muted">{v && typeof v === "object" ? `${v.used ?? 0}${v.limit === null ? " / ∞" : v.limit != null ? ` / ${v.limit}` : ""}` : String(v)}</span>
         </li>
       ))}

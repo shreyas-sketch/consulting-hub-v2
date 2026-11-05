@@ -45,7 +45,7 @@ function Result({ r }) {
       </Card>
       {r.rewrites && (
         <AiFrame title="Rewritten around your niche" className="rise-in">
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2">Headline options</p>
+          <p className="text-[12px] font-semibold text-bz-teal mb-2">Headline options</p>
           <div className="space-y-2">
             {r.rewrites.headlines.map((h) => (
               <div key={h.text} className="rounded-bzcard border border-bz-line bg-bz-panel p-3 flex items-start gap-2">
@@ -55,13 +55,13 @@ function Result({ r }) {
             ))}
           </div>
           <div className="flex items-center justify-between mt-5 mb-2">
-            <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal">About section</p>
+            <p className="text-[12px] font-semibold text-bz-teal">About section</p>
             <CopyBtn text={r.rewrites.about} />
           </div>
           <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3.5"><Para text={r.rewrites.about} className="text-[14.5px]" /></div>
           {r.rewrites.posts?.length > 0 && (
             <>
-              <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mt-5 mb-2">Three posts to write next</p>
+              <p className="text-[12px] font-semibold text-bz-teal mt-5 mb-2">Three posts to write next</p>
               <div className="space-y-3">{r.rewrites.posts.map((p, i) => <Step key={p.hook} n={i + 1} ai title={p.hook}>{p.summary}</Step>)}</div>
             </>
           )}

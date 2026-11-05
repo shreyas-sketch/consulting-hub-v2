@@ -20,7 +20,7 @@ function Player({ item }) {
   );
 }
 
-const pill = "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-full border border-bz-line bg-bz-raised text-[14px] font-bold hover:border-bz-line-strong";
+const pill = "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-bzbtn border border-bz-line bg-bz-raised text-[14px] font-bold hover:border-bz-line-strong";
 
 function Item({ it, open, onOpen }) {
   return (

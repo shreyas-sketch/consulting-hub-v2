@@ -1,9 +1,8 @@
 // /app/file — My Consulting File: everything the member has made, on one page. Print or save as PDF from the browser.
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, FileText, Printer } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
+import { fileApi, useConsultingFile } from "@/services/file";
 import { useAuth } from "@/context/AuthContext";
 import { hdate, inr } from "@/lib/format";
 import { Button, Card, Empty, Label, LinkButton, Loadable, Meter, PageHeader } from "../components/ui";
@@ -14,7 +13,7 @@ function Row({ k, v }) {
   if (!v) return null;
   return (
     <div className="py-2.5 border-b border-bz-line last:border-0 grid sm:grid-cols-[180px_1fr] gap-1 sm:gap-4">
-      <dt className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted pt-0.5">{k}</dt>
+      <dt className="text-[12px] font-semibold text-bz-muted pt-0.5">{k}</dt>
       <dd className="text-[15px]">{v}</dd>
     </div>
   );
@@ -32,9 +31,9 @@ function CopyBlueprint({ text }) {
 
 export default function File() {
   const { user } = useAuth();
-  const q = useQuery({ queryKey: ["file"], queryFn: async () => (await api.get("/file")).data });
+  const q = useConsultingFile();
   // Count one visit when this page opens (Home reads the same data for its progress, so GET /file counts nothing).
-  useEffect(() => { api.post("/file/viewed").catch(() => { /* analytics only */ }); }, []);
+  useEffect(() => { fileApi.markViewed().catch(() => { /* analytics only */ }); }, []);
   return (
     <div className="space-y-5">
       <PageHeader kicker="My Consulting File" title="Everything you've made," accent="in one place."
@@ -51,7 +50,7 @@ export default function File() {
             <div className="space-y-4 print-plain">
               <Card>
                 <Label>{user?.name || "Consultant"} · {hdate(new Date().toISOString())}</Label>
-                {k.consultant_title ? <p className="text-[24px] font-extrabold leading-tight">{k.consultant_title}</p> : <p className="text-[18px] font-bold">Pick a niche in Starting Point to complete your profile.</p>}
+                {k.consultant_title ? <p className="text-[24px] font-display font-[500] leading-tight">{k.consultant_title}</p> : <p className="text-[18px] font-bold">Pick a niche in Starting Point to complete your profile.</p>}
                 <dl className="mt-3">
                   <Row k="Niche" v={k.niche} />
                   <Row k="Value proposition" v={k.value_proposition} />
@@ -67,7 +66,7 @@ export default function File() {
                 <Card>
                   <div className="flex items-baseline justify-between gap-3">
                     <Label className="mb-0">Readiness Score</Label>
-                    <span className="text-[24px] font-extrabold text-bz-gold tabular">{f.readiness.total}<span className="text-[13px] text-bz-muted">/60</span></span>
+                    <span className="text-[24px] font-display font-[500] text-bz-gold tabular">{f.readiness.total}<span className="text-[13px] text-bz-muted">/60</span></span>
                   </div>
                   <p className="text-[15px] font-bold mt-1">{f.readiness.band}</p>
                   <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
@@ -103,7 +102,7 @@ export default function File() {
                 <Card>
                   <div className="flex items-baseline justify-between gap-3">
                     <Label className="mb-0">LinkedIn Score</Label>
-                    <span className="text-[24px] font-extrabold text-bz-gold tabular">{f.linkedin.score}<span className="text-[13px] text-bz-muted">/100</span></span>
+                    <span className="text-[24px] font-display font-[500] text-bz-gold tabular">{f.linkedin.score}<span className="text-[13px] text-bz-muted">/100</span></span>
                   </div>
                   <ul className="mt-2 space-y-1 text-[14px] list-disc pl-5">{f.linkedin.problems.map((p) => <li key={p.key}>{p.tip}</li>)}</ul>
                 </Card>

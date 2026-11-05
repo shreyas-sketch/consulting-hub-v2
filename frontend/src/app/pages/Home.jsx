@@ -6,6 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { track } from "@/lib/attribution";
 import { FEATURES, WEBINAR_TOOLS } from "@/lib/features";
 import { inr } from "@/lib/format";
+import { useConsultingFile } from "@/services/file";
+import { qk } from "@/services/queryKeys";
 import { Card, Chip, Label, LinkButton, Loadable, Meter, PageHeader, RowLink, Stat } from "../components/ui";
 
 function greeting() {
@@ -34,7 +36,7 @@ function GroupSession({ s }) {
         </div>
       </div>
       <a href={s.link} target="_blank" rel="noopener noreferrer" onClick={() => track("group_session_clicked", {})}
-        className="mt-4 w-full inline-flex items-center justify-center min-h-[52px] px-6 rounded-full bg-bz-gold text-bz-on-accent font-extrabold text-[16px]">
+        className="mt-4 w-full inline-flex items-center justify-center min-h-[52px] px-6 rounded-bzbtn bg-bz-gold text-bz-on-accent font-extrabold text-[16px]">
         Join the session
       </a>
     </Card>
@@ -43,8 +45,8 @@ function GroupSession({ s }) {
 
 export default function Home() {
   const { user, plan } = useAuth();
-  const file = useQuery({ queryKey: ["file"], queryFn: async () => (await api.get("/file")).data });
-  const home = useQuery({ queryKey: ["me-home"], queryFn: async () => (await api.get("/me/home")).data, staleTime: 5 * 60_000 });
+  const file = useConsultingFile();
+  const home = useQuery({ queryKey: qk.home, queryFn: async () => (await api.get("/me/home")).data, staleTime: 5 * 60_000 });
   const p = plan?.plan || "free";
   const first = (user?.name || "").split(" ")[0];
   return (

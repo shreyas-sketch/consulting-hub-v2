@@ -27,12 +27,21 @@ import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import BadRequest, LimitReached, NotFound
 from growth import events
 from growth.clock import ist_month_key, utcnow
 from state import db
 from util import iso
 
-from .common import NO_VENDOR, as_dict, as_list, busy_error, clamp_int, strip_providers, text
+from .common import (
+    NO_VENDOR,
+    as_dict,
+    as_list,
+    busy_error,
+    clamp_int,
+    strip_providers,
+    text,
+)
 from .knowledge import knowledge, system_block
 
 router = APIRouter(prefix="/network", tags=["network-finder"])
@@ -52,9 +61,7 @@ indexes.register("contacts", [("user_id", 1), ("key", 1)])
 # ---------------------------------------------------------------- metering for counted units ----
 def _limit_error(meter: str, used: int, limit: int, left: int) -> HTTPException:
     unit = {"contacts": "contacts to score", "radar": "companies to find"}.get(meter) or plans.LIMIT_UNITS.get(meter, meter)
-    return HTTPException(status_code=402, detail={
-        "code": "limit", "feature": meter, "used": used, "limit": limit, "plan_needed": None, "once": False,
-        "msg": f"You have {left} {unit} left this month. Choose {left} or fewer, or wait for the 1st."})
+    return LimitReached(f"You have {left} {unit} left this month. Choose {left} or fewer, or wait for the 1st.", feature=meter, used=used, limit=limit, plan_needed=None, once=False)
 
 
 def _used_up(meter: str, used: int, cap: int, plan: str) -> HTTPException:
@@ -62,8 +69,7 @@ def _used_up(meter: str, used: int, cap: int, plan: str) -> HTTPException:
     unit = plans.LIMIT_UNITS.get(meter, plans.FEATURE_NAMES.get(meter, meter) + " uses")
     nxt = {"free": "member", "member": "l1"}.get(plan)
     msg = f"You've used all {cap} {unit} this month." + (f" {plans.LABELS[nxt]} gives you more." if nxt else " It resets on the 1st.")
-    return HTTPException(status_code=402, detail={"code": "limit", "feature": meter, "used": used, "limit": cap,
-                                                  "plan_needed": nxt, "once": plan == "free", "msg": msg})
+    return LimitReached(msg, feature=meter, used=used, limit=cap, plan_needed=nxt, once=plan == "free")
 
 
 async def reserve(d, user: dict, meter: str, n: int, *, access: str, partial: bool = False) -> tuple[str, int]:
@@ -353,17 +359,16 @@ async def _store(user: dict, rows: list[dict], source: str) -> dict:
 async def import_csv(file: UploadFile = File(...), user: dict = Depends(user_dep())):
     await plans.require(db(), user, FEATURE)
     if not (file.filename or "").lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail={"code": "bad_type", "msg": "Upload the Connections.csv file from LinkedIn."})
+        raise BadRequest("Upload the Connections.csv file from LinkedIn.", code="bad_type")
     raw = await file.read(MAX_FILE + 1)
     if len(raw) > MAX_FILE:
-        raise HTTPException(status_code=400, detail={"code": "too_large", "msg": "That file is over 5 MB. Upload Connections.csv only."})
+        raise BadRequest("That file is over 5 MB. Upload Connections.csv only.", code="too_large")
     try:
         rows = parse_connections_csv(decode_csv(raw))
     except (ValueError, StopIteration, csv.Error):
-        raise HTTPException(status_code=400, detail={
-            "code": "bad_csv", "msg": "This doesn't look like LinkedIn's Connections.csv. It needs the columns First Name, Last Name and Company."})
+        raise BadRequest("This doesn't look like LinkedIn's Connections.csv. It needs the columns First Name, Last Name and Company.", code="bad_csv")
     if not rows:
-        raise HTTPException(status_code=400, detail={"code": "empty", "msg": "No people found in that file."})
+        raise BadRequest("No people found in that file.", code="empty")
     return await _store(user, rows, "csv")
 
 
@@ -379,7 +384,7 @@ async def paste(body: PasteIn, user: dict = Depends(user_dep())):
     except (ValueError, StopIteration, csv.Error):
         rows = []
     if not rows:
-        raise HTTPException(status_code=400, detail={"code": "empty", "msg": "Put one person on each line: Name, Role, Company."})
+        raise BadRequest("Put one person on each line: Name, Role, Company.", code="empty")
     return await _store(user, rows, "paste")
 
 
@@ -458,7 +463,7 @@ async def score(body: ScoreIn, user: dict = Depends(user_dep())):
     ids = list(dict.fromkeys(body.ids))
     rows = [c async for c in d.contacts.find({"_id": {"$in": ids}, "user_id": uid})]
     if not rows:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Pick people from your list first."})
+        raise NotFound("Pick people from your list first.")
     rows.sort(key=lambda c: ids.index(c["_id"]))
 
     async def work(plan: str, n: int):
@@ -493,7 +498,7 @@ async def one(cid: str, user: dict = Depends(user_dep())):
     await plans.require(db(), user, FEATURE)
     c = await get_contact(str(user["_id"]), cid)
     if not c:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Contact not found."})
+        raise NotFound("Contact not found.")
     return public(c)
 
 
@@ -508,7 +513,7 @@ async def patch(cid: str, body: PatchIn, user: dict = Depends(user_dep())):
     uid = str(user["_id"])
     c = await get_contact(uid, cid)
     if not c:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Contact not found."})
+        raise NotFound("Contact not found.")
     s: dict = {}
     if body.status is not None:
         s["status"] = body.status

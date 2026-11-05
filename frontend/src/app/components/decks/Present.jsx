@@ -72,7 +72,7 @@ export default function Present({ layout, canvas, start = 0, onClose }) {
       </div>
       <div className="absolute top-0 right-0 left-0 flex items-center justify-between gap-3 p-2 pt-[max(8px,env(safe-area-inset-top))] pointer-events-none">
         <span className="text-[13px] font-bold text-white/60 tabular px-3" aria-live="polite">{i + 1} / {n}</span>
-        <button type="button" onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-full bg-white/10 text-white/80 text-[14px] font-bold hover:bg-white/20" data-testid="deck-present-close">
+        <button type="button" onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-bzbtn bg-white/10 text-white/80 text-[14px] font-bold hover:bg-white/20" data-testid="deck-present-close">
           <X className="w-4 h-4" aria-hidden /> Close
         </button>
       </div>

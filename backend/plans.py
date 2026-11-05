@@ -27,6 +27,7 @@ from fastapi import HTTPException
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from core.errors import Conflict, LimitReached, Locked
 from growth import events
 from growth.clock import as_utc, ist_month_key, utcnow
 
@@ -168,7 +169,7 @@ async def cap_lock(db, user, name: str, wait_s: float = 3.0):
 
         async with plans.cap_lock(db, user, "docs"):
             if await db.docs.count_documents({"user_id": uid}) >= plans.cap("docs", plan):
-                raise HTTPException(409, ...)
+                raise Conflict(...)
             await db.docs.insert_one(...)
 
     The lock is a short lease in Mongo, so it works across workers; a crashed holder's lease ends after 30 s.
@@ -185,7 +186,7 @@ async def cap_lock(db, user, name: str, wait_s: float = 3.0):
             break
         except DuplicateKeyError:                    # held by another request
             if asyncio.get_running_loop().time() >= deadline:
-                raise HTTPException(status_code=409, detail={"code": "busy", "msg": "Another change is still saving. Try again."})
+                raise Conflict("Another change is still saving. Try again.", code="busy")
             await asyncio.sleep(0.05)
     try:
         yield
@@ -360,9 +361,7 @@ def needed_for(feature: str) -> str:
 
 def locked_error(feature: str, plan_needed: Optional[str] = None) -> HTTPException:
     need = plan_needed or needed_for(feature)
-    return HTTPException(status_code=403, detail={
-        "code": "locked", "feature": feature, "plan_needed": need,
-        "msg": f"{FEATURE_NAMES.get(feature, feature)} is part of the {LABELS[need]}."})
+    return Locked(f"{FEATURE_NAMES.get(feature, feature)} is part of the {LABELS[need]}.", feature=feature, plan_needed=need)
 
 
 async def require(db, user: dict, feature: str) -> str:
@@ -434,8 +433,7 @@ async def consume(db, user: dict, feature: str, plan: Optional[str] = None) -> d
             msg = f"You've used your free go on the webinar. The {LABELS['member']} gives you {LIMITS[feature]['member'] or 'more'} {unit} a month."
         else:
             msg = f"You've used all {cap} {unit} this month." + (f" {LABELS[nxt]} gives you more." if nxt else " It resets on the 1st.")
-        raise HTTPException(status_code=402, detail={"code": "limit", "feature": feature, "used": used, "limit": cap,
-                                                     "plan_needed": nxt, "once": plan == "free", "msg": msg})
+        raise LimitReached(msg, feature=feature, used=used, limit=cap, plan_needed=nxt, once=plan == "free")
     return {"used": int(doc.get(feature, 1)), "limit": limit}
 
 

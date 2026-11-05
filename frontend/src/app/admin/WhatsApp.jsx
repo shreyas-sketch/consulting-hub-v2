@@ -11,7 +11,7 @@ function Row({ label, value, mono }) {
   return (
     <div className="py-2 border-t border-bz-line first:border-t-0">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted">{label}</span>
+        <span className="text-[12.5px] font-semibold text-bz-muted">{label}</span>
         <CopyButton text={value} />
       </div>
       <p className={`whitespace-pre-line break-words text-[14px] mt-0.5 ${mono ? "font-bzmono text-[13px]" : ""}`}>{value}</p>

@@ -63,7 +63,7 @@ function UserBubble({ text, hide }) {
 function QuickReply({ text, onSend, busy, i }) {
   return (
     <button type="button" disabled={busy} onClick={() => onSend(text)} data-testid={`gpt-quick-${i}`}
-      className="no-print inline-flex items-center gap-2 min-h-[48px] px-5 rounded-full border border-bz-teal text-bz-teal font-bold text-[15px] hover:bg-bz-teal-tint disabled:opacity-50">
+      className="no-print inline-flex items-center gap-2 min-h-[48px] px-5 rounded-bzbtn border border-bz-teal text-bz-teal font-bold text-[15px] hover:bg-bz-teal-tint disabled:opacity-50">
       {text}<ArrowRight className="w-4 h-4" aria-hidden />
     </button>
   );
@@ -161,7 +161,7 @@ function Chat({ g }) {
     <div className="lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-7">
       <aside className="no-print hidden lg:block">
         <div className="sticky top-6 max-h-[calc(100vh-48px)] overflow-y-auto pr-1">
-          <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-muted mb-2">Your chats</p>
+          <p className="text-[12px] font-semibold text-bz-muted mb-2">Your chats</p>
           {convs.isLoading ? <Skeleton lines={4} /> : listEl}
         </div>
       </aside>

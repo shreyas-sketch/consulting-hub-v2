@@ -1,8 +1,6 @@
-from datetime import timedelta
 
 from conftest import login, run
 
-from growth.clock import utcnow
 
 
 def test_otp_signup_creates_free_account_no_trial(client, mdb):

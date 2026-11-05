@@ -1,9 +1,8 @@
 // /app/cases — the live case (from the webinar) first, then the practice cases. Free accounts: the live case, plus
 // any case they answered before (read-only).
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Lock } from "lucide-react";
-import { api } from "@/lib/api";
+import { useCases } from "@/services/cases";
 import { useAuth } from "@/context/AuthContext";
 import { Card, Chip, Label, LinkButton, Loadable, PageHeader } from "../components/ui";
 
@@ -32,7 +31,7 @@ function CaseRow({ c }) {
 
 export default function Cases() {
   const { plan } = useAuth();
-  const q = useQuery({ queryKey: ["cases"], queryFn: async () => (await api.get("/cases")).data });
+  const q = useCases();
   return (
     <div className="space-y-5">
       <PageHeader kicker="Cases" title="Think like a consultant," accent="one case at a time."

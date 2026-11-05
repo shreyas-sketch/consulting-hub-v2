@@ -265,7 +265,7 @@ function StatusCard({ d, onJump }) {
           <div className="flex flex-wrap gap-2 mt-2.5">
             {site.placeholders.map((p) => (
               <button key={p.section_id} type="button" onClick={() => onJump(p.page, p.section_id)}
-                className="min-h-[40px] px-3 rounded-full border border-bz-line bg-bz-panel text-[13px] font-bold hover:border-bz-gold">
+                className="min-h-[40px] px-3 rounded-bzbtn border border-bz-line bg-bz-panel text-[13px] font-bold hover:border-bz-gold">
                 {pageLabel(p.page)}: {d.section_types.find((t) => t.type === p.type)?.label} ({p.count})
               </button>
             ))}
@@ -432,7 +432,7 @@ function SectionCard({ s, page, first, last, proposal, onMove, moving }) {
               </Field>
               <div className="flex flex-wrap gap-2 mt-2">
                 {QUICK.map((qk) => (
-                  <button key={qk} type="button" onClick={() => setAsk(qk)} className="min-h-[40px] px-3 rounded-full border border-bz-line text-[13px] font-bold text-bz-teal hover:border-bz-teal">{qk}</button>
+                  <button key={qk} type="button" onClick={() => setAsk(qk)} className="min-h-[40px] px-3 rounded-bzbtn border border-bz-line text-[13px] font-bold text-bz-teal hover:border-bz-teal">{qk}</button>
                 ))}
               </div>
               <Button variant="ai" className="w-full mt-3" onClick={runAi} disabled={ask.trim().length < 3 || !canRun} data-testid="site-ai-run">Show me the change</Button>
@@ -447,8 +447,8 @@ function SectionCard({ s, page, first, last, proposal, onMove, moving }) {
         <AiFrame title="Suggested change" className="mt-4" right={<span className="text-[12px] text-bz-muted">{ago(proposal.at)}</span>}>
           <p className="text-[13px] text-bz-muted mb-3">You asked: “{proposal.instruction}”</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3"><p className="text-[12px] font-bold text-bz-muted uppercase tracking-[0.12em] mb-2">Now</p><SectionText type={s.type} data={proposal.before} /></div>
-            <div className="rounded-bzcard border border-bz-teal bg-bz-teal-tint p-3"><p className="text-[12px] font-bold text-bz-teal uppercase tracking-[0.12em] mb-2">After</p><SectionText type={s.type} data={proposal.after} /></div>
+            <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3"><p className="text-[12px] font-bold text-bz-muted mb-2">Now</p><SectionText type={s.type} data={proposal.before} /></div>
+            <div className="rounded-bzcard border border-bz-teal bg-bz-teal-tint p-3"><p className="text-[12px] font-bold text-bz-teal mb-2">After</p><SectionText type={s.type} data={proposal.after} /></div>
           </div>
           {proposal.note && <p className="text-[13px] text-bz-muted mt-3">{proposal.note}</p>}
           <div className="flex flex-wrap gap-2 mt-4">

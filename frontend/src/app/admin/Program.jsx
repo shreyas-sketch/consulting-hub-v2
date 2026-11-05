@@ -39,7 +39,7 @@ function DayEditor({ d, i, onChange, onRemove }) {
         <Field label="Workbook link"><Input value={d.workbook_url} onChange={set("workbook_url")} placeholder="https://…" maxLength={500} /></Field>
       </div>
       <div className="space-y-2">
-        <span className="block text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted">Tasks</span>
+        <span className="block text-[12px] font-semibold text-bz-muted">Tasks</span>
         {d.tasks.map((t, j) => (
           <div key={t.id || `new-${j}`} className="flex gap-2">
             <Input value={t.text} onChange={(e) => setTask(j, e.target.value)} maxLength={300} placeholder="e.g. Fill the EDE sheet" />

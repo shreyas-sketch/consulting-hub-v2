@@ -21,7 +21,7 @@ import uuid
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -29,6 +29,7 @@ import indexes
 import llm
 import media
 from core.deps import user_dep
+from core.errors import BadRequest, Conflict, Gone, NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -152,10 +153,10 @@ async def build_material(d, user: dict, body: DeckIn) -> dict:
     if body.source == "text":
         title = text(body.title, 120)
         if len(title) < 3:
-            raise HTTPException(status_code=400, detail={"code": "title", "msg": "Give your deck a title."})
+            raise BadRequest("Give your deck a title.", code="title")
         notes = body.notes.strip()
         if len(notes) < 20:
-            raise HTTPException(status_code=400, detail={"code": "notes", "msg": "Add your notes: a few lines on what the deck should say."})
+            raise BadRequest("Add your notes: a few lines on what the deck should say.", code="notes")
         audience = text(body.audience, 160) or "Business owners and senior leaders"
         lines = [f"DECK TITLE: {title}", f"AUDIENCE: {audience}", *head, "",
                  "WHAT THE DECK SHOULD SAY (the presenter's own notes; their numbers are the only numbers you may use):",
@@ -165,12 +166,12 @@ async def build_material(d, user: dict, body: DeckIn) -> dict:
                 "data": {"notes": notes}}
 
     if not body.id:
-        raise HTTPException(status_code=400, detail={"code": "pick", "msg": "Pick what to build the deck from."})
+        raise BadRequest("Pick what to build the deck from.", code="pick")
     if body.source == "case":
         a = await d.case_answers.find_one({"_id": body.id, "user_id": uid})
         c = await d.cases.find_one({"_id": a["case_id"]}) if a else None
         if not a or not c:
-            raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "That case answer was not found."})
+            raise NotFound("That case answer was not found.")
         title = text(body.title, 120) or f"{c['company']}: {c['title']}"
         audience = text(body.audience, 160) or f"Owner and leadership team of {c['company']}"
         facts = "\n".join(f"- {f}" for f in c.get("facts", []))
@@ -191,7 +192,7 @@ async def build_material(d, user: dict, body: DeckIn) -> dict:
 
     b = await d.briefs.find_one({"_id": body.id, "user_id": uid})
     if not b:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "That Meeting Brief was not found."})
+        raise NotFound("That Meeting Brief was not found.")
     co = b["input"]["company"]
     title = text(body.title, 120) or f"{co}: a first conversation"
     audience = text(body.audience, 160) or (b["input"].get("meeting_with") or f"Leadership team of {co}")
@@ -505,7 +506,7 @@ async def mine(user: dict = Depends(user_dep())):
 async def _own(deck_id: str, user: dict) -> dict:
     doc = await db().decks.find_one({"_id": deck_id, "user_id": str(user["_id"])})
     if not doc:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Deck not found."})
+        raise NotFound("Deck not found.")
     return doc
 
 
@@ -520,17 +521,17 @@ async def edit(deck_id: str, body: DeckEdit, user: dict = Depends(user_dep())):
     d = db()
     doc = await _own(deck_id, user)
     if not doc.get("deck"):
-        raise HTTPException(status_code=409, detail={"code": "old_deck", "msg": "This deck can't be changed. Make it again."})
+        raise Conflict("This deck can't be changed. Make it again.", code="old_deck")
     deck, what = doc["deck"], []
     if body.slides is not None:
         old = deck["slides"]
         if len(body.slides) != len(old) or any(not isinstance(s, dict) or s.get("layout") != o["layout"]
                                                for s, o in zip(body.slides, old)):
-            raise HTTPException(status_code=400, detail={"code": "shape", "msg": "Slides can't be added, removed or moved here."})
+            raise BadRequest("Slides can't be added, removed or moved here.", code="shape")
         try:
             deck = dl.clean_deck({"slides": body.slides}, strict=True)
         except dl.BadDeck as e:
-            raise HTTPException(status_code=400, detail={"code": "slide", "msg": str(e)})
+            raise BadRequest(str(e), code="slide")
         what.append("text")
     theme = body.theme or doc.get("theme", "dark")
     if theme != doc.get("theme", "dark"):
@@ -539,7 +540,7 @@ async def edit(deck_id: str, body: DeckEdit, user: dict = Depends(user_dep())):
     if body.title is not None:
         t = text(body.title, 120)
         if len(t) < 3:
-            raise HTTPException(status_code=400, detail={"code": "title", "msg": "Give your deck a title."})
+            raise BadRequest("Give your deck a title.", code="title")
         if t != title:
             title = t
             what.append("title")
@@ -555,7 +556,7 @@ async def edit(deck_id: str, body: DeckEdit, user: dict = Depends(user_dep())):
     if not res.modified_count:                       # someone saved in between: keep theirs
         for f in files.values():
             await media.delete_blob(d, f["blob_id"])
-        raise HTTPException(status_code=409, detail={"code": "changed", "msg": "This deck changed while you were saving. Open it again."})
+        raise Conflict("This deck changed while you were saving. Open it again.", code="changed")
     for f in (doc.get("files") or {}).values():
         await media.delete_blob(d, f.get("blob_id"))
     await events.track(d, "deck_edited", user_id=doc["user_id"], props={"what": ",".join(what)})
@@ -580,7 +581,7 @@ async def file(deck_id: str, kind: Literal["pptx", "pdf"] = Query("pdf"), inline
     f = (doc.get("files") or {}).get(kind)
     b = await media.get_blob(db(), f["blob_id"]) if f else None
     if not b:
-        raise HTTPException(status_code=410, detail={"code": "gone", "msg": "This file is no longer available. Make the deck again."})
+        raise Gone("This file is no longer available. Make the deck again.")
     disp = "inline" if inline and kind == "pdf" else "attachment"
     return Response(bytes(b["data"]), media_type=CTYPE[kind],
                     headers={"Content-Disposition": f'{disp}; filename="{_slug(doc["title"])}.{kind}"',

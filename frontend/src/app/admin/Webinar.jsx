@@ -35,7 +35,7 @@ export default function Webinar() {
                 <Kpi label="Bought ₹1,999" value={d.bought?.member ?? 0} />
                 <Kpi label="Group session list" value={d.group_session_list} sub="have an account, not bought" />
               </div>
-              <a href={csv} className="inline-flex items-center gap-2 min-h-[52px] px-6 rounded-full bg-bz-gold text-bz-on-accent font-extrabold text-[15px]" data-testid="webinar-csv">
+              <a href={csv} className="inline-flex items-center gap-2 min-h-[52px] px-6 rounded-bzbtn bg-bz-gold text-bz-on-accent font-extrabold text-[15px]" data-testid="webinar-csv">
                 <Download className="w-4 h-4" aria-hidden /> Download group-session list (CSV)
               </a>
               <Card>
