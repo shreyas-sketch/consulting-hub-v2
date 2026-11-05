@@ -125,9 +125,9 @@ async def run_metered_n(d, user: dict, meter: str, n: int, work: Callable[[str, 
     plan, n = await reserve(d, user, meter, n, access=access, partial=partial)
     try:
         result, used = await work(plan, n)
-    except llm.LLMError:
+    except llm.LLMError as e:
         await give_back(d, user, meter, n, plan)
-        raise busy_error()
+        raise busy_error(e, meter)
     except Exception:
         await give_back(d, user, meter, n, plan)
         raise

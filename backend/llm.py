@@ -8,6 +8,8 @@ parses the first JSON object in the reply.
 
 Models (env): LLM_MODEL_FAST (default claude-haiku-5-5), LLM_MODEL_STRONG
 (claude-sonnet-5-5), LLM_MODEL_VISION (claude-opus-5-5).
+Output room (env): LLM_MAX_OUTPUT_TOKENS (default 4,000) for every tool and every call shape; the max_tokens a
+caller passes is ignored (see out_tokens).
 """
 from __future__ import annotations
 
@@ -72,6 +74,13 @@ async def _guarded(coro_fn, task: str, timeout: Optional[float] = None, queue_wa
         sem.release()
 
 
+def out_tokens(_requested: Optional[int] = None) -> int:
+    """Output room for every AI answer: one setting for all tools, LLM_MAX_OUTPUT_TOKENS (default 4,000).
+    The max_tokens a tool passes is ignored on purpose. It is a ceiling: Anthropic bills the tokens actually written,
+    and an answer cut off half-way can't be used at all (the member saw "AI is busy")."""
+    return settings.llm.max_output_tokens
+
+
 def time_budget(max_tokens: int, timeout: Optional[float] = None) -> float:
     """Seconds a call may take. A long answer from the strong model streams at roughly 30-60 tokens a second, so a
     flat 45 s cut off long briefings and scripts half-way (they then worked on the retry). The budget grows with
@@ -85,7 +94,7 @@ async def _call_text(*, model: str, max_tokens: int, system: str, content) -> st
     resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system,
                                            messages=[{"role": "user", "content": content}])
     if getattr(resp, "stop_reason", None) == "max_tokens":
-        log.warning("LLM reply cut at max_tokens=%s (model %s); raise max_tokens for this task", max_tokens, model)
+        log.warning("LLM reply cut at max_tokens=%s (model %s); raise LLM_MAX_OUTPUT_TOKENS", max_tokens, model)
     return "".join(getattr(b, "text", "") for b in resp.content)
 
 
@@ -145,14 +154,8 @@ async def _fake_with_latency(fake: Callable[[], Any], task: str, queue_wait: Opt
     return await _guarded(slow, task, **_wait_kw(queue_wait))
 
 
-# A JSON answer cut off at max_tokens can't be read, so the member got "AI is busy" (seen live on the Offer Card at
-# 1,000 tokens). max_tokens is only a ceiling (Anthropic bills the tokens actually written), so every JSON call gets
-# at least this much room. Tools that need more still ask for more.
-MIN_JSON_TOKENS = 2048
-
-
 async def _complete_json(*, task, system, prompt, fake, model, max_tokens, images, timeout=None, queue_wait=None) -> dict:
-    max_tokens = max(max_tokens, MIN_JSON_TOKENS)
+    max_tokens = out_tokens(max_tokens)
     m = mode()
     if m == "fake":
         return await _fake_with_latency(fake, task, queue_wait)
@@ -177,6 +180,7 @@ async def _complete_json(*, task, system, prompt, fake, model, max_tokens, image
 
 async def complete_text(*, task: str, system: str, prompt: str, fake: Callable[[], str], model: str = "strong",
                         max_tokens: int = 1200, queue_wait: Optional[float] = None) -> str:
+    max_tokens = out_tokens(max_tokens)
     m = mode()
     if m == "fake":
         return await _fake_with_latency(fake, task, queue_wait)
@@ -198,6 +202,7 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
                         queue_wait: Optional[float] = None) -> str:
     """Multi-turn chat: messages = [{"role": "user"|"assistant", "content": str}, ...] ending with a user turn.
     Returns the assistant's text. Same queue, timeout and fake rules as complete_json."""
+    max_tokens = out_tokens(max_tokens)
     m = mode()
     if m == "fake":
         return await _fake_with_latency(fake, task, queue_wait)
@@ -229,6 +234,8 @@ async def complete_with_tools(*, task: str, system: str, prompt: str, tools: lis
     max_continues times. The whole exchange holds one slot of the concurrency guard and one timeout
     (default LLM_TIMEOUT_S). No fake here: the caller checks its own vendor switch first and keeps its own fake.
     Raises LLMError on any failure."""
+    max_tokens = out_tokens(max_tokens)
+
     async def call():
         msgs: list = [{"role": "user", "content": prompt}]
         blocks: list = []
