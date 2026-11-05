@@ -70,3 +70,37 @@ def test_json_calls_get_at_least_the_minimum_room(monkeypatch):
     assert out == {"ok": True} and seen["max_tokens"] == llm.MIN_JSON_TOKENS
     asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, model="strong", max_tokens=7000))
     assert seen["max_tokens"] == 7000
+
+
+def test_portfolio_review_accepts_how_a_real_model_writes():
+    """Live: "AI is busy" after the member filled the approach. Steps as objects, scores as {"score": n}, a missing
+    lesson list and title must not throw the whole review away."""
+    from features.portfolio import STEPS, _clean_review
+    p = {"brief": {"company": "Shree Polymers", "client_words": "Our cash is always stuck."},
+         "answer": {"scope": "Cash cycle, Surat plant, last 12 months", "objective": "From 95 to 60 days by March",
+                    "framework_options": "Cash conversion cycle; options on debtors, stock, creditors",
+                    "do_first": "Weekly debtor calls", "owner_metrics": "Finance head, debtor days weekly"}}
+    raw = {"scores": {"Scope": {"score": 8}, "objective": 7, "strategy": "6", "execution": 7},
+           "good": ["Clear scope"], "improve": [{"text": "Name the owner"}], "summary": "Solid first go.",
+           "case_study": {"client_context": "A Surat polymer maker.", "challenge": "Cash stuck in debtors.",
+                          "approach": [{"step": STEPS[i], "text": f"Did step {i + 1}."} for i in range(5)],
+                          "expected_outcome": "Debtor days could fall to 60."},
+           "video_script": {"hook": "h", "problem": "p", "approach": "a", "result": "r", "call_to_action": "c"}}
+    r = _clean_review(raw, p)
+    assert r["scores"] == {"scope": 8, "objective": 7, "strategy": 6, "execution": 7}
+    assert [s["text"] for s in r["case_study"]["approach"]][:5] == [f"Did step {i + 1}." for i in range(5)]
+    assert r["case_study"]["approach"][5]["text"] == "Finance head, debtor days weekly"   # filled from the member
+    assert r["case_study"]["title"].startswith("Practice project: Shree Polymers")
+    assert r["improve"] == ["Name the owner"]
+
+
+def test_portfolio_review_still_refuses_a_review_without_a_script():
+    import pytest
+
+    import llm
+    from features.portfolio import _clean_review
+    raw = {"scores": {"scope": 5, "objective": 5, "strategy": 5, "execution": 5},
+           "case_study": {"client_context": "x", "challenge": "y", "approach": ["a"] * 6, "expected_outcome": "z"}}
+    with pytest.raises(llm.LLMError) as e:
+        _clean_review(raw, {})
+    assert "script.hook" in str(e.value)

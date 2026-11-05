@@ -32,7 +32,7 @@ from state import db
 from util import iso
 
 from .case_bank import CRITERIA
-from .common import busy_error, clamp_int, run_metered, text, text_list
+from .common import busy_error, clamp_int, run_metered, text
 from .knowledge import knowledge, system_block
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -171,26 +171,74 @@ def _review_prompt(p: dict, a: dict, k: dict) -> str:
             '"approach": "", "result": "", "call_to_action": ""}}')
 
 
-def _clean_review(raw: dict) -> dict:
-    sc = raw.get("scores") or {}
-    if not isinstance(sc, dict) or not all(k in sc for k, _ in CRITERIA):
-        raise llm.LLMError("portfolio: missing scores")
-    scores = {k: clamp_int(sc.get(k), 0, 10, 0) for k, _ in CRITERIA}
+def _piece(v, n: int) -> str:
+    """One AI field as plain text. A real model sometimes writes a step as {"step": "...", "text": "..."} or a list
+    of lines instead of a string; take the words, not the Python repr."""
+    if isinstance(v, dict):
+        for k in ("text", "description", "detail", "details", "content", "summary", "what", "value"):
+            if isinstance(v.get(k), str) and v[k].strip():
+                return text(v[k], n)
+        return text(" ".join(str(x) for x in v.values() if isinstance(x, (str, int, float))), n)
+    if isinstance(v, list):
+        return text(" ".join(_piece(x, n) for x in v), n)
+    return text(v, n)
+
+
+def _score(v) -> int:
+    if isinstance(v, dict):
+        v = v.get("score", v.get("value"))
+    return clamp_int(v, 0, 10, 0)
+
+
+def _steps(v) -> list[str]:
+    """The 6 approach steps, in order: a list (of strings or objects) or an object keyed by step name."""
+    if isinstance(v, dict):
+        low = {str(k).strip().lower(): x for k, x in v.items()}
+        items = [low.get(s.lower()) for s in STEPS] if any(s.lower() in low for s in STEPS) else list(v.values())
+    elif isinstance(v, list):
+        items = v
+    else:
+        items = []
+    return [_piece(x, 700) for x in items[:6]]
+
+
+def _clean_review(raw: dict, p: dict | None = None) -> dict:
+    """Validate the review. The scores and the video script must be there; smaller gaps in the case study are filled
+    from the member's own approach, so one missing line never costs the whole feedback."""
+    if not isinstance(raw, dict):
+        raise llm.LLMError("portfolio: bad shape")
+    sc = raw.get("scores") if isinstance(raw.get("scores"), dict) else {}
+    sc = {str(k).strip().lower(): x for k, x in sc.items()}
+    if sum(1 for k, _ in CRITERIA if k in sc) < 3:
+        raise llm.LLMError(f"portfolio: missing scores ({sorted(sc)})")
+    scores = {k: _score(sc.get(k)) for k, _ in CRITERIA}
     cs = raw.get("case_study") if isinstance(raw.get("case_study"), dict) else {}
     vs = raw.get("video_script") if isinstance(raw.get("video_script"), dict) else {}
-    steps = text_list(cs.get("approach"), 6, 700)
-    case = {"title": text(cs.get("title"), 100), "client_context": text(cs.get("client_context"), 500),
-            "challenge": text(cs.get("challenge"), 700),
+    a = (p or {}).get("answer") or {}
+    b = (p or {}).get("brief") or {}
+    mine = [a.get("scope"), a.get("objective"), a.get("framework_options"), a.get("framework_options"),
+            a.get("do_first"), a.get("owner_metrics")]                      # the member's words for each step
+    steps = _steps(cs.get("approach"))
+    steps += [""] * (6 - len(steps))
+    steps = [t or text(mine[i] or "", 700) for i, t in enumerate(steps)]
+    case = {"title": _piece(cs.get("title"), 100) or text(f"Practice project: {b.get('company') or 'a client'}", 100),
+            "client_context": _piece(cs.get("client_context"), 500),
+            "challenge": _piece(cs.get("challenge"), 700) or text(b.get("client_words") or "", 700),
             "approach": [{"step": i + 1, "name": STEPS[i], "text": t} for i, t in enumerate(steps)],
-            "expected_outcome": text(cs.get("expected_outcome"), 400), "lessons": text_list(cs.get("lessons"), 4, 240)}
-    script = {f: text(vs.get(f), 600) for f in ("hook", "problem", "approach", "result", "call_to_action")}
-    if (len(steps) < 6 or not all(case[f] for f in ("title", "client_context", "challenge", "expected_outcome"))
-            or not all(script.values())):
-        raise llm.LLMError("portfolio: incomplete review")
+            "expected_outcome": _piece(cs.get("expected_outcome"), 400),
+            "lessons": [x for x in (_piece(y, 240) for y in (cs.get("lessons") or [])[:4]) if x]
+            if isinstance(cs.get("lessons"), list) else []}
+    script = {f: _piece(vs.get(f), 600) for f in ("hook", "problem", "approach", "result", "call_to_action")}
+    missing = [f for f in ("client_context", "challenge", "expected_outcome") if not case[f]]
+    missing += [f"step {i + 1}" for i, t in enumerate(steps) if not t]
+    missing += [f"script.{f}" for f, v in script.items() if not v]
+    if missing:
+        raise llm.LLMError(f"portfolio: incomplete review (missing {', '.join(missing)})")
     words = sum(len(v.split()) for v in script.values())
     return {"scores": scores, "overall": round(sum(scores.values()) / len(scores), 1),
-            "good": text_list(raw.get("good"), 3, 200), "improve": text_list(raw.get("improve"), 3, 200),
-            "summary": text(raw.get("summary"), 400), "case_study": case, "video_script": script,
+            "good": [x for x in (_piece(y, 200) for y in (raw.get("good") or [])[:3]) if x] if isinstance(raw.get("good"), list) else [],
+            "improve": [x for x in (_piece(y, 200) for y in (raw.get("improve") or [])[:3]) if x] if isinstance(raw.get("improve"), list) else [],
+            "summary": _piece(raw.get("summary"), 400), "case_study": case, "video_script": script,
             "script_words": words, "script_seconds": round(words / 2.5)}    # ~150 words a minute
 
 
@@ -248,10 +296,10 @@ async def _review(user: dict, p: dict) -> dict:
     k = await knowledge(db(), user)
     try:
         raw = await llm.complete_json(task="portfolio_review", system=SYSTEM_REVIEW, prompt=_review_prompt(p, p["answer"], k),
-                                      fake=lambda: _fake_review(p, p["answer"]), model="strong", max_tokens=2600)
-        review = _clean_review(raw)
-    except llm.LLMError:
-        raise busy_error()           # the answer is saved (status "answered"): "Get my feedback" tries again
+                                      fake=lambda: _fake_review(p, p["answer"]), model="strong", max_tokens=5000)
+        review = _clean_review(raw, p)
+    except llm.LLMError as e:
+        raise busy_error(e, "portfolio_review")   # the answer is saved (status "answered"): "Get my feedback" tries again
     await db().portfolio_projects.update_one({"_id": p["_id"]}, {"$set": {"review": review, "status": "done",
                                                                           "done_at": utcnow()}})
     await events.track(db(), "portfolio_done", user_id=p["user_id"], props={"score": review["overall"]})

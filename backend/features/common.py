@@ -14,7 +14,10 @@ from core.errors import AIBusy
 log = logging.getLogger("tools")
 
 
-def busy_error() -> HTTPException:
+def busy_error(reason: object = None, tool: str = "") -> HTTPException:
+    """The member sees "busy"; when the caller passes what went wrong, the log keeps the real reason."""
+    if reason is not None:
+        log.warning("AI work failed: tool=%s reason=%s", tool or "?", reason)
     return AIBusy("The AI is busy right now. Try again in a minute. This didn't use up your go.")
 
 

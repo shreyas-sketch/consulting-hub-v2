@@ -906,11 +906,11 @@ async def _chat_reply(tid: str, uid: str, t: dict, msg: str, user: dict) -> dict
     try:
         reply = await llm.complete_chat(task="pitch_chat", system=system, messages=history,
                                         fake=lambda: _fake_reply(t, msg), model="strong", max_tokens=1500)
-    except llm.LLMError:
-        raise busy_error()
+    except llm.LLMError as e:
+        raise busy_error(e, "pitch_chat")
     reply = strip_providers((reply or "").strip())
     if not reply:
-        raise busy_error()
+        raise busy_error("empty reply", "pitch_chat")
     n = len(takes)
     await db().pitch_threads.update_one({"_id": tid}, {
         "$push": {"messages": {"$each": [_msg("user", msg, after_take=n), _msg("assistant", reply, after_take=n)]}},
