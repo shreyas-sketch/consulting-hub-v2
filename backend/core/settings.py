@@ -234,6 +234,10 @@ class _Gemini:
         return env_str("GEMINI_MODEL")
 
     @property
+    def fallback_model(self) -> str:            # used when GEMINI_MODEL stays busy (503/429) after the retries
+        return env_str("GEMINI_FALLBACK_MODEL")
+
+    @property
     def tts_model(self) -> str:
         return env_str("GEMINI_TTS_MODEL")
 
