@@ -1,6 +1,7 @@
 """Helpers every tool uses: plan check + metering + refund when the work fails."""
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Awaitable, Callable, Iterable, Optional
 
@@ -9,6 +10,8 @@ from fastapi import HTTPException
 import llm
 import plans
 from core.errors import AIBusy
+
+log = logging.getLogger("tools")
 
 
 def busy_error() -> HTTPException:
@@ -22,7 +25,10 @@ async def run_metered(db, user: dict, meter: str, work: Callable[[str], Awaitabl
     await plans.consume(db, user, meter, plan)
     try:
         return await work(plan)
-    except llm.LLMError:
+    except llm.LLMError as e:
+        # The member only sees "busy"; the log says what really happened (timeout, queue full, vendor error, an
+        # answer that failed our checks, or the AI not configured), so a production problem can be told apart.
+        log.warning("AI work failed: tool=%s plan=%s reason=%s", meter, plan, e)
         await plans.refund(db, user, meter, plan)
         raise busy_error()
     except Exception:
