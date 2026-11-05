@@ -1,7 +1,6 @@
 """The application kernel: settings, error envelope, request context middleware, module registry."""
 import pytest
 from fastapi import APIRouter
-
 from tests.conftest import qa_login
 
 
