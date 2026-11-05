@@ -145,6 +145,8 @@ async def _deliver(senders: Senders, phone: str, code: str, channel: Channel) ->
     """Returns (result, fell_back)."""
     if channel == "whatsapp" and senders.whatsapp is None:
         channel = "sms"
+    if channel == "sms" and senders.sms is None:          # WhatsApp-only set-up (no MSG91): send it there instead
+        channel = "auto"
     order = [senders.sms] if channel == "sms" else [senders.whatsapp, senders.sms]
     order = [s for s in order if s is not None]
     if not order:

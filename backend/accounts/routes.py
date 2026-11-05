@@ -136,7 +136,8 @@ async def otp_request(body: OtpRequestIn, request: Request, response: Response):
     ch = await otp_service.request_otp(_db(), senders, phone, channel=body.channel,      # OtpError is an AppError
                                        ip=client_ip(request), anon_id=anon)
     out = {"challenge_id": ch.challenge_id, "channel": ch.channel, "sent_to": mask(phone),
-           "expires_in": ch.expires_in, "resend_in": ch.resend_in, "fell_back": ch.fell_back, "is_new": is_new}
+           "expires_in": ch.expires_in, "resend_in": ch.resend_in, "fell_back": ch.fell_back, "is_new": is_new,
+           "sms_available": senders.sms is not None}   # the login screen offers "Send by SMS instead" only when true
     if settings.qa_mode and not settings.is_production:
         for s in (senders.sms, senders.whatsapp):
             if isinstance(s, ConsoleSender) and s.sent and s.sent[-1][0] == phone:
