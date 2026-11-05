@@ -8,7 +8,7 @@ parses the first JSON object in the reply.
 
 Models (env): LLM_MODEL_FAST (default claude-haiku-5-5), LLM_MODEL_STRONG
 (claude-sonnet-5-5), LLM_MODEL_VISION (claude-opus-5-5).
-Output room (env): LLM_MAX_OUTPUT_TOKENS (default 4,000) for every tool and every call shape; the max_tokens a
+Output room (env): LLM_MAX_OUTPUT_TOKENS (default 15,000) for every tool and every call shape; the max_tokens a
 caller passes is ignored (see out_tokens).
 """
 from __future__ import annotations
@@ -75,7 +75,8 @@ async def _guarded(coro_fn, task: str, timeout: Optional[float] = None, queue_wa
 
 
 def out_tokens(_requested: Optional[int] = None) -> int:
-    """Output room for every AI answer: one setting for all tools, LLM_MAX_OUTPUT_TOKENS (default 4,000).
+    """Output room for every AI answer: one setting for all tools, LLM_MAX_OUTPUT_TOKENS (default 15,000).
+    Capped at 21,000: the Anthropic SDK refuses non-streaming calls above about 21,300 (expected time > 10 minutes).
     The max_tokens a tool passes is ignored on purpose. It is a ceiling: Anthropic bills the tokens actually written,
     and an answer cut off half-way can't be used at all (the member saw "AI is busy")."""
     return settings.llm.max_output_tokens

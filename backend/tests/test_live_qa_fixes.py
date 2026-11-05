@@ -55,7 +55,7 @@ def test_time_budget_grows_with_answer_length(monkeypatch):
 
 
 def test_every_ai_call_gets_the_same_output_room(monkeypatch):
-    """Every tool writes up to LLM_MAX_OUTPUT_TOKENS (default 4,000), whatever max_tokens it passes."""
+    """Every tool writes up to LLM_MAX_OUTPUT_TOKENS (default 15,000), whatever max_tokens it passes."""
     import asyncio
 
     import llm
@@ -70,10 +70,13 @@ def test_every_ai_call_gets_the_same_output_room(monkeypatch):
     for asked in (700, 1000, 7000):
         asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, model="strong", max_tokens=asked))
     asyncio.run(llm.complete_text(task="t", system="s", prompt="p", fake=str, max_tokens=300))
-    assert seen == [4000, 4000, 4000, 4000]
+    assert seen == [15000, 15000, 15000, 15000]
     monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "6000")
     asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, max_tokens=700))
     assert seen[-1] == 6000
+    monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "50000")                    # above the SDK's non-streaming limit
+    asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, max_tokens=700))
+    assert seen[-1] == 21000
 
 
 def test_portfolio_review_accepts_how_a_real_model_writes():
