@@ -270,6 +270,40 @@ def test_otp_global_cap_per_minute(mdb, monkeypatch):
     assert otp_service.DEFAULT_MAX_PER_MINUTE == 1200
 
 
+def test_failed_send_does_not_lock_the_member_out(mdb):
+    """A provider failure (e.g. AiSensy campaign not set up) must not start the resend cooldown or eat the
+    hourly allowance: the member never got a code. Failed sends have their own, separate cap."""
+    from accounts import otp_service
+    from accounts.otp_providers import Senders, SendResult
+
+    class Flaky:
+        def __init__(self):
+            self.ok = False
+
+        async def send(self, phone, code, ttl):
+            return SendResult(self.ok, "aisensy", "whatsapp", error=None if self.ok else "campaign not live")
+
+    wa = Flaky()
+    senders = Senders(whatsapp=wa, sms=None)
+    phone, now = "+919800000009", datetime(2026, 11, 5, 9, 12, 0, tzinfo=timezone.utc)
+
+    async def go():
+        for i in range(otp_service.MAX_FAILED_PER_PHONE_HOUR):
+            with pytest.raises(otp_service.OtpError) as e:
+                await otp_service.request_otp(mdb, senders, phone, ip="1.1.1.1", now=now + timedelta(seconds=i))
+            assert e.value.code == "send_failed"
+        with pytest.raises(otp_service.OtpError) as e:            # separate cap on failures
+            await otp_service.request_otp(mdb, senders, phone, ip="1.1.1.1", now=now + timedelta(seconds=20))
+        assert e.value.code == "send_failed_limit" and e.value.status == 429
+        wa.ok = True                                             # provider fixed: the member can log in at once
+        ch = await otp_service.request_otp(mdb, senders, phone, ip="1.1.1.1", now=now + timedelta(hours=1, seconds=30))
+        assert ch.channel == "whatsapp"
+        with pytest.raises(otp_service.OtpError) as e:            # a real send still starts the cooldown
+            await otp_service.request_otp(mdb, senders, phone, ip="1.1.1.1", now=now + timedelta(hours=1, seconds=35))
+        assert e.value.code == "resend_cooldown"
+    run(go())
+
+
 # ---------------------------------------------------------------- 7. metering is atomic ----
 class SlowDb:
     """Yields to the loop on every usage call, like a real network round-trip."""
