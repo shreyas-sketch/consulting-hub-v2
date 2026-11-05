@@ -812,8 +812,10 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
             raise llm.LLMError(str(e))
         except pitch_video.VideoError as e:
             log.warning("pitch video failed: %s", e)
-            raise ServiceUnavailable("The analysis is taking longer than expected. Try again in a moment. "
-                                             "This didn't use up your go.", code="video_busy")
+            slow = "took too long" in str(e) or "Timeout" in str(e)
+            msg = ("The analysis is taking longer than expected. Try again in a moment. " if slow else
+                   "We couldn't analyse this video just now. Try again in a few minutes. ")
+            raise ServiceUnavailable(msg + "This didn't use up your go.", code="video_busy")
         finally:
             sem.release()
             _drop(path)                 # the video is gone from our side before we even save the report

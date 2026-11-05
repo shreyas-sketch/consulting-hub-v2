@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -32,6 +33,8 @@ from growth import events
 from growth.clock import as_utc, utcnow
 
 from .otp_providers import Senders, SendResult
+
+log = logging.getLogger("otp")
 
 OTP_LEN = 6
 TTL_MIN = 10
@@ -190,6 +193,11 @@ async def request_otp(
         "superseded": False, "ip": ip, "created_at": now,
         "expires_at": now + timedelta(minutes=TTL_MIN), "purge_at": now + timedelta(days=1)})
     if not res.ok:
+        # The provider's own answer is the only way to tell a bad key from a campaign that is not live, so it goes
+        # to the server log (never to the member). The phone is masked.
+        log.warning("OTP send failed: provider=%s channel=%s phone=%s error=%s",
+                    res.provider, res.channel, phone[:3] + "*****" + phone[-2:],
+                    (res.error or "")[:300])
         await events.track(db, "otp_failed", anon_id=anon_id,
                            props={"reason": "send_failed", "provider": res.provider,
                                   "error": (res.error or "")[:120]})

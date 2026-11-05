@@ -250,7 +250,8 @@ async def _add_source(user: dict, pid: str, *, kind: str, title: str, body: str 
     title = text(title, 120) or "Untitled source"
     parts = chunks if chunks is not None else make_chunks(body, page_starts)
     rows = [{"_id": f"{sid}:{c['i']}", "source_id": sid, "project_id": pid, "user_id": uid, "title": title,
-             "i": c["i"], "page": c.get("page"), "text": c["text"], "tokens": c["tokens"], "n": c.get("n") or len(c["tokens"])}
+             "i": c["i"], "page": c.get("page"), "breaks": c.get("breaks") or [], "text": c["text"], "tokens": c["tokens"],
+             "n": c.get("n") or len(c["tokens"])}
             for c in parts]
     s = {"_id": sid, "project_id": pid, "user_id": uid, "kind": kind, "title": title, "url": url, "doc_id": doc_id,
          "words": words, "pages": pages, "chunks": len(rows), "ntok": sum(r["n"] for r in rows), "truncated": truncated,
@@ -542,7 +543,7 @@ async def generate(pid: str, body: GenIn, user: dict = Depends(user_dep())):
                   f"\n\nSOURCES:\n{block}\n\n{PROMPTS[body.kind]}")
         raw = await llm.complete_json(task=f"notebook_{body.kind}", system=GEN_SYSTEM, prompt=prompt,
                                       fake=lambda: _fake_gen(body.kind, p["title"], used, texts), model="strong",
-                                      max_tokens=2400)
+                                      max_tokens=4000 if body.kind == "briefing" else 3000)   # room to finish the JSON
         title, md = _check_gen(body.kind, raw, block)
         md += "\n\n---\nMade from: " + " · ".join(s["title"] for s in used)
         now = utcnow()
