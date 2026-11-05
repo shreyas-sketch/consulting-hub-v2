@@ -16,12 +16,24 @@ label estimates as estimates. Say what a button does ("Make my deck", not "Submi
 
 ## Backend (FastAPI + Motor/Mongo)
 
-Reference files: `features/brief.py`, `features/cases.py`, `features/linkedin.py`, `features/start.py`, `plans.py`.
+Read `docs/ARCHITECTURE.md` first. Reference: `features/cases/` (the layered layout every new tool copies), plus
+`features/brief.py`, `features/linkedin.py`, `features/start.py`, `plans.py`.
+
+- New tools are packages: `features/<name>/` with `router.py` (HTTP only), `service.py` (rules, metering, AI),
+  `repository.py` (subclass `core.repository.Repository`; the only code that queries the tool's collections),
+  `prompts.py` (system prompt, prompt builder, fake) and `schemas.py` (request bodies, response mappers).
+  List the module in `core/modules.py` under its plan level. Single-file tools still work and move to this layout when
+  they are next changed substantially.
+- Errors: raise from `core.errors` (`NotFound`, `InvalidInput`, `Conflict`, `PayloadTooLarge`, `UnsupportedMedia`,
+  `TooManyRequests`, `UpstreamError`, `ServiceUnavailable`, or `error(status, code, msg)`), always with a plain `msg`.
+  Never a bare `HTTPException`. The wire shape `{detail: {code, msg}}` is fixed.
+- Configuration: add new environment variables to `core/settings.py` (typed, with a default and a note) and to
+  `backend/.env.example`. Never read `os.environ` anywhere else.
 
 - One module per tool in `backend/features/<name>.py` exposing `router = APIRouter(prefix="/<name>", tags=[...])`.
-  It is already listed in `server.py`; just replace the stub. Admin endpoints for the tool live in the same module under
+  It is listed in `core/modules.py`. Admin endpoints for the tool live in the same module under
   `/admin/<name>...` with `Depends(admin_dep())` (`core.deps`). A page outside `/api` (public website) goes on `public_router`.
-- Database: `from state import db` then `db()`. Ids are `uuid.uuid4().hex` strings; `user_id` is `str(user["_id"])`.
+- Database: in a repository, `self.db`; elsewhere `from state import db` then `db()`. Ids are `uuid.uuid4().hex` strings; `user_id` is `str(user["_id"])`.
   Return plain dicts; datetimes through `util.iso()`; never return raw Mongo docs.
 - Access and metering (do not edit `plans.py`; all features, limits and caps already exist there):
   - `plans.require(db, user, "<feature>")` → 403 locked when the plan doesn't include it.
@@ -76,7 +88,8 @@ Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; page
   Manrope only (JetBrains Mono for code/prompts). No new colours, no light mode, no emojis.
 - `Markdown` (components/Markdown.jsx) renders AI Markdown with copy cards. `UsageLine` shows the plan limit.
   After a metered action call `refreshMe()` from `useAuth()` so limits update.
-- API: `api` / `get` from `@/lib/api`, React Query (`useQuery`, `useQueryClient`), errors through `apiError(e)`.
+- API: for a domain that has a module in `src/services/` (cases, file), use its hooks and add keys to
+  `services/queryKeys.js`; new domains get a service module. Otherwise `api` / `get` from `@/lib/api`, React Query (`useQuery`, `useQueryClient`), errors through `apiError(e)`.
   402/403 open the global upgrade sheet automatically; don't show your own error for those.
 - Formats: `inr()`, `hdate()`, `ago()` from `@/lib/format`.
 - Phone first (390 px): no sideways scroll, tap targets ≥ 44 px, inputs 16 px. Tables scroll inside their own box.
@@ -87,7 +100,7 @@ Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; page
 
 ## Rules for parallel work
 
-- Only edit the files you own. Shared files (`plans.py`, `server.py`, `llm.py`, `media.py`, `audio/*`, `conftest.py`,
+- Only edit the files you own. Shared files (`plans.py`, `server.py`, `core/*`, `llm.py`, `media.py`, `audio/*`, `conftest.py`,
   `App.js`, `AppShell.jsx`, `ui.jsx`, `common.jsx`, `features.js`, `index.css`) are read-only for you. If you need a
   change there, say so in your final report.
 - Don't start servers, don't run Playwright, don't run `git` commands.

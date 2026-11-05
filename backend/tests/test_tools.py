@@ -1,5 +1,5 @@
 """Webinar tools: Readiness Score, Starting Point, cases, Meeting Brief, LinkedIn Score, My Consulting File."""
-from conftest import qa_login, run
+from conftest import qa_login
 
 import llm
 

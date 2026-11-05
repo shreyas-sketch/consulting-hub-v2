@@ -264,6 +264,12 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 - Every setting is in `backend/.env.example`, with a note on each.
 - Keys go into Railway's settings, never into chat or email.
 
+**Structure** (details in `docs/ARCHITECTURE.md`)
+- Each tool splits into router (web requests), service (rules) and repository (database). `features/cases/` is the model; the other tools move to it as they are changed.
+- All settings are read in one file (`backend/core/settings.py`). In production the app refuses to start if a setting is unsafe (for example a weak `JWT_SECRET` or test mode left on).
+- Every error has a code and a plain message; every request has an id that appears in the logs.
+- GitHub runs the tests and the build on every push (`.github/workflows/ci.yml`).
+
 **Test mode**
 - `QA_MODE=true` runs the whole app with fake outside services and sample data, so anyone can try every screen without keys.
 - It's refused in production.
@@ -308,7 +314,7 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 
 ## 14. How it was tested (measured)
 
-- **Automated tests:** 347, all pass (`cd backend && pytest`). They cover every tool, billing, L2, public pages, decks, search, audio and messages.
+- **Automated tests:** 361, all pass (`cd backend && pytest`). They cover every tool, billing, L2, public pages, decks, search, audio and messages.
 - **Screen walk on a phone and a computer:** every screen and every admin page. No errors and no sideways scrolling.
 - **Decks:** the PowerPoint and PDF were compared side by side, and they match.
 - **Load test** (details in `docs/LOAD_TEST.md`), with 10,000 accounts in the database:
@@ -365,6 +371,7 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 | `docs/WHATSAPP_TEMPLATES.md` | Every WhatsApp template, ready to submit |
 | `docs/QA_REPORT.md` | What was reviewed and tested, and what wasn't |
 | `docs/LOAD_TEST.md` | Load test results and how to run it again |
+| `docs/ARCHITECTURE.md` | Layers, settings, errors, logging, module registry, quality gates |
 | `docs/BACKEND_DESIGN.md` | How the backend works |
 | `docs/BUILD_GUIDE.md` | Rules every tool follows (for anyone adding a tool) |
 | `docs/API_CONTRACT.md` | Every API route |

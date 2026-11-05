@@ -1,6 +1,7 @@
 # Backend design
 
-Short notes for the developer. Code comments carry the detail.
+Short notes for the developer. Code comments carry the detail. The layers and cross-cutting rules (settings, errors,
+request context, module registry) are in `ARCHITECTURE.md`.
 
 ## Plans (`plans.py`)
 

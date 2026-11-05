@@ -28,13 +28,13 @@ Calls are group calls only. There are no one-to-one calls anywhere in the app.
 **Outside services**: Razorpay (payments), MSG91 (SMS login codes), AiSensy (WhatsApp), Anthropic (all AI text and web
 search), Google Gemini (pitch videos and audio). Decks are made by the app itself.
 
-**Start here**: `docs/CONSULTATION_HUB_A_TO_Z.md` explains the whole app in plain words.
+**Start here**: `docs/CONSULTATION_HUB_A_TO_Z.md` explains the whole app in plain words; `docs/ARCHITECTURE.md` explains how the code is structured.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `backend/` | FastAPI app (`server.py`); tools in `features/` (one file each), plans and limits in `plans.py`, billing in `billing/`, admin in `admin/` |
+| `backend/` | FastAPI app (`server.py` composition root, `core/` kernel: settings, errors, middleware, module registry); tools in `features/` (`features/cases/` is the layered reference), plans and limits in `plans.py`, billing in `billing/`, admin in `admin/` |
 | `backend/gpts/` | All 52 GPT prompts from the current hub, one file each, for L1 and L2 (see its README) |
 | `frontend/` | React app in Akshat's design system (dark only), served by FastAPI |
 | `scripts/qa_server.py` | Whole app on sample data: no database, no keys, no network |
@@ -52,7 +52,7 @@ cd ../backend && python ../scripts/qa_server.py      # http://localhost:8765
 Test mode: every vendor is fake, the OTP code shows on screen (000000 also works), and demo logins work:
 `POST /api/qa/login` with `{}` (free), `{"plan":"member"}`, `{"plan":"l1"}`, `{"plan":"l2"}` or `{"role":"admin"}`.
 
-Tests: `cd backend && pytest` · Build: `cd frontend && yarn build`
+Tests: `cd backend && ruff check . && pytest` · Build: `cd frontend && CI=true yarn build` · CI: `.github/workflows/ci.yml`
 
 ## Deploy
 

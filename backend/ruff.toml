@@ -1,0 +1,10 @@
+# Lint gate used by CI (`ruff check .`). Errors that are bugs, plus import order.
+line-length = 120
+target-version = "py312"
+extend-exclude = ["gpts/prompts"]
+
+[lint]
+select = ["F", "E9", "I001"]
+
+[lint.per-file-ignores]
+"tests/*" = ["I001"]
