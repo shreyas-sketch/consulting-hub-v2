@@ -85,7 +85,7 @@ async def _call_text(*, model: str, max_tokens: int, system: str, content) -> st
     resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system,
                                            messages=[{"role": "user", "content": content}])
     if getattr(resp, "stop_reason", None) == "max_tokens":
-        log.warning("LLM reply cut at max_tokens=%s (model %s)", max_tokens, model)
+        log.warning("LLM reply cut at max_tokens=%s (model %s); raise max_tokens for this task", max_tokens, model)
     return "".join(getattr(b, "text", "") for b in resp.content)
 
 
@@ -145,7 +145,14 @@ async def _fake_with_latency(fake: Callable[[], Any], task: str, queue_wait: Opt
     return await _guarded(slow, task, **_wait_kw(queue_wait))
 
 
+# A JSON answer cut off at max_tokens can't be read, so the member got "AI is busy" (seen live on the Offer Card at
+# 1,000 tokens). max_tokens is only a ceiling (Anthropic bills the tokens actually written), so every JSON call gets
+# at least this much room. Tools that need more still ask for more.
+MIN_JSON_TOKENS = 2048
+
+
 async def _complete_json(*, task, system, prompt, fake, model, max_tokens, images, timeout=None, queue_wait=None) -> dict:
+    max_tokens = max(max_tokens, MIN_JSON_TOKENS)
     m = mode()
     if m == "fake":
         return await _fake_with_latency(fake, task, queue_wait)

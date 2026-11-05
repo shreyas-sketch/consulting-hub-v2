@@ -52,3 +52,21 @@ def test_time_budget_grows_with_answer_length(monkeypatch):
     assert llm.time_budget(20000) == 180
     assert llm.time_budget(4000, 30) == 30
     assert llm.time_budget(300) == 45                           # never below LLM_TIMEOUT_S
+
+
+def test_json_calls_get_at_least_the_minimum_room(monkeypatch):
+    """Offer Card asked for 1,000 tokens and the live answer was cut mid-JSON → "AI is busy"."""
+    import asyncio
+
+    import llm
+    seen = {}
+
+    async def fake_call(*, model, max_tokens, system, content):
+        seen["max_tokens"] = max_tokens
+        return '{"ok": true}'
+    monkeypatch.setattr(llm, "mode", lambda: "live")
+    monkeypatch.setattr(llm, "_call_text", fake_call)
+    out = asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, model="strong", max_tokens=1000))
+    assert out == {"ok": True} and seen["max_tokens"] == llm.MIN_JSON_TOKENS
+    asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, model="strong", max_tokens=7000))
+    assert seen["max_tokens"] == 7000
