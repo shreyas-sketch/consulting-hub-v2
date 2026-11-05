@@ -21,7 +21,15 @@ import itertools
 import random
 from pathlib import Path
 
-from locust import HttpUser, between, task
+from locust import HttpUser, between, events, task
+
+LIMITS_HIT: dict[str, int] = {}
+
+
+@events.test_stop.add_listener
+def _report_limits(**_):
+    if LIMITS_HIT:
+        print("Correctly refused at the monthly limit (402, counted as success):", LIMITS_HIT)
 
 _CSV = Path(__file__).with_name("members.csv")
 _PAID = [r for r in csv.DictReader(_CSV.open())] if _CSV.exists() else []
@@ -127,14 +135,64 @@ class Member(HttpUser):
             self.client.post("/api/akshat-ai/ask", json={"question": "How do I price my first project?"},
                              name="akshat ai (AI)")
 
+    def _metered(self, path, body, name):
+        """A 402 'monthly limit used' is the correct answer once a member has used their allowance: not a failure."""
+        with self.client.post(path, json=body, name=name, catch_response=True) as r:
+            if r.status_code == 402:
+                r.success()
+                LIMITS_HIT[name] = LIMITS_HIT.get(name, 0) + 1
+            return r
+
     @task(1)
     def deck(self):
-        r = self.client.post("/api/decks", json={"source": "text", "title": "Cutting wastage in FMCG plants",
-                                                 "audience": "Plant heads",
-                                                 "notes": "Wastage is 6% of output. Target 3% in 90 days. Three levers: "
-                                                          "ordering, cold chain, shift handover."},
-                             name="deck make (AI + render)")
+        r = self._metered("/api/decks", {"source": "text", "title": "Cutting wastage in FMCG plants",
+                                         "audience": "Plant heads",
+                                         "notes": "Wastage is 6% of output. Target 3% in 90 days. Three levers: "
+                                                  "ordering, cold chain, shift handover."},
+                          "deck make (AI + render)")
         if r.ok and (r.json() or {}).get("id"):
             did = r.json()["id"]
             self.client.get(f"/api/decks/{did}/file?kind=pptx", name="deck download pptx")
             self.client.get(f"/api/decks/{did}/file?kind=pdf", name="deck download pdf")
+
+    # ---- the rest of the paid tools (added 5 Nov) ----
+    @task(2)
+    def visual(self):
+        self._metered("/api/visuals", {"kind": "process", "prompt": "Five steps to cut plant wastage"}, "visual make (AI)")
+
+    @task(1)
+    def inbox_file(self):
+        self.client.get("/api/inbox", name="inbox")
+        self.client.get("/api/file", name="file")
+
+    @task(1)
+    def offer_or_story(self):
+        if self.plan not in ("l1", "l2"):
+            return
+        if random.random() < 0.5:
+            self._metered("/api/offer-card", {"offer_name": "90-day plant reset", "what_you_get": "Diagnosis\nPlan\nWeekly reviews",
+                                              "fee_from_inr": 300000, "fee_to_inr": 600000}, "offer card (AI)")
+        else:
+            self._metered("/api/stories/text", {"text": "In 2015 our Nashik plant lost 6% of output to wastage. I set up daily "
+                                                        "reviews with shift heads, fixed the cold chain and changed ordering. "
+                                                        "In 9 months wastage fell to 3.5%, saving two crore a year."},
+                          "story (AI)")
+
+    @task(2)
+    def l2_tools(self):
+        if self.plan != "l2":
+            return
+        pick = random.random()
+        if pick < 0.3:
+            self._metered("/api/outreach", {"name": "Meera Kapoor", "role": "COO", "company": "Sunrise Textiles",
+                                            "relationship": "worked together at Arvind", "channel": "email",
+                                            "goal": "diagnostic_call"}, "outreach (AI)")
+        elif pick < 0.55:
+            self._metered("/api/proposals", {"company": "Desai Pumps", "person": "Rahul Desai", "fee_low_inr": 150000,
+                                             "fee_high_inr": 400000, "notes": "Sales flat for two years at 40 crore. "
+                                             "Dealers in Gujarat complain about delivery times."}, "proposal (AI)")
+        elif pick < 0.8:
+            self._metered("/api/social/generate", {"count": 3}, "social posts (AI)")
+        else:
+            self._metered("/api/radar/run", {"industry": random.choice(["Pharma", "Auto parts", "FMCG"]), "city": "Pune"},
+                          "radar (search + AI)")

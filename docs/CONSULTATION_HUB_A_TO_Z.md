@@ -314,7 +314,7 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 
 ## 14. How it was tested (measured)
 
-- **Automated tests:** 361, all pass (`cd backend && pytest`). They cover every tool, billing, L2, public pages, decks, search, audio and messages.
+- **Automated tests:** 362, all pass (`cd backend && pytest`). They cover every tool, billing, L2, public pages, decks, search, audio and messages.
 - **Screen walk on a phone and a computer:** every screen and every admin page. No errors and no sideways scrolling.
 - **Decks:** the PowerPoint and PDF were compared side by side, and they match.
 - **Load test** (details in `docs/LOAD_TEST.md`), with 10,000 accounts in the database:
@@ -370,6 +370,7 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 | `docs/HANDOVER.md` | Step-by-step set-up for the developer |
 | `docs/WHATSAPP_TEMPLATES.md` | Every WhatsApp template, ready to submit |
 | `docs/QA_REPORT.md` | What was reviewed and tested, and what wasn't |
+| `docs/QA_RUN_2026-11-05.md` | Latest full QA and load test (5 Nov): results and launch recommendation |
 | `docs/LOAD_TEST.md` | Load test results and how to run it again |
 | `docs/ARCHITECTURE.md` | Layers, settings, errors, logging, module registry, quality gates |
 | `docs/BACKEND_DESIGN.md` | How the backend works |

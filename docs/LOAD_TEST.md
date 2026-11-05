@@ -1,5 +1,9 @@
 # Load test
 
+**Latest run: 5 Nov 2026, see `QA_RUN_2026-11-05.md`.** 500 attendees: 57,642 requests, 0 failed. 500 paid members
+(wider tool mix): 15,421 requests, 0 failed. Webinar + 300 members together: 0 failed with `LLM_MAX_CONCURRENCY=96`
+(about 10% of members' AI requests got "busy, try again" at the default 48). The 4 Nov run is kept below.
+
 ## What was run (4 Nov 2026), measured
 
 Set-up:
