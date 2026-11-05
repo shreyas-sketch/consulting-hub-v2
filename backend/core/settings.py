@@ -209,7 +209,7 @@ class _Llm:
 
     @property
     def max_output_tokens(self) -> int:         # the most any AI answer may write, for every tool (a ceiling, not a cost)
-        return max(256, env_int("LLM_MAX_OUTPUT_TOKENS", 4000))
+        return min(21000, max(256, env_int("LLM_MAX_OUTPUT_TOKENS", 15000)))   # SDK limit for non-streaming calls
 
     @property
     def queue_wait_s(self) -> float:            # how long a call may wait for a slot before "busy"
