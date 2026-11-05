@@ -38,6 +38,7 @@ TTL_MIN = 10
 RESEND_COOLDOWN_S = 30
 MAX_PER_PHONE_HOUR = 5
 MAX_PER_PHONE_DAY = 10
+MAX_FAILED_PER_PHONE_HOUR = 10      # sends the provider rejected; counted apart so a provider fault never locks a member out
 # Per-IP cap is only a brake on scripted abuse. Indian mobile carriers (Jio, Airtel, Vi) put thousands of
 # phones behind one public IP (CGNAT), so a low cap blocks real webinar sign-ups: the load test showed 30/hour
 # let only 30 of 500 people behind one IP sign up. The per-phone limits below are the real protection.
@@ -105,17 +106,23 @@ def new_code() -> str:
 
 
 async def _check_limits(db, phone: str, ip: str, now: datetime) -> None:
-    last = await db.otp_challenges.find_one({"phone": phone}, sort=[("created_at", -1)])
+    # Only codes that were actually sent count towards the cooldown and the phone limits: if the provider
+    # failed, the member never got a code and must be able to try again straight away.
+    sent = {"phone": phone, "send_ok": {"$ne": False}}
+    last = await db.otp_challenges.find_one(sent, sort=[("created_at", -1)])
     if last:
         wait = RESEND_COOLDOWN_S - int((now - as_utc(last["created_at"])).total_seconds())
         if wait > 0:
             raise OtpError("resend_cooldown", f"Wait {wait}s before asking for a new code.", 429,
                            retry_in=wait)
     hour, day = now - timedelta(hours=1), now - timedelta(days=1)
-    if await db.otp_challenges.count_documents({"phone": phone, "created_at": {"$gte": hour}}) >= MAX_PER_PHONE_HOUR:
+    if await db.otp_challenges.count_documents({**sent, "created_at": {"$gte": hour}}) >= MAX_PER_PHONE_HOUR:
         raise OtpError("phone_hourly_limit", "Too many codes requested. Try again in an hour.", 429)
-    if await db.otp_challenges.count_documents({"phone": phone, "created_at": {"$gte": day}}) >= MAX_PER_PHONE_DAY:
+    if await db.otp_challenges.count_documents({**sent, "created_at": {"$gte": day}}) >= MAX_PER_PHONE_DAY:
         raise OtpError("phone_daily_limit", "Too many codes today. Try again tomorrow.", 429)
+    failed = {"phone": phone, "send_ok": False, "created_at": {"$gte": hour}}
+    if await db.otp_challenges.count_documents(failed) >= MAX_FAILED_PER_PHONE_HOUR:
+        raise OtpError("send_failed_limit", "We couldn't reach WhatsApp for this number. Try again in an hour.", 429)
     if ip and await db.otp_challenges.count_documents({"ip": ip, "created_at": {"$gte": hour}}) >= settings.otp.max_per_ip_hour:
         raise OtpError("ip_limit", "Too many requests from this network. Try again later.", 429)
     await _global_minute(db, now)
