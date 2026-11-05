@@ -15,12 +15,13 @@ import re
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import NotFound
 from core.flags import is_on
 from growth import events
 from growth.clock import utcnow
@@ -183,5 +184,5 @@ async def mine(user: dict = Depends(user_dep())):
 async def one(check_id: str, user: dict = Depends(user_dep())):
     d = await db().linkedin_checks.find_one({"_id": check_id, "user_id": str(user["_id"])})
     if not d:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Not found."})
+        raise NotFound("Not found.")
     return _public(d)

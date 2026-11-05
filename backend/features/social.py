@@ -17,13 +17,14 @@ import uuid
 from datetime import date, timedelta
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import InvalidInput, NotFound
 from growth import events
 from growth.clock import IST, utcnow
 from state import db
@@ -117,7 +118,7 @@ def _fake(k: dict, slots: list[dict]) -> dict:
         hook = {"story": f"The day {st['title'].lower() if st else '[a moment from your career]'} taught me something.",
                 "insight": f"Most owners in {niche} look at the wrong number first.",
                 "framework": "A 3-step check I use before any big decision.",
-                "myth_fact": f"Myth: more sales will fix the profit problem.",
+                "myth_fact": "Myth: more sales will fix the profit problem.",
                 "mini_case": f"A {niche} business, a stuck number, and 90 days."}[s["format"]]
         body = (f"{hook}\n\n" + (f"{st['situation']}\n\n{st['what_i_did']}\n\n{st['result']}\n\n" if st else
                                   "[Your example: the situation, what you did, what changed.]\n\n") +
@@ -161,7 +162,7 @@ async def generate(body: GenIn, user: dict = Depends(user_dep())):
     uid = str(user["_id"])
     await plans.require(d, user, FEATURE)
     today = _today()
-    bad_start = HTTPException(status_code=422, detail={"code": "start_date", "msg": "Pick a start date between today and the next four months."})
+    bad_start = InvalidInput("Pick a start date between today and the next four months.", code="start_date")
     try:
         start = date.fromisoformat(body.start_date) if body.start_date else today + timedelta(days=1)
     except ValueError:                              # e.g. 2026-02-30: the right shape but not a real date
@@ -210,7 +211,7 @@ async def listing(month: str = Query("", pattern=r"^(\d{4}-\d{2})?$"), user: dic
     m = month or _today().strftime("%Y-%m")
     y, mo = int(m[:4]), int(m[5:7])
     if not 1 <= mo <= 12 or not 2000 <= y <= 2100:
-        raise HTTPException(status_code=422, detail={"code": "month", "msg": "That month isn't valid. Pick one from the calendar."})
+        raise InvalidInput("That month isn't valid. Pick one from the calendar.", code="month")
     first = date(y, mo, 1)
     nxt = (first + timedelta(days=32)).replace(day=1)
     items = [public(p) async for p in d.social_posts.find(
@@ -234,7 +235,7 @@ async def patch(pid: str, body: PatchIn, user: dict = Depends(user_dep())):
     await plans.require(db(), user, FEATURE)
     p = await db().social_posts.find_one({"_id": pid, "user_id": str(user["_id"])})
     if not p:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Post not found."})
+        raise NotFound("Post not found.")
     s: dict = {"updated_at": utcnow()}
     if body.text is not None:
         s["text"] = _post_text(body.text)
@@ -243,7 +244,7 @@ async def patch(pid: str, body: PatchIn, user: dict = Depends(user_dep())):
         try:
             date.fromisoformat(body.date)
         except ValueError:
-            raise HTTPException(status_code=422, detail={"code": "date", "msg": "That date isn't valid."})
+            raise InvalidInput("That date isn't valid.", code="date")
         s["date"] = body.date
     if body.status is not None:
         s["status"] = body.status

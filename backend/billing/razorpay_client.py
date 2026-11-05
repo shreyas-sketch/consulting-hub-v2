@@ -21,12 +21,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import secrets
 import time
 from typing import Optional, Protocol
 
 import httpx
+
+from core.settings import settings
 
 API = "https://api.razorpay.com/v1"
 TOTAL_COUNT = {"monthly": 120, "yearly": 10}
@@ -37,9 +38,9 @@ class RazorpayError(Exception):
 
 
 def plan_id_for(plan: str, period: str = "monthly") -> Optional[str]:
-    return os.environ.get({("member", "monthly"): "RAZORPAY_PLAN_MEMBER_MONTHLY",
-                           ("member", "yearly"): "RAZORPAY_PLAN_MEMBER_YEARLY",
-                           ("l1", "monthly"): "RAZORPAY_PLAN_L1_MONTHLY"}.get((plan, period), "_"))
+    name = {("member", "monthly"): "RAZORPAY_PLAN_MEMBER_MONTHLY", ("member", "yearly"): "RAZORPAY_PLAN_MEMBER_YEARLY",
+            ("l1", "monthly"): "RAZORPAY_PLAN_L1_MONTHLY"}.get((plan, period))
+    return (settings.razorpay.plan_id(name) or None) if name else None
 
 
 def hmac_hex(secret: str, msg: bytes) -> str:
@@ -181,6 +182,6 @@ def build_client() -> Optional[Razorpay]:
     if mode == "fake":
         return FakeRazorpay()
     if mode == "live":
-        return LiveRazorpay(os.environ["RAZORPAY_KEY_ID"], os.environ["RAZORPAY_KEY_SECRET"],
-                            os.environ["RAZORPAY_WEBHOOK_SECRET"])
+        return LiveRazorpay(settings.razorpay.key_id, settings.razorpay.key_secret,
+                            settings.razorpay.webhook_secret)
     return None

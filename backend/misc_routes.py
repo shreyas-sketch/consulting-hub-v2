@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field
 
 import appsettings
 import plans
 from core.deps import user_dep
+from core.errors import NotFound
 from core.settings import settings
 from growth.clock import utcnow
 from state import db
@@ -52,8 +53,9 @@ class QaLoginIn(BaseModel):
 async def qa_login(body: QaLoginIn, response: Response):
     """QA_MODE only: log in as a demo member on any plan (default: free) or the demo admin."""
     if not settings.qa_mode or settings.is_production:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Not found"})
+        raise NotFound("Not found")
     from datetime import timedelta
+
     from accounts.phone import normalise_in_mobile
     from accounts.routes import create_member
     from auth import public_user, set_auth_cookies

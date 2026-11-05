@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -13,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
 
 import plans
+from core.settings import settings
 from growth.clock import IST, utcnow
 
 from . import site_looks
@@ -42,12 +42,11 @@ def app_host() -> str:
 
 
 def public_base() -> str:
-    from core.settings import settings
-    return (os.environ.get("PUBLIC_BASE_URL") or settings.public_base_url).rstrip("/")
+    return settings.app.public_base_url
 
 
 def sites_domain() -> str:
-    return (os.environ.get("SITES_DOMAIN") or "").strip().lower().lstrip("*").strip(".")
+    return settings.sites.domain
 
 
 def site_root(site: dict, plan: str) -> str:

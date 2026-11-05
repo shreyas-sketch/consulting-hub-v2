@@ -14,7 +14,7 @@ import re
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import indexes
@@ -23,6 +23,7 @@ import media
 import plans
 from audio import tts
 from core.deps import user_dep
+from core.errors import NotFound, ServiceUnavailable
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -129,13 +130,13 @@ async def listen(body: ListenIn, user: dict = Depends(user_dep())):
     if body.source == "case":
         c = await d.cases.find_one({"_id": body.id, "active": {"$ne": False}})
         if not c:
-            raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Case not found."})
+            raise NotFound("Case not found.")
         shared, title, sub = is_shared_case(c), c["title"], f"{c['company']} · {c['industry']}"
         prompt, fake = _case_prompt(c), (lambda: _case_fake(c))
     else:
         b = await d.briefs.find_one({"_id": body.id, "user_id": uid})
         if not b:
-            raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Brief not found."})
+            raise NotFound("Brief not found.")
         shared, title, sub = False, f"Brief: {b['input']['company']}", b["input"].get("meeting_with") or "Meeting Brief"
         prompt, fake = _brief_prompt(b), (lambda: _brief_fake(b))
 
@@ -162,14 +163,13 @@ async def listen(body: ListenIn, user: dict = Depends(user_dep())):
         try:
             data, ctype = await tts.speak(script)
         except tts.TTSError:
-            raise HTTPException(status_code=503, detail={
-                "code": "audio_busy", "msg": "Audio isn't working right now. Try again in a few minutes. This didn't use up your go."})
+            raise ServiceUnavailable("Audio isn't working right now. Try again in a few minutes. This didn't use up your go.", code="audio_busy")
         ext = "mp3" if "mpeg" in ctype else "wav"
         try:
             blob_id = await media.save_blob(d, user_id=uid, kind="listen", content_type=ctype, data=data,
                                             name=f"{text(title, 60)}.{ext}", public=shared)
         except media.TooLarge:
-            raise HTTPException(status_code=503, detail={"code": "audio_busy", "msg": "This audio came out too long. Try again."})
+            raise ServiceUnavailable("This audio came out too long. Try again.", code="audio_busy")
         row = {"_id": uuid.uuid4().hex, "user_id": uid, "source": body.source, "ref_id": body.id, "title": title,
                "sub": sub, "script": script, "words": len(script.split()), "blob_id": blob_id, "content_type": ctype,
                "shared": shared, "made_by_me": True, "at": utcnow()}

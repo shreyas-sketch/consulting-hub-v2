@@ -10,11 +10,10 @@ emojis, no newlines inside a variable (channels._one_line strips them).
 """
 from __future__ import annotations
 
-import os
-
+from core.settings import env_str, settings
 from notify.channels import campaign_for
 
-BRAND = lambda: os.environ.get("BRAND_NAME", "Consultation Hub")  # noqa: E731
+BRAND = lambda: settings.app.brand_name  # noqa: E731
 
 # kind → (template name, when it's sent, the fixed opening words, sample {{1}}, sample button path, category)
 ALERTS: list[tuple[str, str, str, str, str, str, str]] = [
@@ -57,9 +56,9 @@ def _body(opening: str) -> str:
 
 
 def catalogue(base_url: str = "") -> dict:
-    base = (base_url or os.environ.get("PUBLIC_BASE_URL") or "https://<your app address>").rstrip("/")
+    base = (base_url or env_str("PUBLIC_BASE_URL") or "https://<your app address>").rstrip("/")
     items = [{
-        "kind": "otp", "template": "hub_login_code", "campaign": os.environ.get("AISENSY_OTP_CAMPAIGN", "otp"),
+        "kind": "otp", "template": "hub_login_code", "campaign": settings.aisensy.otp_campaign,
         "category": "AUTHENTICATION", "language": "English (en)",
         "when": "Every login code sent on WhatsApp (needs Admin › Switches › WhatsApp OTP on).",
         "body": "Meta writes this one: \"{{1}} is your verification code.\" Tick \"Add security recommendation\" and "

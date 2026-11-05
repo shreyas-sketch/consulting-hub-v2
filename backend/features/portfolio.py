@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import Conflict, NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -211,7 +212,7 @@ def _public(d: dict) -> dict:
 async def _own(pid: str, uid: str) -> dict:
     d = await db().portfolio_projects.find_one({"_id": pid, "user_id": uid})
     if not d:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Project not found."})
+        raise NotFound("Project not found.")
     return d
 
 
@@ -264,7 +265,7 @@ async def answer(pid: str, body: AnswerIn, user: dict = Depends(user_dep())):
     await plans.require(db(), user, "portfolio")
     p = await _own(pid, uid)
     if p["status"] == "done":
-        raise HTTPException(status_code=409, detail={"code": "done", "msg": "This project is finished. Start a new one."})
+        raise Conflict("This project is finished. Start a new one.", code="done")
     ans = {k: v.strip() for k, v in body.model_dump().items()}
     await db().portfolio_projects.update_one({"_id": pid}, {"$set": {"answer": ans, "status": "answered",
                                                                      "answered_at": utcnow()}})
@@ -277,5 +278,5 @@ async def review(pid: str, user: dict = Depends(user_dep())):
     await plans.require(db(), user, "portfolio")
     p = await _own(pid, str(user["_id"]))
     if p["status"] != "answered" or not p.get("answer"):
-        raise HTTPException(status_code=409, detail={"code": "bad_status", "msg": "Write your approach first."})
+        raise Conflict("Write your approach first.", code="bad_status")
     return await _review(user, p)

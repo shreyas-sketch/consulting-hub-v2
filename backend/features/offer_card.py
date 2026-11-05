@@ -16,13 +16,14 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -181,7 +182,7 @@ def _public(d: dict) -> dict:
 async def _own(card_id: str, uid: str) -> dict:
     d = await db().offer_cards.find_one({"_id": card_id, "user_id": uid})
     if not d:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Offer Card not found."})
+        raise NotFound("Offer Card not found.")
     return d
 
 

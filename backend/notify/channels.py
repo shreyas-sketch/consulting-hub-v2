@@ -7,18 +7,19 @@ Campaign names can be overridden by env AISENSY_CAMPAIGN_<KIND>.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Optional
 
 import httpx
+
+from core.settings import settings
 
 log = logging.getLogger("notify.channels")
 AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2"
 
 
 def campaign_for(kind: str) -> str:
-    return os.environ.get(f"AISENSY_CAMPAIGN_{kind.upper()}", f"alert_{kind}")
+    return settings.aisensy.campaign(kind)
 
 
 @dataclass
@@ -46,7 +47,7 @@ class AiSensyWhatsApp:
         payload = {
             "apiKey": self.api_key, "campaignName": campaign_for(row["kind"]),
             "destination": phone.lstrip("+"),
-            "userName": (user.get("name") or os.environ.get("BRAND_NAME", "Consultation Hub") + " user")[:60],
+            "userName": (user.get("name") or settings.app.brand_name + " user")[:60],
             "source": f"alert-{row['kind']}",
             "templateParams": [_one_line(f"{row['title']} — {row['body']}")],
             "buttons": [{"type": "button", "sub_type": "url", "index": 0,
@@ -85,5 +86,5 @@ def build_whatsapp():
     if mode == "fake":
         return FakeChannel()
     if mode == "live":
-        return AiSensyWhatsApp(os.environ["AISENSY_API_KEY"])
+        return AiSensyWhatsApp(settings.aisensy.api_key)
     return None

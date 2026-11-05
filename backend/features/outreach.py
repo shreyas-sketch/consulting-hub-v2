@@ -12,13 +12,14 @@ from __future__ import annotations
 import uuid
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import InvalidInput, NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -74,7 +75,7 @@ def _fake(c: dict, channel: str, goal: str, me: str, k: dict) -> dict:
     rel = c.get("relationship") or "[how you know each other]"
     niche = k.get("niche") or "[your niche]"
     ask = {"reconnect": "Would love to hear what you're working on these days.",
-           "intro": f"Is there someone in your circle dealing with this I could speak to? Happy to return the favour.",
+           "intro": "Is there someone in your circle dealing with this I could speak to? Happy to return the favour.",
            "diagnostic_call": "If it's useful, I'm happy to do a free 20-minute call to look at one problem with you. No pitch."}[goal]
     subj = lambda s: s if channel == "email" else ""  # noqa: E731
     return {"variants": [
@@ -124,14 +125,14 @@ async def draft(body: DraftIn, user: dict = Depends(user_dep())):
     if body.contact_id:
         n = await d.contacts.find_one({"_id": body.contact_id, "user_id": uid})
         if not n:
-            raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "That contact is no longer in your list."})
+            raise NotFound("That contact is no longer in your list.")
         c["name"] = c["name"] or n.get("name", "")
         c["role"] = c["role"] or n.get("position", "")
         c["company"] = c["company"] or n.get("company", "")
         extra = " ".join(x for x in [n.get("notes"), f"Suggested angle: {n['angle']}" if n.get("angle") else ""] if x)
         c["context"] = " ".join(x for x in [c["context"], extra] if x)[:1000]
     if len(c["name"]) < 2:
-        raise HTTPException(status_code=422, detail={"code": "name", "msg": "Type the person's name."})
+        raise InvalidInput("Type the person's name.", code="name")
 
     async def work(plan: str):
         k = await knowledge(d, user)
@@ -179,7 +180,7 @@ async def _own(oid: str, user: dict) -> dict:
     await plans.require(db(), user, FEATURE)
     o = await db().outreach.find_one({"_id": oid, "user_id": str(user["_id"])})
     if not o:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Draft not found."})
+        raise NotFound("Draft not found.")
     return o
 
 

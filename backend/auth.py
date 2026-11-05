@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -18,6 +17,9 @@ import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+
+from core.errors import Forbidden, TooManyRequests, Unauthorized
+from core.settings import settings
 
 log = logging.getLogger("auth")
 
@@ -29,7 +31,10 @@ LOCKOUT_WINDOW_MIN = 15
 
 
 def _jwt_secret() -> str:
-    return os.environ["JWT_SECRET"]
+    secret = settings.auth.jwt_secret
+    if not secret:
+        raise RuntimeError("JWT_SECRET is not set")
+    return secret
 
 
 def _now() -> datetime:
@@ -58,7 +63,6 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def _cookie_kwargs() -> dict:
-    from core.settings import settings
     kw = dict(httponly=True, secure=settings.cookie_secure, samesite=settings.cookie_samesite, path="/")
     if settings.cookie_domain:
         kw["domain"] = settings.cookie_domain
@@ -91,36 +95,28 @@ def public_user(doc: dict) -> dict:
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-_db_ref = {"db": None}
-
-
-def bind_db(db) -> None:
-    _db_ref["db"] = db
-
-
 def _db():
-    if _db_ref["db"] is None:
-        raise RuntimeError("Auth module not bound to a database")
-    return _db_ref["db"]
+    import state
+    return state.db()
 
 
 async def _user_from_token(token: str, kind: str = "access") -> dict:
     try:
         payload = jwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail={"code": "expired", "msg": "Session expired. Log in again."})
+        raise Unauthorized("Session expired. Log in again.", code="expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail={"code": "invalid_token", "msg": "Log in again."})
+        raise Unauthorized("Log in again.", code="invalid_token")
     if payload.get("type") != kind:
-        raise HTTPException(status_code=401, detail={"code": "invalid_token", "msg": "Log in again."})
+        raise Unauthorized("Log in again.", code="invalid_token")
     try:
         user = await _db().users.find_one({"_id": ObjectId(payload["sub"])})
     except Exception:  # noqa: BLE001
         user = None
     if not user:
-        raise HTTPException(status_code=401, detail={"code": "no_user", "msg": "Log in again."})
+        raise Unauthorized("Log in again.", code="no_user")
     if (user.get("status") or "active") == "revoked":
-        raise HTTPException(status_code=403, detail={"code": "revoked", "msg": "This account is disabled."})
+        raise Forbidden("This account is disabled.", code="revoked")
     return user
 
 
@@ -131,7 +127,7 @@ async def get_current_user(request: Request) -> dict:
         if h.startswith("Bearer "):
             token = h[7:]
     if not token:
-        raise HTTPException(status_code=401, detail={"code": "not_logged_in", "msg": "Log in to continue."})
+        raise Unauthorized("Log in to continue.")
     return await _user_from_token(token)
 
 
@@ -144,7 +140,7 @@ async def optional_user(request: Request) -> Optional[dict]:
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if (user.get("role") or "user") != "admin":
-        raise HTTPException(status_code=403, detail={"code": "admin_only", "msg": "Admin only."})
+        raise Forbidden("Admin only.", code="admin_only")
     return user
 
 
@@ -169,7 +165,7 @@ async def logout(response: Response):
 async def refresh(request: Request, response: Response):
     token = request.cookies.get("refresh_token")
     if not token:
-        raise HTTPException(status_code=401, detail={"code": "not_logged_in", "msg": "Log in to continue."})
+        raise Unauthorized("Log in to continue.")
     user = await _user_from_token(token, "refresh")
     set_auth_cookies(response, str(user["_id"]), user.get("role") or "user")
     return {"ok": True}
@@ -206,14 +202,14 @@ async def _count_attempt(identifier: str) -> bool:
 async def staff_login(body: StaffLoginIn, response: Response):
     email = body.email.strip().lower()
     if not await _count_attempt(email):
-        raise HTTPException(status_code=429, detail={"code": "locked_out", "msg": "Too many tries. Wait 15 minutes."})
+        raise TooManyRequests("Too many tries. Wait 15 minutes.", code="locked_out")
     user = await _db().users.find_one({"email": email, "password_hash": {"$exists": True}})
     # bcrypt takes ~0.2 s of CPU: run it in a thread so other requests aren't held up.
     ok = bool(user) and await asyncio.to_thread(verify_password, body.password, user["password_hash"])
     if not ok:
-        raise HTTPException(status_code=401, detail={"code": "bad_login", "msg": "Wrong email or password."})
+        raise Unauthorized("Wrong email or password.", code="bad_login")
     if (user.get("status") or "active") == "revoked":
-        raise HTTPException(status_code=403, detail={"code": "revoked", "msg": "This account is disabled."})
+        raise Forbidden("This account is disabled.", code="revoked")
     await _db().login_attempts.delete_one({"_id": email})
     await _db().users.update_one({"_id": user["_id"]}, {"$set": {"last_login_at": _now()}})
     set_auth_cookies(response, str(user["_id"]), user.get("role") or "user")
@@ -223,8 +219,8 @@ async def staff_login(body: StaffLoginIn, response: Response):
 
 
 async def seed_admin(db) -> None:
-    email = (os.environ.get("ADMIN_EMAIL") or "").strip().lower()
-    password = os.environ.get("ADMIN_PASSWORD") or ""
+    email = settings.auth.admin_email
+    password = settings.auth.admin_password
     if not email or not password:
         return
     existing = await db.users.find_one({"email": email})

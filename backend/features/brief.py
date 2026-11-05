@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import llm
 from core.deps import user_dep
+from core.errors import NotFound
 from core.flags import is_on
 from growth import events
 from growth.clock import utcnow
@@ -22,7 +23,15 @@ from research import search
 from state import db
 from util import iso
 
-from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text, text_list
+from .common import (
+    NO_VENDOR,
+    as_dict,
+    as_list,
+    run_metered,
+    strip_providers,
+    text,
+    text_list,
+)
 from .knowledge import links_in, no_links
 
 router = APIRouter(prefix="/briefs", tags=["meeting-brief"])
@@ -128,5 +137,5 @@ async def mine(user: dict = Depends(user_dep())):
 async def one(brief_id: str, user: dict = Depends(user_dep())):
     b = await db().briefs.find_one({"_id": brief_id, "user_id": str(user["_id"])})
     if not b:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Brief not found."})
+        raise NotFound("Brief not found.")
     return _public(b)

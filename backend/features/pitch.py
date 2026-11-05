@@ -52,6 +52,17 @@ import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import (
+    Conflict,
+    InvalidInput,
+    NotFound,
+    PayloadTooLarge,
+    ServiceUnavailable,
+    TooManyRequests,
+    UnsupportedMedia,
+    error,
+)
+from core.settings import settings
 from growth import events
 from growth.clock import as_utc, ist_month_key, utcnow
 from state import db
@@ -349,7 +360,7 @@ def _card(t: dict, m: dict) -> dict:
 async def _own(tid: str, uid: str) -> dict:
     t = await db().pitch_threads.find_one({"_id": tid, "user_id": uid})
     if not t:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Practice not found."})
+        raise NotFound("Practice not found.")
     return t
 
 
@@ -375,7 +386,7 @@ def _fair_use(what: str) -> HTTPException:
     msg = {"practices": f"You've started {MONTHLY_PRACTICES} practices this month. Keep going in one you already have. "
                         "New practices open again on the 1st.",
            "chats": f"You've asked your coach {MONTHLY_CHAT} questions this month. Questions open again on the 1st."}[what]
-    return HTTPException(status_code=429, detail={"code": "fair_use", "msg": msg})
+    return TooManyRequests(msg, code="fair_use")
 
 
 @router.post("")
@@ -384,7 +395,7 @@ async def start(body: ThreadIn, user: dict = Depends(user_dep())):
     await plans.require(db(), user, "pitch")
     setting, audience = text(body.setting, 300), text(body.audience, 300)
     if body.pitch_type == "other" and not setting:
-        raise HTTPException(status_code=422, detail={"code": "no_setting", "msg": "Tell us where you'll use this pitch."})
+        raise InvalidInput("Tell us where you'll use this pitch.", code="no_setting")
     if not await _use(uid, "practices", MONTHLY_PRACTICES):
         raise _fair_use("practices")
     label = TYPES[body.pitch_type]["label"]
@@ -412,7 +423,7 @@ async def one(tid: str, user: dict = Depends(user_dep())):
 async def remove(tid: str, user: dict = Depends(user_dep())):
     res = await db().pitch_threads.delete_one({"_id": tid, "user_id": str(user["_id"])})
     if not res.deleted_count:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Practice not found."})
+        raise NotFound("Practice not found.")
     return {"ok": True}
 
 
@@ -423,7 +434,7 @@ def _ext(content_type: str, filename: str) -> str:
     if ext not in VIDEO_TYPES:
         ext = CT_EXT.get((content_type or "").split(";")[0].strip().lower(), "")
     if ext not in VIDEO_TYPES:
-        raise HTTPException(status_code=415, detail={"code": "bad_type", "msg": "Use a video file: MP4, MOV, WEBM or MKV."})
+        raise UnsupportedMedia("Use a video file: MP4, MOV, WEBM or MKV.")
     return ext
 
 
@@ -479,7 +490,7 @@ def mp4_duration(path: str) -> Optional[float]:
 
 
 def tmp_dir() -> str:
-    d = os.environ.get("PITCH_TMP_DIR") or tempfile.gettempdir()
+    d = settings.pitch.tmp_dir or tempfile.gettempdir()
     os.makedirs(d, exist_ok=True)
     return d
 
@@ -494,7 +505,7 @@ async def _receive(request: Request, ext: str) -> tuple[str, int]:
             async for chunk in request.stream():
                 size += len(chunk)
                 if size > MAX_BYTES:
-                    raise HTTPException(status_code=413, detail={"code": "too_large", "msg": "That video is larger than 100 MB."})
+                    raise PayloadTooLarge("That video is larger than 100 MB.")
                 buf += chunk
                 if len(buf) >= CHUNK:
                     f.write(buf)
@@ -523,7 +534,7 @@ def _sem() -> asyncio.Semaphore:
     loop = id(asyncio.get_running_loop())
     if loop not in _SEMS:
         _SEMS.clear()
-        _SEMS[loop] = asyncio.Semaphore(int(os.environ.get("PITCH_MAX_CONCURRENCY", "4") or 4))
+        _SEMS[loop] = asyncio.Semaphore(settings.pitch.max_concurrency)
     return _SEMS[loop]
 
 
@@ -700,9 +711,7 @@ def _check_cooldown(last) -> None:
     cd = _cooldown(last)
     if not cd["can_upload"]:
         mins = max(1, -(-cd["cooldown_seconds_remaining"] // 60))
-        raise HTTPException(status_code=429, detail={
-            "code": "cooldown", "seconds": cd["cooldown_seconds_remaining"], "next_upload_at": cd["next_upload_at"],
-            "msg": f"Give the feedback time to land. You can upload your next take in {mins} min."})
+        raise TooManyRequests(f"Give the feedback time to land. You can upload your next take in {mins} min.", code="cooldown", seconds=cd["cooldown_seconds_remaining"], next_upload_at=cd["next_upload_at"])
 
 
 TOO_LONG = {"code": "too_long", "msg": "Keep your video under 8 minutes."}
@@ -731,24 +740,24 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
     await _own(tid, uid)
     _check_cooldown(await _last_upload(uid))
     if pitch_video.mode() == "off":
-        raise HTTPException(status_code=503, detail={"code": "paused", "msg": "Pitch Practice is paused right now. Try again later."})
+        raise ServiceUnavailable("Pitch Practice is paused right now. Try again later.", code="paused")
     ext = _ext(request.headers.get("content-type", ""), filename)
     try:
         declared = int(request.headers.get("content-length") or 0)
     except ValueError:
         declared = 0
     if declared > MAX_BYTES:
-        raise HTTPException(status_code=413, detail={"code": "too_large", "msg": "That video is larger than 100 MB."})
+        raise PayloadTooLarge("That video is larger than 100 MB.")
     if duration_s is not None and duration_s > MAX_SECONDS + 2:
-        raise HTTPException(status_code=413, detail=TOO_LONG)
+        raise error(413, **TOO_LONG)
     if duration_s is None and ext in ("webm", "mkv"):          # we don't read a length from these containers
-        raise HTTPException(status_code=422, detail=NO_LENGTH)
+        raise error(422, **NO_LENGTH)
     now = utcnow()
     got = await db().pitch_threads.update_one(
         {"_id": tid, "user_id": uid, "$or": [{"busy_until": None}, {"busy_until": {"$lt": now}}]},
         {"$set": {"busy_until": now + timedelta(minutes=15)}})
     if not got.matched_count:
-        raise HTTPException(status_code=409, detail={"code": "busy", "msg": "A take is already being analysed. Wait for it to finish."})
+        raise Conflict("A take is already being analysed. Wait for it to finish.", code="busy")
     member_locked = False
 
     async def unlock() -> None:
@@ -758,8 +767,7 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
     try:
         member_locked = await _lock_member(uid, now)
         if not member_locked:
-            raise HTTPException(status_code=409, detail={
-                "code": "busy", "msg": "Your last take is still being analysed. Wait for it to finish."})
+            raise Conflict("Your last take is still being analysed. Wait for it to finish.", code="busy")
         t = await _own(tid, uid)          # read again under the locks: a take may have finished in between
         _check_cooldown(await _last_upload(uid))
     except HTTPException:
@@ -772,17 +780,17 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
         nonlocal path
         path, size = await _receive(request, ext)
         if size < 1024:
-            raise HTTPException(status_code=422, detail={"code": "empty", "msg": "That video is empty. Record it again."})
+            raise InvalidInput("That video is empty. Record it again.", code="empty")
         with open(path, "rb") as f:
             head = f.read(64)
         if not sniff(head, ext):
-            raise HTTPException(status_code=415, detail={"code": "bad_type", "msg": "That file doesn't look like a video. Use MP4, MOV, WEBM or MKV."})
+            raise UnsupportedMedia("That file doesn't look like a video. Use MP4, MOV, WEBM or MKV.")
         secs = mp4_duration(path) if ext in ("mp4", "m4v", "mov") else None
         if secs is not None and secs > MAX_SECONDS + 2:
-            raise HTTPException(status_code=413, detail=TOO_LONG)
+            raise error(413, **TOO_LONG)
         length = secs if secs is not None else duration_s
         if length is None:
-            raise HTTPException(status_code=422, detail=NO_LENGTH)
+            raise error(422, **NO_LENGTH)
         takes = t.get("takes") or []
         prior = takes[-1]["report"] if takes else None
         k = await knowledge(db(), user)
@@ -790,7 +798,7 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
         try:
             await asyncio.wait_for(sem.acquire(), timeout=60)
         except (asyncio.TimeoutError, TimeoutError):
-            raise HTTPException(status_code=503, detail={"code": "busy", "msg": "Many people are practising right now. Try again in a few minutes. This didn't use up your go."})
+            raise ServiceUnavailable("Many people are practising right now. Try again in a few minutes. This didn't use up your go.")
         info: dict = {}
         try:
             raw = await pitch_video.analyse(
@@ -799,14 +807,13 @@ async def take(tid: str, request: Request, duration_s: Optional[float] = Query(N
                 max_seconds=MAX_SECONDS + 2, info=info)
         except pitch_video.TooLong as e:
             log.info("pitch take refused by the engine's length: %.1f s", e.seconds)
-            raise HTTPException(status_code=413, detail=TOO_LONG)
+            raise error(413, **TOO_LONG)
         except pitch_video.BadOutput as e:
             raise llm.LLMError(str(e))
         except pitch_video.VideoError as e:
             log.warning("pitch video failed: %s", e)
-            raise HTTPException(status_code=503, detail={
-                "code": "video_busy", "msg": "The analysis is taking longer than expected. Try again in a moment. "
-                                             "This didn't use up your go."})
+            raise ServiceUnavailable("The analysis is taking longer than expected. Try again in a moment. "
+                                             "This didn't use up your go.", code="video_busy")
         finally:
             sem.release()
             _drop(path)                 # the video is gone from our side before we even save the report
@@ -867,10 +874,10 @@ async def chat(tid: str, body: ChatIn, user: dict = Depends(user_dep())):
     await plans.require(db(), user, "pitch")
     t = await _own(tid, uid)
     if sum(1 for m in t.get("messages") or [] if m["role"] == "user") >= MAX_CHAT:
-        raise HTTPException(status_code=429, detail={"code": "chat_full", "msg": "This practice has a lot of chat already. Start a new practice to keep going."})
+        raise TooManyRequests("This practice has a lot of chat already. Start a new practice to keep going.", code="chat_full")
     msg = body.message.strip()
     if not msg:
-        raise HTTPException(status_code=422, detail={"code": "empty", "msg": "Type your question."})
+        raise InvalidInput("Type your question.", code="empty")
     if not await _use(uid, "chats", MONTHLY_CHAT):
         raise _fair_use("chats")
     try:

@@ -22,7 +22,7 @@ from pptx.util import Emu, Pt
 from reportlab.lib.colors import HexColor
 from reportlab.pdfgen import canvas as rl_canvas
 
-from .deck_layout import FONTS, H, PPTX_BOLD, W
+from .deck_layout import FONTS, PPTX_BOLD, H, W
 
 PPTX_FONT = "Manrope"
 EMU_PER_PT = 12700

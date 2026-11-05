@@ -34,6 +34,13 @@ import llm
 import plans
 from accounts.routes import client_ip
 from core.deps import user_dep
+from core.errors import (
+    BadRequest,
+    InvalidInput,
+    NotFound,
+    PayloadTooLarge,
+    TooManyRequests,
+)
 from core.settings import settings
 from growth import events
 from growth.clock import ist_month_bounds, utcnow
@@ -41,7 +48,15 @@ from notify import service as notify
 from state import db
 from util import iso, oid
 
-from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text, text_list
+from .common import (
+    NO_VENDOR,
+    as_dict,
+    as_list,
+    run_metered,
+    strip_providers,
+    text,
+    text_list,
+)
 from .knowledge import knowledge, no_links, offer_block, own_links, system_block
 
 router = APIRouter(prefix="/diagnostic", tags=["client-diagnostic"])
@@ -245,7 +260,7 @@ async def _own(did: str, user: dict) -> dict:
     await plans.require(db(), user, FEATURE)
     x = await db().diagnostics.find_one({"_id": did, "user_id": str(user["_id"])})
     if not x:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Diagnostic not found."})
+        raise NotFound("Diagnostic not found.")
     return x
 
 
@@ -280,10 +295,10 @@ async def edit(did: str, body: EditIn, user: dict = Depends(user_dep())):
     try:
         qs = clean_questions(body.questions, lo=4, hi=15)
     except ValueError:
-        raise HTTPException(status_code=422, detail={"code": "questions", "msg": "Keep at least 4 questions, with at least 3 on a 1-5 scale."})
+        raise InvalidInput("Keep at least 4 questions, with at least 3 on a 1-5 scale.", code="questions")
     link = body.cta_link.strip()
     if link and not re.match(r"^https://[^\s]+\.[^\s]+$", link):
-        raise HTTPException(status_code=422, detail={"code": "cta_link", "msg": "The booking link must start with https://"})
+        raise InvalidInput("The booking link must start with https://", code="cta_link")
     s = {"title": text(body.title, 80), "intro": text(body.intro, 400), "questions": qs,
          "bands": clean_bands(body.bands) if body.bands else x["bands"],
          "brand": {"name": text(body.brand_name, 80), "title": text(body.brand_title, 120)},
@@ -332,7 +347,7 @@ async def one_response(did: str, rid: str, user: dict = Depends(user_dep())):
     await _own(did, user)
     r = await db().diagnostic_responses.find_one({"_id": rid, "diagnostic_id": did})
     if not r:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Response not found."})
+        raise NotFound("Response not found.")
     return response_full(r)
 
 
@@ -346,7 +361,7 @@ async def _rate_limit(request: Request, kind: str, per_hour: int) -> None:
     ip, now = _ip_hash(request), utcnow()
     n = await d.diagnostic_hits.count_documents({"ip": ip, "kind": kind, "at": {"$gt": now - timedelta(hours=1)}})
     if n >= per_hour:
-        raise HTTPException(status_code=429, detail={"code": "too_many", "msg": "Too many tries from this network. Please try again in an hour."})
+        raise TooManyRequests("Too many tries from this network. Please try again in an hour.")
     await d.diagnostic_hits.insert_one({"_id": uuid.uuid4().hex, "ip": ip, "kind": kind, "at": now,
                                         "purge_at": now + timedelta(hours=2)})
 
@@ -354,7 +369,7 @@ async def _rate_limit(request: Request, kind: str, per_hour: int) -> None:
 async def _live(pid: str) -> dict:
     d = db()
     x = await d.diagnostics.find_one({"public_id": pid}) if re.fullmatch(r"[A-Za-z0-9]{6,16}", pid or "") else None
-    closed = HTTPException(status_code=404, detail={"code": "closed", "msg": "This diagnostic isn't open right now."})
+    closed = NotFound("This diagnostic isn't open right now.", code="closed")
     if not x or x.get("status") != "published":
         raise closed
     owner = await d.users.find_one({"_id": oid(x["user_id"])}) if oid(x["user_id"]) else None
@@ -364,7 +379,7 @@ async def _live(pid: str) -> dict:
 
 
 def _too_large() -> HTTPException:
-    return HTTPException(status_code=413, detail={"code": "too_large", "msg": "That's too much text. Keep each answer to a line or two and try again."})
+    return PayloadTooLarge("That's too much text. Keep each answer to a line or two and try again.")
 
 
 def _check_length(request: Request) -> None:
@@ -374,7 +389,7 @@ def _check_length(request: Request) -> None:
         try:
             n = int(cl)
         except ValueError:
-            raise HTTPException(status_code=400, detail={"code": "bad_request", "msg": "Please try again."})
+            raise BadRequest("Please try again.")
         if n > MAX_BODY:
             raise _too_large()
 
@@ -423,7 +438,7 @@ def _contact(body: AnswerIn) -> tuple[str, str]:
     email = (body.email or "").strip().lower()
     email = email if re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", email) else ""
     if not phone and not email:
-        raise HTTPException(status_code=422, detail={"code": "contact", "msg": "Add your phone number or email so the consultant can send your result."})
+        raise InvalidInput("Add your phone number or email so the consultant can send your result.", code="contact")
     return phone, email
 
 
@@ -492,7 +507,7 @@ async def answer(pid: str, request: Request):
             except (TypeError, ValueError):
                 iv = 0
             if not 1 <= iv <= 5:
-                raise HTTPException(status_code=422, detail={"code": "answers", "msg": "Please answer every 1-5 question."})
+                raise InvalidInput("Please answer every 1-5 question.", code="answers")
             answers[q["id"]] = iv
         else:
             answers[q["id"]] = " ".join(str(v or "").split())[:500]

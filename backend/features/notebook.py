@@ -38,8 +38,25 @@ from util import iso
 
 from . import kb
 from .common import as_list, run_metered, strip_providers, text, text_list
-from .docs import (MAX_WORDS, NO_PROVIDER, NOT_COVERED, bad, cited_answer, claim_slot, clean_text, first_sentence,
-                   make_chunks, not_found, read_upload, retrieve, sentences, spread, strip_markdown, tidy, _nums)
+from .docs import (
+    MAX_WORDS,
+    NO_PROVIDER,
+    NOT_COVERED,
+    _nums,
+    bad,
+    cited_answer,
+    claim_slot,
+    clean_text,
+    first_sentence,
+    make_chunks,
+    not_found,
+    read_upload,
+    retrieve,
+    sentences,
+    spread,
+    strip_markdown,
+    tidy,
+)
 
 router = APIRouter(prefix="/notebook", tags=["research-notebook"])
 

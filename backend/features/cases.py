@@ -13,20 +13,29 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import appsettings
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
 from util import iso
 
 from .case_bank import CASES, CRITERIA, model_answer_text
-from .common import NO_VENDOR, as_dict, clamp_int, run_metered, strip_providers, text, text_list
+from .common import (
+    NO_VENDOR,
+    as_dict,
+    clamp_int,
+    run_metered,
+    strip_providers,
+    text,
+    text_list,
+)
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 WEBINAR_QUEUE_WAIT = 45          # seconds a scoring call may wait for an AI slot when the whole webinar answers at once
@@ -103,7 +112,7 @@ async def one(case_id: str, user: dict = Depends(user_dep())):
     d = db()
     c = await get_case(d, case_id)
     if not c:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Case not found."})
+        raise NotFound("Case not found.")
     plan = (await plans.effective_plan(d, user))["plan"]
     live_id = (await appsettings.get(d))["live_case_id"]
     mine = [_answer(a) async for a in d.case_answers.find({"user_id": str(user["_id"]), "case_id": case_id}).sort("at", -1)]
@@ -154,7 +163,7 @@ async def answer(case_id: str, body: AnswerIn, user: dict = Depends(user_dep()))
     d = db()
     c = await get_case(d, case_id)
     if not c:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Case not found."})
+        raise NotFound("Case not found.")
     uid = str(user["_id"])
     live_id = (await appsettings.get(d))["live_case_id"]
     if (await plans.effective_plan(d, user))["plan"] == "free" and case_id != live_id:

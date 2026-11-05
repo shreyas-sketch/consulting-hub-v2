@@ -15,13 +15,14 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 import indexes
 import plans
 from core.deps import admin_dep, user_dep
+from core.errors import AppError, error
 from core.settings import settings
 from growth.clock import IST, as_utc, utcnow
 from jobs import registry
@@ -44,8 +45,8 @@ registry.register("call_reminders", "Remind members of group calls and events (2
                   "features.calls:job_reminders")
 
 
-def _err(status: int, code: str, msg: str) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code, "msg": msg})
+def _err(status: int, code: str, msg: str) -> AppError:
+    return error(status, code, msg)
 
 
 def parse_when(v: str) -> datetime:

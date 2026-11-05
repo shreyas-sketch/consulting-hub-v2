@@ -33,6 +33,7 @@ from typing import Any, AsyncIterator, Callable, Optional
 
 import httpx
 
+from core.settings import settings
 from core.vendors import vendor_mode
 
 log = logging.getLogger("pitch_video")
@@ -81,7 +82,7 @@ def mode() -> str:
 
 
 def model_name() -> str:
-    return (os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL).strip()
+    return (settings.gemini.video_model or DEFAULT_MODEL)
 
 
 async def _chunks(path: str) -> AsyncIterator[bytes]:
@@ -189,8 +190,8 @@ async def analyse(path: str, *, mime: str, system: str, prompt: str, fake: Calla
         return fake()
     if m == "off":
         raise VideoError("video analysis is not configured")
-    key = os.environ["GEMINI_API_KEY"]
-    max_wait = float(os.environ.get("GEMINI_POLL_MAX_S", "300") or 300)
+    key = settings.gemini.api_key
+    max_wait = settings.gemini.poll_max_s
     c = client or httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=20.0))
     name = None
     try:

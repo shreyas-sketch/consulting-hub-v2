@@ -13,7 +13,7 @@ QA_MODE=true makes every unset vendor fake, so the whole app runs locally.
 """
 from __future__ import annotations
 
-import os
+from core.settings import env_str, settings
 
 REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
     "razorpay": ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"),
@@ -34,20 +34,20 @@ class VendorModeError(RuntimeError):
 
 
 def vendor_mode(name: str) -> str:
-    explicit = (os.environ.get(f"{name.upper()}_MODE") or "").strip().lower()
-    prod = (os.environ.get("APP_ENV") or "").lower() == "production"
+    explicit = env_str(f"{name.upper()}_MODE").lower()
+    prod = settings.app.is_production
     if explicit:
         if explicit not in ("live", "fake", "off"):
             raise VendorModeError(f"{name.upper()}_MODE must be live|fake|off")
         if explicit == "fake" and prod:
             raise VendorModeError(f"{name.upper()}_MODE=fake is not allowed in production")
         return explicit
-    if (os.environ.get("QA_MODE") or "").lower() in ("1", "true", "yes") and not prod:
+    if settings.app.qa_mode and not prod:
         return "fake"
     if name in KEYLESS:
         return "live"
     keys = REQUIRED_KEYS.get(name, ())
-    return "live" if keys and all(os.environ.get(k) for k in keys) else "off"
+    return "live" if keys and all(env_str(k) for k in keys) else "off"
 
 
 def status() -> dict[str, str]:

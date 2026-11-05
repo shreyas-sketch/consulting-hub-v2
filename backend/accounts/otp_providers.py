@@ -13,11 +13,12 @@ A new provider is one class with `channel`, `name` and `async send()`.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
 import httpx
+
+from core.settings import settings
 
 log = logging.getLogger("accounts.otp_providers")
 
@@ -52,7 +53,7 @@ class AiSensyWhatsApp:
             "apiKey": self.api_key,
             "campaignName": self.campaign,
             "destination": phone_e164.lstrip("+"),
-            "userName": os.environ.get("BRAND_NAME", "Consultation Hub") + " user",
+            "userName": settings.app.brand_name + " user",
             "source": "otp",
             "templateParams": [code],
             # Authentication templates carry the code again on the Copy-code button.
@@ -122,19 +123,18 @@ def build_senders() -> Senders:
     """Reads env. WhatsApp is used only when the WHATSAPP_OTP flag is on (Admin › Features,
     or OTP_WHATSAPP_ENABLED=true) and AISENSY_API_KEY is set; otherwise SMS (MSG91).
     QA_MODE uses the console sender."""
-    from core.settings import settings
-    mode = os.environ.get("OTP_PROVIDER_MODE", "console" if settings.qa_mode else "live").lower()
+    mode = settings.otp.provider_mode
     if mode == "console":
         if settings.is_production:
             raise RuntimeError("OTP_PROVIDER_MODE=console is not allowed in production")
         return Senders(whatsapp=ConsoleSender("whatsapp"), sms=ConsoleSender("sms"))
     wa = None
     from core.flags import is_on
-    if is_on("WHATSAPP_OTP") and os.environ.get("AISENSY_API_KEY"):
-        wa = AiSensyWhatsApp(os.environ["AISENSY_API_KEY"], os.environ.get("AISENSY_OTP_CAMPAIGN", "otp"))
+    if is_on("WHATSAPP_OTP") and settings.aisensy.api_key:
+        wa = AiSensyWhatsApp(settings.aisensy.api_key, settings.aisensy.otp_campaign)
     sms = None
-    if os.environ.get("MSG91_AUTH_KEY") and os.environ.get("MSG91_OTP_TEMPLATE_ID"):
-        sms = Msg91Sms(os.environ["MSG91_AUTH_KEY"], os.environ["MSG91_OTP_TEMPLATE_ID"])
+    if settings.msg91.auth_key and settings.msg91.otp_template_id:
+        sms = Msg91Sms(settings.msg91.auth_key, settings.msg91.otp_template_id)
     if wa is None and sms is None:
         log.error("No OTP provider configured (MSG91_* / AISENSY_*). Logins will fail.")
     return Senders(whatsapp=wa, sms=sms)

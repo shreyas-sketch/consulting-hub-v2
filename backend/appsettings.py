@@ -10,6 +10,8 @@ from __future__ import annotations
 import time
 from copy import deepcopy
 
+from core.errors import BadRequest
+
 DEFAULTS: dict = {
     "live_case_id": "retail-chain-margins",
     "group_session": {"title": "Group session with Akshat", "when": "", "link": ""},
@@ -33,8 +35,7 @@ async def get(db) -> dict:
 
 
 def _bad(field: str, msg: str):
-    from fastapi import HTTPException
-    return HTTPException(status_code=400, detail={"code": "bad_setting", "field": field, "msg": msg})
+    return BadRequest(msg, code="bad_setting", field=field)
 
 
 def _text(v, n: int) -> str:

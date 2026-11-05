@@ -16,9 +16,10 @@ import logging
 import re
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 
+from core.errors import BadRequest, Conflict, Forbidden
 from core.settings import settings
 from growth import events
 from growth.clock import utcnow
@@ -30,17 +31,18 @@ from .phone import InvalidPhone, mask, normalise_in_mobile
 log = logging.getLogger("accounts.routes")
 router = APIRouter(prefix="/auth", tags=["auth-otp"])
 
-_state: dict = {"db": None, "senders": None, "fixed": False, "wa": None}
+_state: dict = {"senders": None, "fixed": False, "wa": None}
 
 
-def bind(db, senders: Optional[Senders] = None) -> None:
-    _state["db"] = db
+def use_senders(senders: Optional[Senders] = None) -> None:
+    """Pin the OTP senders (tests, QA server). None = build them from settings and the WhatsApp switch."""
     _state["senders"] = senders
     _state["fixed"] = senders is not None
 
 
 def _db():
-    return _state["db"]
+    import state
+    return state.db()
 
 
 def _senders() -> Senders:
@@ -119,8 +121,7 @@ def classify_source(utm: dict) -> str:
 
 
 def admin_phones() -> set[str]:
-    import os
-    return {p.strip() for p in (os.environ.get("ADMIN_PHONES") or "").split(",") if p.strip()}
+    return settings.auth.admin_phones
 
 
 @router.post("/otp/request")
@@ -128,15 +129,12 @@ async def otp_request(body: OtpRequestIn, request: Request, response: Response):
     try:
         phone = normalise_in_mobile(body.phone)
     except InvalidPhone as e:
-        raise HTTPException(status_code=400, detail={"code": "invalid_phone", "msg": str(e)})
+        raise BadRequest(str(e), code="invalid_phone")
     anon = events.ensure_anon_cookie(request, response)
     is_new = not await _db().users.find_one({"phone": phone}, {"_id": 1})
     senders = _senders()
-    try:
-        ch = await otp_service.request_otp(_db(), senders, phone, channel=body.channel,
-                                           ip=client_ip(request), anon_id=anon)
-    except otp_service.OtpError as e:
-        raise HTTPException(status_code=e.status, detail=e.detail)
+    ch = await otp_service.request_otp(_db(), senders, phone, channel=body.channel,      # OtpError is an AppError
+                                       ip=client_ip(request), anon_id=anon)
     out = {"challenge_id": ch.challenge_id, "channel": ch.channel, "sent_to": mask(phone),
            "expires_in": ch.expires_in, "resend_in": ch.resend_in, "fell_back": ch.fell_back, "is_new": is_new}
     if settings.qa_mode and not settings.is_production:
@@ -176,13 +174,10 @@ async def otp_verify(body: OtpVerifyIn, request: Request, response: Response):
     try:
         phone = normalise_in_mobile(body.phone)
     except InvalidPhone as e:
-        raise HTTPException(status_code=400, detail={"code": "invalid_phone", "msg": str(e)})
+        raise BadRequest(str(e), code="invalid_phone")
     anon = events.anon_id_from(request)
     if not await _qa_bypass(db, body.challenge_id, phone, body.code.strip()):
-        try:
-            await otp_service.verify_otp(db, body.challenge_id, phone, body.code, anon_id=anon)
-        except otp_service.OtpError as e:
-            raise HTTPException(status_code=e.status, detail=e.detail)
+        await otp_service.verify_otp(db, body.challenge_id, phone, body.code, anon_id=anon)
 
     now = utcnow()
     user = await db.users.find_one({"phone": phone})
@@ -192,7 +187,7 @@ async def otp_verify(body: OtpVerifyIn, request: Request, response: Response):
         user = await create_member(db, phone, name=body.name, utm=clean_utm(body.utm), role=role)
     else:
         if (user.get("status") or "active") == "revoked":
-            raise HTTPException(status_code=403, detail={"code": "revoked", "msg": "This account is disabled."})
+            raise Forbidden("This account is disabled.", code="revoked")
         upd: dict = {"last_login_at": now}
         if role == "admin" and user.get("role") != "admin":
             upd["role"] = "admin"
@@ -221,12 +216,11 @@ async def update_profile(body: ProfileIn, user: dict = Depends(_user_dep())):
         upd["name"] = body.name.strip() or None
     if body.email is not None:
         email = body.email.lower().strip()
-        import os
-        staff = (os.environ.get("ADMIN_EMAIL") or "").strip().lower()
+        staff = settings.auth.admin_email
         clash = await _db().users.find_one({"email": email, "_id": {"$ne": user["_id"]}})
         # Emails here aren't checked, so a member can't take the staff login email (seed_admin also refuses it).
         if clash or (staff and email == staff and not user.get("password_hash")):
-            raise HTTPException(status_code=409, detail={"code": "email_taken", "msg": "Email already in use."})
+            raise Conflict("Email already in use.", code="email_taken")
         upd["email"] = email
     if upd:
         await _db().users.update_one({"_id": user["_id"]}, {"$set": upd})

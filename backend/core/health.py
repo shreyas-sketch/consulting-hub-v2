@@ -13,12 +13,6 @@ from fastapi.responses import JSONResponse
 from .settings import settings
 
 router = APIRouter(prefix="/health", tags=["health"])
-_db = None
-
-
-def bind_db(db) -> None:
-    global _db
-    _db = db
 
 
 @router.get("")
@@ -29,10 +23,11 @@ async def health():
 
 @router.get("/ready")
 async def ready():
-    if _db is None:
+    import state
+    if not state.is_bound():
         return JSONResponse({"ok": False, "mongo": "unbound"}, status_code=503)
     try:
-        await _db.command("ping")
+        await state.db().command("ping")
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"ok": False, "mongo": type(e).__name__}, status_code=503)
     return {"ok": True, "mongo": "ok"}

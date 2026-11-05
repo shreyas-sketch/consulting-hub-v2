@@ -23,13 +23,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 import indexes
 import llm
 import plans
 from core.deps import admin_dep, user_dep
+from core.errors import InvalidInput, NotFound
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -122,7 +123,7 @@ def prompt_text(slug: str) -> str:
 def gpt_or_404(slug: str) -> dict:
     g = catalog().get(slug)
     if not g:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Tool not found."})
+        raise NotFound("Tool not found.")
     return g
 
 
@@ -245,7 +246,7 @@ def _public(c: dict, g: Optional[dict] = None) -> dict:
 async def _conv(conv_id: str, user: dict) -> dict:
     c = await db().gpt_conversations.find_one({"_id": conv_id, "user_id": str(user["_id"]), "deleted": {"$ne": True}})
     if not c:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Conversation not found."})
+        raise NotFound("Conversation not found.")
     return c
 
 
@@ -342,7 +343,7 @@ async def send(conv_id: str, body: MessageIn, user: dict = Depends(user_dep())):
     g = gpt_or_404(c["slug"])
     t = body.text.strip()
     if not t:
-        raise HTTPException(status_code=422, detail={"code": "empty", "msg": "Type a message first."})
+        raise InvalidInput("Type a message first.", code="empty")
     client = c.get("client")
     if c["slug"] == STRATEGY and (not client or NEW_CLIENT.search(t)):
         client = new_client(client)
@@ -385,5 +386,5 @@ async def admin_list(user_id: str = Query(..., min_length=1, max_length=64), _: 
 async def admin_one(conv_id: str, _: dict = Depends(admin_dep())):
     c = await db().gpt_conversations.find_one({"_id": conv_id})
     if not c:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Conversation not found."})
+        raise NotFound("Conversation not found.")
     return _public(c) | {"user_id": c["user_id"], "deleted": bool(c.get("deleted")), "client": c.get("client")}

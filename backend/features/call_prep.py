@@ -15,20 +15,30 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import NotFound
 from growth import events
 from growth.clock import utcnow
 from research import search
 from state import db
 from util import iso
 
-from .common import NO_VENDOR, as_dict, as_list, clamp_int, run_metered, strip_providers, text, text_list
+from .common import (
+    NO_VENDOR,
+    as_dict,
+    as_list,
+    clamp_int,
+    run_metered,
+    strip_providers,
+    text,
+    text_list,
+)
 from .knowledge import knowledge, links_in, no_links, system_block
 
 router = APIRouter(prefix="/call-prep", tags=["discovery-call-prep"])
@@ -179,7 +189,7 @@ async def _own(pid: str, user: dict) -> dict:
     await plans.require(db(), user, FEATURE)
     p = await db().call_preps.find_one({"_id": pid, "user_id": str(user["_id"])})
     if not p:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Call prep not found."})
+        raise NotFound("Call prep not found.")
     return p
 
 

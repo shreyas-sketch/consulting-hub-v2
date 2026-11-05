@@ -14,12 +14,13 @@ import re
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import indexes
 import plans
 from core.deps import admin_dep, user_dep
+from core.errors import AppError, error
 from growth import events
 from growth.clock import utcnow
 from notify import service as notify
@@ -42,8 +43,8 @@ events.register("bootcamp_submitted", "Bootcamp task sent for review (props.boot
 events.register("bootcamp_reviewed", "Team reviewed a bootcamp task (props.bootcamp_id, props.task_id)")
 
 
-def _err(status: int, code: str, msg: str) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code, "msg": msg})
+def _err(status: int, code: str, msg: str) -> AppError:
+    return error(status, code, msg)
 
 
 def _url(v: str, label: str) -> str:

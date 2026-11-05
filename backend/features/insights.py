@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 import indexes
@@ -26,13 +26,22 @@ import media
 import plans
 from audio import tts
 from core.deps import user_dep
+from core.errors import InvalidInput, NotFound, ServiceUnavailable
 from growth import events
 from growth.clock import utcnow
 from research import search
 from state import db
 from util import iso
 
-from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text, text_list
+from .common import (
+    NO_VENDOR,
+    as_dict,
+    as_list,
+    run_metered,
+    strip_providers,
+    text,
+    text_list,
+)
 from .knowledge import knowledge, system_block
 
 router = APIRouter(prefix="/insights", tags=["insight-pack"])
@@ -173,7 +182,7 @@ def _public(d: dict) -> dict:
 async def _own(pack_id: str, uid: str) -> dict:
     d = await db().insight_packs.find_one({"_id": pack_id, "user_id": uid})
     if not d:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Insight Pack not found."})
+        raise NotFound("Insight Pack not found.")
     return d
 
 
@@ -184,7 +193,7 @@ async def make(body: PackIn, user: dict = Depends(user_dep())):
     k = await knowledge(db(), user)
     industry = text(body.industry, 80) or text(k.get("target_industry"), 80)
     if not industry:
-        raise HTTPException(status_code=422, detail={"code": "no_industry", "msg": "Type the industry you work in."})
+        raise InvalidInput("Type the industry you work in.", code="no_industry")
     niche = text(k.get("niche"), 120)
 
     async def work(plan: str):
@@ -231,9 +240,8 @@ async def listen(pack_id: str, user: dict = Depends(user_dep())):
             blob_id = await media.save_blob(db(), user_id=uid, kind="insight_audio", content_type=ctype, data=data,
                                             name=f"insight-pack-{pack_id[:8]}")
         except (tts.TTSError, media.TooLarge):
-            raise HTTPException(status_code=503, detail={
-                "code": "audio_failed", "msg": "We couldn't make the audio just now. Try again in a minute. "
-                                               "This didn't use up your go."})
+            raise ServiceUnavailable("We couldn't make the audio just now. Try again in a minute. "
+                                               "This didn't use up your go.", code="audio_failed")
         await db().insight_packs.update_one({"_id": pack_id, "user_id": uid}, {"$set": {"audio_blob_id": blob_id}})
         await events.track(db(), "insight_audio_made", user_id=uid)
         return {"audio_url": media.blob_url(blob_id), "cached": False}

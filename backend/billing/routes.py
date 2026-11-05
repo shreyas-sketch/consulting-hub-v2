@@ -28,13 +28,20 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
 import indexes
 import plans
 from core.deps import user_dep
+from core.errors import (
+    BadRequest,
+    Conflict,
+    NotFound,
+    ServiceUnavailable,
+    UpstreamError,
+)
 from core.settings import settings
 from growth import events
 from growth.clock import IST, as_utc, utcnow
@@ -68,7 +75,7 @@ class VerifyIn(BaseModel):
 def _client():
     c = build_client()
     if c is None:
-        raise HTTPException(status_code=503, detail={"code": "billing_off", "msg": "Payments aren't set up yet."})
+        raise ServiceUnavailable("Payments aren't set up yet.", code="billing_off")
     return c
 
 
@@ -99,7 +106,7 @@ async def _paid_end(c, s: dict) -> datetime:
 @router.post("/checkout")
 async def checkout(body: CheckoutIn, user: dict = Depends(user_dep())):
     if (body.plan, body.period) not in plans.PRICES_INR:
-        raise HTTPException(status_code=400, detail={"code": "bad_period", "msg": "L1 is billed monthly."})
+        raise BadRequest("L1 is billed monthly.", code="bad_period")
     uid = str(user["_id"])
     now = utcnow()
     ep = await plans.effective_plan(db(), user, now)
@@ -109,19 +116,17 @@ async def checkout(body: CheckoutIn, user: dict = Depends(user_dep())):
         when = f" on {day(datetime.fromisoformat(st['ends_at']))}" if st else ""
         msg = ("You're on L2. Your L1 is paused and restarts by itself when L2 ends." if paused else
                f"You're on L2, which includes everything. When L2 ends{when}, you can start L1 again here.")
-        raise HTTPException(status_code=409, detail={"code": "on_l2", "msg": msg})
+        raise Conflict(msg, code="on_l2")
     if paused:
-        raise HTTPException(status_code=409, detail={"code": "l1_paused", "msg": (
-            "Your L1 is paused for L2 and restarts by itself. To change plans, cancel it from Account first.")})
+        raise Conflict("Your L1 is paused for L2 and restarts by itself. To change plans, cancel it from Account first.", code="l1_paused")
     same = await db().subscriptions.find_one({"user_id": uid, "plan": body.plan, "status": {"$in": plans.LIVE_SUB},
                                               "cancel_at_cycle_end": {"$ne": True}, "current_end": {"$gt": utcnow()}})
     if same:
-        raise HTTPException(status_code=409, detail={"code": "already_on_plan", "msg": f"You're already on {plans.LABELS[body.plan]}."})
+        raise Conflict(f"You're already on {plans.LABELS[body.plan]}.", code="already_on_plan")
     later = await db().subscriptions.find_one({"user_id": uid, "plan": body.plan, "status": "authenticated",
                                                "starts_at": {"$gt": now}, "cancel_at_cycle_end": {"$ne": True}})
     if later:
-        raise HTTPException(status_code=409, detail={"code": "already_on_plan", "msg": (
-            f"Your {plans.LABELS[body.plan]} already starts on {day(later['starts_at'])}.")})
+        raise Conflict(f"Your {plans.LABELS[body.plan]} already starts on {day(later['starts_at'])}.", code="already_on_plan")
     c = _client()
     # Not an upgrade: start when the current paid period ends, so the member never pays twice for the same days.
     running = [s async for s in db().subscriptions.find({"user_id": uid, "status": {"$in": plans.LIVE_SUB},
@@ -136,7 +141,7 @@ async def checkout(body: CheckoutIn, user: dict = Depends(user_dep())):
                                           start_at=int(start_at.timestamp()) if start_at else None)
     except RazorpayError as e:
         log.warning("checkout failed: %s", e)
-        raise HTTPException(status_code=502, detail={"code": "checkout_failed", "msg": "Couldn't start the payment. Try again."})
+        raise UpstreamError("Couldn't start the payment. Try again.", code="checkout_failed")
     await db().subscriptions.insert_one({"_id": sub["id"], "user_id": uid, "plan": body.plan, "period": body.period,
                                          "status": "created", "current_end": None, "cancel_at_cycle_end": False,
                                          "starts_at": start_at, "created_at": now, "updated_at": now})
@@ -198,21 +203,21 @@ async def verify(body: VerifyIn, user: dict = Depends(user_dep())):
     c = _client()
     s = await db().subscriptions.find_one({"_id": body.subscription_id, "user_id": str(user["_id"])})
     if not s:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "Payment not found."})
+        raise NotFound("Payment not found.")
     live = c.mode != "fake"
     if live and not c.verify_payment(body.payment_id, body.subscription_id, body.signature):
-        raise HTTPException(status_code=400, detail={"code": "bad_signature", "msg": "Payment couldn't be verified."})
-    used = {"code": "payment_used", "msg": "This payment was already used."}
+        raise BadRequest("Payment couldn't be verified.", code="bad_signature")
+    used = Conflict("This payment was already used.", code="payment_used")
     pay = (body.payment_id or "").strip() or "none"
     if live and await db().subscriptions.find_one({"payment_id": pay, "_id": {"$ne": s["_id"]}}, {"_id": 1}):
-        raise HTTPException(status_code=409, detail=used)
+        raise used
     # One verify per subscription: the payment id is stored in the same write that checks none is stored yet,
     # so an old checkout answer can't be sent again to switch a lapsed or cancelled plan back on.
     now = utcnow()
     claim = await db().subscriptions.update_one({"_id": s["_id"], "payment_id": {"$exists": False}},
                                                 {"$set": {"payment_id": pay, "verified_at": now}})
     if claim.modified_count != 1:
-        raise HTTPException(status_code=409, detail=used)
+        raise used
     s = await db().subscriptions.find_one({"_id": s["_id"]})
     if s.get("status") != "created":
         return {"plan": await plans.plan_info(db(), user)}       # the webhook got here first: nothing to change
@@ -235,8 +240,7 @@ async def verify(body: VerifyIn, user: dict = Depends(user_dep())):
     st = rs.get("status")
     if st in ENDED:
         await db().subscriptions.update_one({"_id": s["_id"]}, {"$set": {"status": st, "updated_at": now}})
-        raise HTTPException(status_code=409, detail={"code": "not_active", "msg": (
-            "This payment didn't start a plan. If money was taken, write to us from Support.")})
+        raise Conflict("This payment didn't start a plan. If money was taken, write to us from Support.", code="not_active")
     rs_start = _ts(rs.get("start_at"))
     if rs_start and rs_start > now and st in ("authenticated", "created", None):
         await _schedule(s, rs_start)
@@ -276,13 +280,13 @@ async def cancel(user: dict = Depends(user_dep())):
         kind = "paused"
         s = await d.subscriptions.find_one({"user_id": uid, "status": "paused", "paused_for_l2": True})
     if not s:
-        raise HTTPException(status_code=404, detail={"code": "no_subscription", "msg": "No active subscription."})
+        raise NotFound("No active subscription.", code="no_subscription")
     now = utcnow()
     try:
         await _client().cancel_subscription(s["_id"], at_cycle_end=kind == "running")
     except RazorpayError as e:
         log.warning("cancel failed: %s", e)
-        raise HTTPException(status_code=502, detail={"code": "cancel_failed", "msg": "Couldn't cancel right now. Try again."})
+        raise UpstreamError("Couldn't cancel right now. Try again.", code="cancel_failed")
     await events.track(d, "subscription_cancelled", user_id=uid, props={"plan": s["plan"], "kind": kind})
     if kind != "running":
         await d.subscriptions.update_one({"_id": s["_id"]}, {"$set": {
@@ -340,7 +344,7 @@ async def webhook(request: Request):
     c = build_client()
     raw = await request.body()
     if c is None or not c.verify_webhook(raw, request.headers.get("X-Razorpay-Signature", "")):
-        raise HTTPException(status_code=400, detail={"code": "bad_signature", "msg": "bad signature"})
+        raise BadRequest("bad signature", code="bad_signature")
     ev = json.loads(raw or b"{}")
     name = ev.get("event", "")
     sub = ((ev.get("payload") or {}).get("subscription") or {}).get("entity") or {}

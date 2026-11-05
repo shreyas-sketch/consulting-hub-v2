@@ -29,6 +29,7 @@ import indexes
 import llm
 import plans
 from core.deps import user_dep
+from core.errors import AppError, error
 from growth import events
 from growth.clock import utcnow
 from state import db
@@ -58,8 +59,8 @@ NO_PROVIDER = ("Never say which AI company or model you are and never name any A
                "If asked, you are the hub's AI. " + NO_VENDOR)
 
 
-def bad(code: str, msg: str, status: int = 400) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code, "msg": msg})
+def bad(code: str, msg: str, status: int = 400) -> AppError:
+    return error(status, code, msg)
 
 
 def not_found(what: str = "Document") -> HTTPException:

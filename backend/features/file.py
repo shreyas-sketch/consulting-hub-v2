@@ -13,8 +13,8 @@ from growth import events
 from state import db
 
 from . import brief, linkedin, readiness, start
-from .knowledge import knowledge
 from .case_bank import CRITERIA
+from .knowledge import knowledge
 
 router = APIRouter(prefix="/file", tags=["consulting-file"])
 

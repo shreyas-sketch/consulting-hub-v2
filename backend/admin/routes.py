@@ -8,7 +8,6 @@ flags, settings, vendors, jobs, cases (live case picker), kb (knowledge base for
 """
 from __future__ import annotations
 
-import asyncio
 import csv
 import io
 import re
@@ -16,7 +15,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -27,6 +26,7 @@ from billing import l2 as l2_billing
 from billing.razorpay_client import build_client
 from core import flags
 from core.deps import admin_dep
+from core.errors import BadRequest, Conflict, NotFound
 from core.vendors import REQUIRED_KEYS, vendor_mode
 from features import kb as kb_f
 from growth import events
@@ -151,11 +151,11 @@ def _window(start: str, end: str) -> tuple[datetime, datetime]:
     try:
         s, e = date.fromisoformat(start), date.fromisoformat(end)
     except ValueError:
-        raise HTTPException(status_code=400, detail={"code": "bad_date", "msg": "Dates must be YYYY-MM-DD."})
+        raise BadRequest("Dates must be YYYY-MM-DD.", code="bad_date")
     if e < s:
         s, e = e, s
     if (e - s).days > 92:
-        raise HTTPException(status_code=400, detail={"code": "range_too_long", "msg": "Pick at most 3 months."})
+        raise BadRequest("Pick at most 3 months.", code="range_too_long")
     return ist_day_start(s), ist_day_start(e + timedelta(days=1))
 
 
@@ -267,7 +267,7 @@ async def _user(user_id: str) -> dict:
     o = oid(user_id)
     u = await db().users.find_one({"_id": o}) if o else None
     if not u:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "User not found."})
+        raise NotFound("User not found.")
     return u
 
 
@@ -320,7 +320,7 @@ async def start_l2(user_id: str, admin: dict = Admin):
         res = await l2_billing.start_l2(db(), user_id, by=str(admin["_id"]))     # claims L2 atomically
     except l2_billing.L2AlreadyActive as e:
         until = f" until {e.ends_at.astimezone(IST).date().isoformat()}" if e.ends_at else ""
-        raise HTTPException(status_code=409, detail={"code": "already_l2", "msg": f"L2 already runs{until}."})
+        raise Conflict(f"L2 already runs{until}.", code="already_l2")
     return {"result": res, **(await user_detail(user_id, admin))}
 
 
@@ -347,7 +347,7 @@ async def _stop_billing(user_id: str) -> dict:
 async def set_status(user_id: str, body: StatusIn, admin: dict = Admin):
     u = await _user(user_id)
     if str(u["_id"]) == str(admin["_id"]):
-        raise HTTPException(status_code=400, detail={"code": "self", "msg": "You can't change your own status."})
+        raise BadRequest("You can't change your own status.", code="self")
     await db().users.update_one({"_id": u["_id"]}, {"$set": {"status": body.status}})
     billing = await _stop_billing(user_id) if body.status == "revoked" else None
     return {**(await user_detail(user_id, admin)), "billing": billing}
@@ -382,7 +382,7 @@ async def set_flag(body: FlagIn, admin: dict = Admin):
     try:
         await flags.set_flag(db(), body.key, body.on, by=str(admin.get("phone") or admin.get("email") or admin["_id"]))
     except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "unknown_flag", "msg": "Unknown switch."})
+        raise NotFound("Unknown switch.", code="unknown_flag")
     await events.track(db(), "feature_toggled", user_id=str(admin["_id"]), props={"key": body.key, "on": body.on})
     return {"items": flags.listing()}
 
@@ -418,10 +418,10 @@ async def jobs(_: dict = Admin):
 async def run_job(name: str, _: dict = Admin):
     """Run now takes the same lock as the scheduler, so a job never runs twice at once."""
     if name not in registry.JOBS:
-        raise HTTPException(status_code=404, detail={"code": "unknown_job", "msg": "Unknown job."})
+        raise NotFound("Unknown job.", code="unknown_job")
     owner = "admin-" + uuid.uuid4().hex[:12]
     if not await registry.claim_lock(db(), name, owner=owner):
-        raise HTTPException(status_code=409, detail={"code": "job_running", "msg": "This job is running now. Try again in a few minutes."})
+        raise Conflict("This job is running now. Try again in a few minutes.", code="job_running")
     try:
         r = await registry.run(db(), name)
     finally:
@@ -440,14 +440,14 @@ async def kb(_: dict = Admin):
 async def kb_upload(file: UploadFile = File(...), title: Optional[str] = Form(None), _: dict = Admin):
     name = (file.filename or "").lower()
     if not name.endswith((".txt", ".vtt", ".md", ".srt")):
-        raise HTTPException(status_code=400, detail={"code": "bad_type", "msg": "Upload a .txt, .vtt, .srt or .md file."})
+        raise BadRequest("Upload a .txt, .vtt, .srt or .md file.", code="bad_type")
     raw = await file.read(8 * 1024 * 1024 + 1)
     if len(raw) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail={"code": "too_large", "msg": "Files up to 8 MB."})
+        raise BadRequest("Files up to 8 MB.", code="too_large")
     text = raw.decode("utf-8", errors="ignore")
     out = await kb_f.ingest(db(), (title or file.filename or "Session").strip()[:120], text)
     if not out["chunks"]:
-        raise HTTPException(status_code=400, detail={"code": "empty", "msg": "No text found in that file."})
+        raise BadRequest("No text found in that file.", code="empty")
     return out
 
 
@@ -479,12 +479,12 @@ async def whatsapp_template_test(body: TemplateTestIn, user: dict = Admin):
     from notify.channels import build_whatsapp
     row = next((t for t in templates.ALERTS if t[0] == body.kind), None)
     if not row:
-        raise HTTPException(404, {"code": "not_found", "msg": "No such message type."})
+        raise NotFound("No such message type.")
     if not user.get("phone"):
-        raise HTTPException(400, {"code": "no_phone", "msg": "Your admin account has no mobile number. Log in with OTP."})
+        raise BadRequest("Your admin account has no mobile number. Log in with OTP.", code="no_phone")
     wa = build_whatsapp()
     if wa is None:
-        raise HTTPException(409, {"code": "off", "msg": "WhatsApp isn't set up yet (AiSensy key missing)."})
+        raise Conflict("WhatsApp isn't set up yet (AiSensy key missing).", code="off")
     kind, _t, _w, _o, sample, path, _c = row
     title, _, text_ = sample.partition(" — ")
     res = await wa.send(user, {"kind": kind, "title": title, "body": text_ or title, "link": "/" + path})

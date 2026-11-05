@@ -10,17 +10,14 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Request, Response
 
+import state
+from core.errors import NotFound, Unauthorized
 from growth.clock import utcnow
 
 MAX_BYTES = 15 * 1024 * 1024
 router = APIRouter(tags=["files"])
-_state: dict = {"db": None}
-
-
-def bind_db(db) -> None:
-    _state["db"] = db
 
 
 class TooLarge(ValueError):
@@ -53,16 +50,16 @@ def blob_url(blob_id: Optional[str]) -> Optional[str]:
 
 @router.get("/blobs/{blob_id}")
 async def serve(blob_id: str, request: Request):
-    b = await get_blob(_state["db"], blob_id)
+    b = await get_blob(state.db(), blob_id)
     if not b:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "File not found."})
+        raise NotFound("File not found.")
     if not b.get("public"):
         try:
             from auth import get_current_user
             user = await get_current_user(request)
         except Exception:  # noqa: BLE001
-            raise HTTPException(status_code=401, detail={"code": "unauthorized", "msg": "Log in to open this file."})
+            raise Unauthorized("Log in to open this file.", code="unauthorized")
         if (user.get("role") != "admin") and str(user["_id"]) != b.get("user_id"):
-            raise HTTPException(status_code=404, detail={"code": "not_found", "msg": "File not found."})
+            raise NotFound("File not found.")
     return Response(bytes(b["data"]), media_type=b.get("content_type") or "application/octet-stream",
                     headers={"Cache-Control": "private, max-age=3600"})
