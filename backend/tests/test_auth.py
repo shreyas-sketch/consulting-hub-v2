@@ -75,3 +75,21 @@ def test_profile_update(client):
 def test_refresh(client):
     login(client)
     assert client.post("/api/auth/refresh").status_code == 200
+
+
+def test_whatsapp_only_setup_never_offers_or_breaks_on_sms(client):
+    """AiSensy-only launch (no MSG91): codes go by WhatsApp, the reply says SMS isn't available, and an SMS
+    request is delivered on WhatsApp instead of failing."""
+    from accounts import routes
+    from accounts.otp_providers import ConsoleSender, Senders
+    wa = ConsoleSender("whatsapp")
+    routes.use_senders(Senders(whatsapp=wa, sms=None))
+    try:
+        r = client.post("/api/auth/otp/request", json={"phone": "9876500111"})
+        assert r.status_code == 200, r.text
+        assert r.json()["channel"] == "whatsapp" and r.json()["sms_available"] is False
+        r = client.post("/api/auth/otp/request", json={"phone": "9876500112", "channel": "sms"})
+        assert r.status_code == 200, r.text
+        assert r.json()["channel"] == "whatsapp" and len(wa.sent) == 2
+    finally:
+        routes.use_senders(None)
