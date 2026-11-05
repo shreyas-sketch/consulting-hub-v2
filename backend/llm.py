@@ -72,9 +72,20 @@ async def _guarded(coro_fn, task: str, timeout: Optional[float] = None, queue_wa
         sem.release()
 
 
+def time_budget(max_tokens: int, timeout: Optional[float] = None) -> float:
+    """Seconds a call may take. A long answer from the strong model streams at roughly 30-60 tokens a second, so a
+    flat 45 s cut off long briefings and scripts half-way (they then worked on the retry). The budget grows with
+    the answer's length: LLM_TIMEOUT_S at least, plus about a second per 30 tokens, at most 180 s."""
+    if timeout:
+        return timeout
+    return min(180.0, max(settings.llm.timeout_s, 20 + max_tokens / 30))
+
+
 async def _call_text(*, model: str, max_tokens: int, system: str, content) -> str:
     resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system,
                                            messages=[{"role": "user", "content": content}])
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        log.warning("LLM reply cut at max_tokens=%s (model %s)", max_tokens, model)
     return "".join(getattr(b, "text", "") for b in resp.content)
 
 
@@ -148,7 +159,7 @@ async def _complete_json(*, task, system, prompt, fake, model, max_tokens, image
     content.append({"type": "text", "text": prompt + "\n\nReply with one JSON object only."})
     try:
         text = await _guarded(lambda: _call_text(model=model, max_tokens=max_tokens, system=system, content=content), task,
-                              timeout or (120 if max_tokens > 3000 else None), **_wait_kw(queue_wait))
+                              time_budget(max_tokens, timeout), **_wait_kw(queue_wait))
         return _parse(text)
     except LLMError:
         raise
@@ -166,7 +177,7 @@ async def complete_text(*, task: str, system: str, prompt: str, fake: Callable[[
         raise LLMError("AI is not configured (ANTHROPIC_API_KEY).")
     try:
         text = await _guarded(lambda: _call_text(model=model, max_tokens=max_tokens, system=system, content=prompt), task,
-                              **_wait_kw(queue_wait))
+                              time_budget(max_tokens), **_wait_kw(queue_wait))
         return text.strip()
     except LLMError:
         raise
@@ -191,7 +202,7 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
         resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs)
         return "".join(getattr(b, "text", "") for b in resp.content)
     try:
-        return (await _guarded(call, task, timeout or (150 if max_tokens > 3000 else None), **_wait_kw(queue_wait))).strip()
+        return (await _guarded(call, task, time_budget(max_tokens, timeout), **_wait_kw(queue_wait))).strip()
     except LLMError:
         raise
     except Exception as e:  # noqa: BLE001

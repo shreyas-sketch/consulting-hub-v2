@@ -199,9 +199,37 @@ def make_chunks(full: str, page_starts: Optional[list[int]] = None) -> list[dict
     out = []
     for i, t in enumerate(kb.chunk(full)):
         toks = kb.tokens(t)
-        page = bisect_right(page_starts, i * step) if page_starts else None
-        out.append({"i": i, "page": page, "text": t, "tokens": toks, "n": len(toks)})
+        row = {"i": i, "page": None, "text": t, "tokens": toks, "n": len(toks)}
+        if page_starts:
+            start, n = i * step, len(t.split())
+            row["page"] = bisect_right(page_starts, start)
+            # A 350-word chunk often runs onto the next page: remember where (word offset in the chunk → page),
+            # so a citation names the page the passage is really on, not the page the chunk starts on.
+            row["breaks"] = [[ps - start, k + 1] for k, ps in enumerate(page_starts) if start < ps < start + n]
+        out.append(row)
     return out
+
+
+def page_at(h: dict, word_at: int):
+    """The page of the word at `word_at` inside chunk `h` (None when the source has no pages)."""
+    page = h.get("page")
+    for off, pg in h.get("breaks") or []:
+        if word_at >= off:
+            page = pg
+    return page
+
+
+def with_page_marks(h: dict) -> str:
+    """Chunk text with "[page N]" where a new page starts inside it, so the AI sees the boundaries too."""
+    breaks = h.get("breaks") or []
+    if not breaks:
+        return h["text"]
+    words, out, b = h["text"].split(), [], dict((off, pg) for off, pg in breaks)
+    for i, w in enumerate(words):
+        if i in b:
+            out.append(f"[page {b[i]}]")
+        out.append(w)
+    return " ".join(out)
 
 
 async def read_upload(file: UploadFile) -> dict:
@@ -239,21 +267,27 @@ async def retrieve(coll, flt: dict, question: str, *, n_chunks: int, avg_len: fl
     return [r | {"score": round(s, 3)} for s, r in scored[:k]]
 
 
-def snippet(t: str, question: str, width: int = 48) -> str:
-    """The ~50-word window of a chunk that best matches the question (what a citation shows)."""
+def snippet_at(t: str, question: str, width: int = 48) -> tuple[str, int]:
+    """The ~50-word window of a chunk that best matches the question (what a citation shows), and the word offset
+    of the first matching word in it (where the cited passage is, for its page)."""
     words = t.split()
-    if len(words) <= width:
-        return t
     q = set(kb.tokens(question))
     hits = [1 if q.intersection(kb.tokens(w)) else 0 for w in words]
+    if len(words) <= width:
+        return t, next((i for i, x in enumerate(hits) if x), 0)
     best, best_at, cur = -1, 0, sum(hits[:width])
     for i in range(0, len(words) - width + 1):
         if i:
             cur += hits[i + width - 1] - hits[i - 1]
         if cur > best:
             best, best_at = cur, i
+    first = next((best_at + j for j, x in enumerate(hits[best_at:best_at + width]) if x), best_at)
     part = " ".join(words[best_at:best_at + width])
-    return ("… " if best_at else "") + part + (" …" if best_at + width < len(words) else "")
+    return ("… " if best_at else "") + part + (" …" if best_at + width < len(words) else ""), first
+
+
+def snippet(t: str, question: str, width: int = 48) -> str:
+    return snippet_at(t, question, width)[0]
 
 
 def sentences(t: str) -> list[str]:
@@ -266,16 +300,17 @@ def first_sentence(t: str, n: int = 220) -> str:
 
 
 def spread(chunks: list[dict], budget_words: int) -> list[dict]:
-    """Evenly spaced, non-overlapping chunks (they overlap by 15%) up to a word budget, in reading order."""
+    """Chunks up to a word budget, evenly spaced, in reading order. When everything fits, everything is used:
+    chunks overlap by only 15%, so skipping every other one (the old way) dropped about a third of the text, and with
+    it facts and dates a timeline or briefing needed."""
     if not chunks:
         return []
     per = max(1, len(chunks[0]["text"].split()))
     want = max(1, budget_words // per)
-    pool = chunks[::2] if len(chunks) > 2 else chunks
-    if len(pool) <= want:
-        return pool
-    stepf = len(pool) / want
-    return [pool[int(i * stepf)] for i in range(want)]
+    if len(chunks) <= want:
+        return list(chunks)
+    stepf = len(chunks) / want
+    return [chunks[int(i * stepf)] for i in range(want)]
 
 
 # ------------------------------------------------------------------ cited answers ----
@@ -294,8 +329,9 @@ def excerpt_block(hits: list[dict]) -> str:
     for i, h in enumerate(hits):
         where = h.get("title") or "Document"
         if h.get("page"):
-            where += f", page {h['page']}"
-        out.append(f"[{i + 1}] ({where})\n{h['text']}")
+            last = (h.get("breaks") or [[0, h["page"]]])[-1][1]
+            where += f", page {h['page']}" if last == h["page"] else f", pages {h['page']}-{last}"
+        out.append(f"[{i + 1}] ({where})\n{with_page_marks(h)}")
     return "\n\n".join(out)
 
 
@@ -349,8 +385,9 @@ async def cited_answer(question: str, hits: list[dict], *, task: str, ref_key: s
     cites = []
     for n in used:
         h = hits[n - 1]
-        cites.append({"n": n, ref_key: h.get(ref_key), "doc_title": h.get("title") or "Document", "page": h.get("page"),
-                      "excerpt": snippet(h["text"], question)})
+        excerpt, at = snippet_at(h["text"], question)
+        cites.append({"n": n, ref_key: h.get(ref_key), "doc_title": h.get("title") or "Document", "page": page_at(h, at),
+                      "excerpt": excerpt})
     return {"answer": answer, "covered": covered and bool(used), "citations": cites}
 
 

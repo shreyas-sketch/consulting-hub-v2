@@ -119,11 +119,11 @@ async def _upload(c: httpx.AsyncClient, key: str, path: str, mime: str) -> dict:
         "Content-Type": "application/json"})
     url = r.headers.get("x-goog-upload-url")
     if r.status_code >= 400 or not url:
-        raise VideoError(f"upload start HTTP {r.status_code}")
+        raise VideoError(f"upload start HTTP {r.status_code}: {vendor_why(r)}")
     r = await c.post(url, content=_chunks(path), headers={
         "Content-Length": str(size), "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize"})
     if r.status_code >= 400:
-        raise VideoError(f"upload HTTP {r.status_code}")
+        raise VideoError(f"upload HTTP {r.status_code}: {vendor_why(r)}")
     f = (r.json() or {}).get("file") or {}
     if not f.get("name") or not f.get("uri"):
         raise VideoError("upload: no file name")
@@ -134,40 +134,57 @@ async def _wait_active(c: httpx.AsyncClient, key: str, f: dict, poll_s: float, m
     deadline = time.monotonic() + max_wait_s
     while (f.get("state") or "PROCESSING") != "ACTIVE":
         if f.get("state") == "FAILED":
-            raise VideoError("processing failed")
+            raise VideoError(f"processing failed: {(f.get('error') or {}).get('message') or 'no reason given'}")
         if time.monotonic() > deadline:
             raise VideoError("processing took too long")
         await asyncio.sleep(poll_s)
         r = await c.get(f"{BASE}/v1beta/{f['name']}", headers={"x-goog-api-key": key})
         if r.status_code >= 400:
-            raise VideoError(f"file status HTTP {r.status_code}")
+            raise VideoError(f"file status HTTP {r.status_code}: {vendor_why(r)}")
         f = {**f, **(r.json() or {})}
     return f
 
 
-async def _generate(c: httpx.AsyncClient, key: str, f: dict, mime: str, system: str, prompt: str) -> str:
+def vendor_why(r: httpx.Response) -> str:
+    """Short reason from a Gemini error reply ({"error": {"status", "message"}}), for the server log only."""
+    try:
+        e = (r.json() or {}).get("error") or {}
+        why = f"{e.get('status') or ''} {e.get('message') or ''}".strip()
+    except ValueError:
+        why = r.text
+    return " ".join((why or "").split())[:300]
+
+
+async def generate_parts(c: httpx.AsyncClient, key: str, parts: list, system: str, *, model: str,
+                         temperature: float = 0.4, max_tokens: int = 16384) -> str:
+    """generateContent with any parts (fileData or inlineData + text); JSON answer as text. One retry on 429/5xx."""
     body = {"systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"fileData": {"mimeType": f.get("mimeType") or mime, "fileUri": f["uri"]}},
-                                                    {"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.4, "maxOutputTokens": 16384}}
-    url = f"{BASE}/v1beta/models/{model_name()}:generateContent"
+            "contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {"responseMimeType": "application/json", "temperature": temperature,
+                                 "maxOutputTokens": max_tokens}}
+    url = f"{BASE}/v1beta/models/{model}:generateContent"
     for attempt in range(2):
         r = await c.post(url, json=body, headers={"x-goog-api-key": key, "Content-Type": "application/json"})
         if r.status_code in (429, 500, 503) and attempt == 0:
             await asyncio.sleep(4)
             continue
         if r.status_code >= 400:
-            raise VideoError(f"generate HTTP {r.status_code}")
+            raise VideoError(f"generate HTTP {r.status_code} (model {model}): {vendor_why(r)}")
         data = r.json() or {}
         cands = data.get("candidates") or []
         if not cands:
             raise VideoError(f"no answer ({(data.get('promptFeedback') or {}).get('blockReason') or 'empty'})")
-        parts = ((cands[0].get("content") or {}).get("parts")) or []
-        text = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and not p.get("thought"))
+        out = ((cands[0].get("content") or {}).get("parts")) or []
+        text = "".join(p.get("text", "") for p in out if isinstance(p, dict) and not p.get("thought"))
         if not text.strip():
             raise VideoError(f"empty answer ({cands[0].get('finishReason') or 'unknown'})")
         return text
     raise VideoError("generate failed")
+
+
+async def _generate(c: httpx.AsyncClient, key: str, f: dict, mime: str, system: str, prompt: str) -> str:
+    parts = [{"fileData": {"mimeType": f.get("mimeType") or mime, "fileUri": f["uri"]}}, {"text": prompt}]
+    return await generate_parts(c, key, parts, system, model=model_name())
 
 
 async def _delete(c: httpx.AsyncClient, key: str, name: Optional[str]) -> None:
@@ -204,6 +221,8 @@ async def analyse(path: str, *, mime: str, system: str, prompt: str, fake: Calla
         if max_seconds is not None and secs is not None and secs > max_seconds:
             raise TooLong(secs)
         return parse_json(await _generate(c, key, f, mime, system, prompt))
+    except httpx.TimeoutException as e:
+        raise VideoError(f"network: Timeout ({type(e).__name__})") from e
     except httpx.HTTPError as e:
         raise VideoError(f"network: {type(e).__name__}") from e
     finally:

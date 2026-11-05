@@ -15,6 +15,7 @@ Goal Map is plain arithmetic, shown with its assumptions so the member can chang
 from __future__ import annotations
 
 import math
+import re
 import uuid
 from typing import Optional
 
@@ -94,6 +95,26 @@ def _fake(body: SnapshotIn) -> dict:
     return {"options": out, "note": "Test mode answer. Live mode writes these from your inputs."}
 
 
+_SLOT = re.compile(r"\[[^\]]{2,40}\]")      # an unfilled "[target audience]" copied from the prompt's format
+
+
+def _repair(row: dict) -> None:
+    """Every later tool (website, outreach, network, decks) reads the chosen option, so an empty title or a value
+    proposition with the prompt's [slots] still in it would spread as placeholders. Rebuild them from the parts."""
+    for k in ("who", "problem", "result"):
+        if _SLOT.search(row[k]):
+            row[k] = ""
+    if not row["title"] or _SLOT.search(row["title"]):
+        row["title"] = f"{row['niche']} Consultant" if "consult" not in row["niche"].lower() else row["niche"]
+    if not row["value_prop"] or _SLOT.search(row["value_prop"]):
+        if row["who"] and row["result"] and row["problem"]:
+            res = row["result"][0].lower() + row["result"][1:]
+            prob = row["problem"][0].lower() + row["problem"][1:]
+            row["value_prop"] = f"I help {row['who']} {res.rstrip('.')} by helping them solve {prob.rstrip('.')}."
+        else:
+            row["value_prop"] = ""
+
+
 def _clean_options(raw: dict, body: SnapshotIn) -> list[dict]:
     opts = []
     for o in as_list(as_dict(raw).get("options"))[:3]:
@@ -106,6 +127,7 @@ def _clean_options(raw: dict, body: SnapshotIn) -> list[dict]:
                "fee_low": min(lo, hi), "fee_high": max(lo, hi),
                "experience": clamp_int(o.get("experience"), 1, 10, 5), "demand": clamp_int(o.get("demand"), 1, 10, 5),
                "enjoyment": clamp_int(o.get("enjoyment"), 1, 10, 5)}
+        _repair(row)
         row["total"] = row["experience"] + row["demand"] + row["enjoyment"]
         row["yearly_low"], row["yearly_high"] = row["fee_low"] * 4 * 12, row["fee_high"] * 4 * 12   # 4 clients a month
         opts.append(strip_providers(row))
@@ -153,7 +175,7 @@ async def snapshot(body: SnapshotIn, user: dict = Depends(user_dep())):
 
     async def work(plan: str):
         raw = as_dict(await llm.complete_json(task="niche_snapshot", system=SYSTEM, prompt=_prompt(body),
-                                              fake=lambda: _fake(body), model="fast", max_tokens=1200,
+                                              fake=lambda: _fake(body), model="fast", max_tokens=3000,
                                               queue_wait=WEBINAR_QUEUE_WAIT))
         opts = _clean_options(raw, body)
         doc = {"_id": uuid.uuid4().hex, "user_id": uid, "input": body.model_dump(), "options": opts, "chosen": 0,

@@ -23,6 +23,7 @@ function ImportCard({ onDone, first }) {
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [open, setOpen] = useState(first);
+  const [from, setFrom] = useState("file");          // which button the message belongs to, so it shows next to it
 
   const done = (d) => {
     const extra = [d.duplicates ? `${d.duplicates} were already in your list` : "", d.over_cap ? `${d.over_cap} didn't fit (limit ${d.cap.toLocaleString("en-IN")})` : ""].filter(Boolean).join(". ");
@@ -31,6 +32,7 @@ function ImportCard({ onDone, first }) {
     onDone();
   };
   const upload = async () => {
+    setFrom("file");
     if (!file) { setErr("Choose your Connections.csv file first."); return; }
     setErr(""); setOk(""); setBusy("file");
     try {
@@ -39,6 +41,7 @@ function ImportCard({ onDone, first }) {
     } catch (e) { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } finally { setBusy(""); }
   };
   const addPaste = async () => {
+    setFrom("paste");
     if (paste.trim().length < 3) { setErr("Put one person on each line: Name, Role, Company."); return; }
     setErr(""); setOk(""); setBusy("paste");
     try { done((await api.post("/network/paste", { text: paste })).data); }
@@ -65,9 +68,10 @@ function ImportCard({ onDone, first }) {
           <Upload className="w-5 h-5 text-bz-gold shrink-0" aria-hidden />
           <span className="text-[15px] truncate">{file ? file.name : "Choose Connections.csv"}</span>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="sr-only" data-testid="network-file"
-            onChange={(e) => { setFile(e.target.files?.[0] || null); setErr(""); }} />
+            onChange={(e) => { setFile(e.target.files?.[0] || null); setErr(""); setFrom("file"); }} />
         </label>
         <Button className="w-full" onClick={upload} loading={busy === "file"} disabled={!!busy} data-testid="network-upload">Upload my connections</Button>
+        {from === "file" && <><ErrorLine>{err}</ErrorLine><OkLine>{ok}</OkLine></>}
       </div>
       <div className="mt-5 pt-4 border-t border-bz-line">
         <Field label="Or paste a list" hint="One person per line: Name, Role, Company. Or 'Name - Role at Company'.">
@@ -75,9 +79,8 @@ function ImportCard({ onDone, first }) {
             placeholder={"Neha Shah, Director, Bharat Forge\nAmit Joshi - VP Sales at Tata Motors"} data-testid="network-paste" />
         </Field>
         <Button variant="secondary" className="w-full mt-3" onClick={addPaste} loading={busy === "paste"} disabled={!!busy} data-testid="network-paste-add">Add these people</Button>
+        {from === "paste" && <><ErrorLine>{err}</ErrorLine><OkLine>{ok}</OkLine></>}
       </div>
-      <ErrorLine>{err}</ErrorLine>
-      <OkLine>{ok}</OkLine>
       {!first && <button type="button" onClick={() => setOpen(false)} className="mt-2 w-full text-[14px] font-bold text-bz-muted min-h-[44px]">Close</button>}
     </Card>
   );

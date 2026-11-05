@@ -14,6 +14,7 @@ Other tools (Offer Card, Credibility Code) read title, situation, what_i_did and
 """
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from typing import Optional
@@ -40,6 +41,8 @@ from util import iso
 
 from .common import run_metered, text, text_list
 from .knowledge import knowledge, system_block
+
+log = logging.getLogger("stories")
 
 router = APIRouter(prefix="/stories", tags=["story-bank"])
 
@@ -183,7 +186,8 @@ async def _make(user: dict, story: str, question: str, source: str, transcribe=N
         if transcribe is not None:
             try:
                 words = await transcribe()
-            except stt.STTError:
+            except stt.STTError as e:
+                log.warning("voice note transcription failed: %s", e)
                 raise ServiceUnavailable("We couldn't turn your voice note into text just now. Try again in a "
                                                  "minute, or type your story. This didn't use up your go.", code="stt_failed")
             if len(words.strip()) < 40:

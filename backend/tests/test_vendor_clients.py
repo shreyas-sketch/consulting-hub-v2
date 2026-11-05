@@ -284,22 +284,37 @@ async def test_tts_errors_raise_ttserror(gemini_live, monkeypatch):
         await tts.speak("Hello there.")
 
 
+def _gen_reply(text):
+    return {"candidates": [{"content": {"parts": [{"text": text}]}, "finishReason": "STOP"}]}
+
+
 async def test_stt_inline_returns_text(gemini_live):
     seen = []
 
     def handler(req):
-        seen.append(json.loads(req.content))
-        return httpx.Response(200, json={"status": "completed", "steps": [{"type": "model_output", "content": [
-            {"type": "text", "text": '{"text": "  I cut late deliveries\\nfrom 30% to 6%  in three months. "}'}]}]})
+        seen.append((str(req.url), json.loads(req.content)))
+        return httpx.Response(200, json=_gen_reply('{"text": "  I cut late deliveries\\nfrom 30% to 6%  in three months. "}'))
     audio = b"\x1aE\xdf\xa3" + b"\x00" * 5000
     async with _client(handler) as c:
         out = await stt.transcribe(audio, filename="n.m4a", content_type="audio/mp4", client=c)
     assert out == "I cut late deliveries from 30% to 6% in three months."
-    body = seen[0]
-    part = body["input"][1]
-    assert body["model"] == "gemini-3.8-flash" and body["store"] is False
-    assert part["type"] == "audio" and part["mime_type"] == "audio/m4a" and base64.b64decode(part["data"]) == audio
-    assert body["input"][0]["type"] == "text"
+    url, body = seen[0]
+    assert url.endswith("/v1beta/models/gemini-3.8-flash:generateContent")
+    part = body["contents"][0]["parts"][0]["inlineData"]
+    assert part["mimeType"] == "audio/m4a" and base64.b64decode(part["data"]) == audio
+    assert body["generationConfig"]["temperature"] == 0
+
+
+async def test_stt_uses_the_pitch_model_when_no_stt_model(gemini_live, monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-other-flash")
+    urls = []
+
+    def handler(req):
+        urls.append(str(req.url))
+        return httpx.Response(200, json=_gen_reply('{"text": "Hello."}'))
+    async with _client(handler) as c:
+        await stt.transcribe(b"x" * 2000, client=c)
+    assert urls[0].endswith("/models/gemini-other-flash:generateContent")
 
 
 async def test_stt_large_file_uses_files_api_and_deletes_it(gemini_live, monkeypatch):
@@ -315,11 +330,10 @@ async def test_stt_large_file_uses_files_api_and_deletes_it(gemini_live, monkeyp
             assert req.headers["X-Goog-Upload-Command"] == "upload, finalize" and len(req.content) == 5000
             return httpx.Response(200, json={"file": {"name": "files/abc", "uri": "https://g/files/abc", "state": "ACTIVE",
                                                       "mimeType": "audio/webm"}})
-        if u.endswith("/v1beta/interactions"):
-            part = json.loads(req.content)["input"][1]
-            assert part == {"type": "audio", "uri": "https://g/files/abc", "mime_type": "audio/webm"}
-            return httpx.Response(200, json={"status": "completed", "steps": [{"type": "model_output", "content": [
-                {"type": "text", "text": '{"text": "Hello from a long note."}'}]}]})
+        if u.endswith(":generateContent"):
+            part = json.loads(req.content)["contents"][0]["parts"][0]
+            assert part == {"fileData": {"mimeType": "audio/webm", "fileUri": "https://g/files/abc"}}
+            return httpx.Response(200, json=_gen_reply('{"text": "Hello from a long note."}'))
         if req.method == "DELETE":
             return httpx.Response(200, json={})
         return httpx.Response(404)
@@ -329,11 +343,13 @@ async def test_stt_large_file_uses_files_api_and_deletes_it(gemini_live, monkeyp
     assert ("DELETE", "https://generativelanguage.googleapis.com/v1beta/files/abc") in log
 
 
-async def test_stt_errors_raise_stterror(gemini_live, monkeypatch):
-    async with _client(lambda req: httpx.Response(400, json={})) as c:
-        with pytest.raises(stt.STTError):
+async def test_stt_errors_raise_stterror_with_the_vendor_reason(gemini_live, monkeypatch):
+    bad = {"error": {"status": "NOT_FOUND", "message": "models/gemini-3.8-flash is not found"}}
+    async with _client(lambda req: httpx.Response(404, json=bad)) as c:
+        with pytest.raises(stt.STTError) as e:
             await stt.transcribe(b"x" * 2000, client=c)
-    empty = {"status": "completed", "steps": [{"type": "model_output", "content": [{}]}]}
+    assert "NOT_FOUND" in str(e.value) and "is not found" in str(e.value)
+    empty = {"candidates": [{"content": {"parts": []}, "finishReason": "SAFETY"}]}
     async with _client(lambda req: httpx.Response(200, json=empty)) as c:
         with pytest.raises(stt.STTError):
             await stt.transcribe(b"x" * 2000, client=c)
@@ -351,9 +367,10 @@ async def test_stt_errors_raise_stterror(gemini_live, monkeypatch):
 
 
 async def test_stt_retries_once_when_busy(gemini_live, monkeypatch):
-    monkeypatch.setattr(stt, "RETRY_PAUSE_S", 0)
-    replies = [httpx.Response(503, json={}), httpx.Response(200, json={"status": "completed", "steps": [
-        {"type": "model_output", "content": [{"type": "text", "text": '{"text": ""}'}]}]})]
+    async def no_sleep(_):
+        return None
+    monkeypatch.setattr(stt.pitch_video.asyncio, "sleep", no_sleep)
+    replies = [httpx.Response(503, json={}), httpx.Response(200, json=_gen_reply('{"text": ""}'))]
     async with _client(lambda req: replies.pop(0)) as c:
         assert await stt.transcribe(b"x" * 2000, client=c) == ""       # nothing said → empty text, not an error
 

@@ -423,7 +423,7 @@ function Thread({ id }) {
       <Loadable q={q} what="this practice" lines={8}>
         {(t) => (
           <>
-            <PageHeader kicker={t.type_label} ai title={t.title} sub={[t.setting, t.audience && `Audience: ${t.audience}`].filter(Boolean).join(" ")} />
+            <PageHeader kicker={t.type_label} ai title={t.title} sub={[t.setting, t.audience && `Audience: ${t.audience}`].filter(Boolean).join(" · ")} />
             {!t.takes.length ? <AiFrame title="Pitch Coach"><Markdown text={t.messages.find((m) => m.kind === "intro")?.content} /></AiFrame> : null}
             {t.takes.length > 1 ? (
               <div className="flex flex-wrap gap-2" role="group" aria-label="Takes">
