@@ -54,22 +54,26 @@ def test_time_budget_grows_with_answer_length(monkeypatch):
     assert llm.time_budget(300) == 45                           # never below LLM_TIMEOUT_S
 
 
-def test_json_calls_get_at_least_the_minimum_room(monkeypatch):
-    """Offer Card asked for 1,000 tokens and the live answer was cut mid-JSON → "AI is busy"."""
+def test_every_ai_call_gets_the_same_output_room(monkeypatch):
+    """Every tool writes up to LLM_MAX_OUTPUT_TOKENS (default 4,000), whatever max_tokens it passes."""
     import asyncio
 
     import llm
-    seen = {}
+    seen = []
 
     async def fake_call(*, model, max_tokens, system, content):
-        seen["max_tokens"] = max_tokens
+        seen.append(max_tokens)
         return '{"ok": true}'
     monkeypatch.setattr(llm, "mode", lambda: "live")
     monkeypatch.setattr(llm, "_call_text", fake_call)
-    out = asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, model="strong", max_tokens=1000))
-    assert out == {"ok": True} and seen["max_tokens"] == llm.MIN_JSON_TOKENS
-    asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, model="strong", max_tokens=7000))
-    assert seen["max_tokens"] == 7000
+    monkeypatch.delenv("LLM_MAX_OUTPUT_TOKENS", raising=False)
+    for asked in (700, 1000, 7000):
+        asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, model="strong", max_tokens=asked))
+    asyncio.run(llm.complete_text(task="t", system="s", prompt="p", fake=str, max_tokens=300))
+    assert seen == [4000, 4000, 4000, 4000]
+    monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "6000")
+    asyncio.run(llm.complete_json(task="t", system="s", prompt="p", fake=dict, max_tokens=700))
+    assert seen[-1] == 6000
 
 
 def test_portfolio_review_accepts_how_a_real_model_writes():
