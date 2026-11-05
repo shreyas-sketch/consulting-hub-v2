@@ -644,3 +644,21 @@ def test_staff_login_checks_password_off_the_event_loop(mdb, monkeypatch):
         r = c.post("/api/auth/staff/login", json={"email": "staff2@example.com", "password": "s3cret-pass"})
         assert r.status_code == 429                                 # 6th try inside the window
     assert seen and all(n != "MainThread" for n in seen)
+
+
+def test_failed_send_reason_is_logged_with_masked_phone(mdb, caplog):
+    import logging
+
+    from accounts import otp_service
+    from accounts.otp_providers import Senders, SendResult
+
+    class Down:
+        async def send(self, phone, code, ttl):
+            return SendResult(False, "aisensy", "whatsapp", error="HTTP 400: {'message': 'Campaign not live'}")
+
+    with caplog.at_level(logging.WARNING, logger="otp"):
+        with pytest.raises(otp_service.OtpError):
+            run(otp_service.request_otp(mdb, Senders(whatsapp=Down(), sms=None), "+919812345678", ip="1.1.1.1"))
+    text = caplog.text
+    assert "Campaign not live" in text and "aisensy" in text
+    assert "9812345678" not in text and "+91*****78" in text
