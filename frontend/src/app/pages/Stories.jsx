@@ -92,7 +92,7 @@ function Capture({ question, onMade }) {
                   <Mic className={`w-6 h-6 ${recording ? "animate-pulse" : ""}`} aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[24px] font-extrabold tabular" data-testid="story-timer">{clock(rec.seconds)}<span className="text-[14px] text-bz-muted font-bold"> / {MAX_MIN}:00</span></p>
+                  <p className="text-[24px] font-display font-[500] tabular" data-testid="story-timer">{clock(rec.seconds)}<span className="text-[14px] text-bz-muted font-bold"> / {MAX_MIN}:00</span></p>
                   <p className="text-[13px] text-bz-muted">{recording ? "Recording. Speak as if you're telling a friend." : rec.status === "done" ? "Listen back, then turn it into your story." : "Two to five minutes is plenty."}</p>
                 </div>
               </div>
@@ -200,20 +200,20 @@ function StoryCard({ s, open, onToggle, onChanged, onDeleted }) {
             <AiFrame title="Your proof story" right={s.edited ? <Chip>Edited</Chip> : null}>
               <div className="space-y-3">
                 {PARTS.map(([k, l]) => s[k] ? (
-                  <div key={k}><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal">{l}</p><p className="text-[15px] leading-relaxed mt-0.5">{s[k]}</p></div>
+                  <div key={k}><p className="text-[12px] font-semibold text-bz-teal">{l}</p><p className="text-[15px] leading-relaxed mt-0.5">{s[k]}</p></div>
                 ) : null)}
               </div>
               {s.numbers?.length ? <div className="mt-4 flex flex-wrap gap-2">{s.numbers.map((n) => <Chip key={n} tone="gold">{n}</Chip>)}</div> : null}
               {s.pitch_line ? (
                 <div className="mt-4 rounded-bzcard border border-bz-line bg-bz-panel p-3.5 flex items-start gap-2">
-                  <div className="min-w-0 flex-1"><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1">Say it in a pitch</p><p className="text-[15px] italic">“{s.pitch_line}”</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-[12px] font-semibold text-bz-teal mb-1">Say it in a pitch</p><p className="text-[15px] italic">“{s.pitch_line}”</p></div>
                   <CopyButton text={s.pitch_line} />
                 </div>
               ) : null}
               {s.linkedin_post ? (
                 <div className="mt-4 rounded-bzcard border border-bz-line bg-bz-panel overflow-hidden">
                   <div className="flex items-center justify-between px-3.5 py-1.5 border-b border-bz-line">
-                    <span className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal">LinkedIn post</span>
+                    <span className="text-[12px] font-semibold text-bz-teal">LinkedIn post</span>
                     <span data-testid="story-copy-post"><CopyButton text={s.linkedin_post} label="Copy post" /></span>
                   </div>
                   <Para text={s.linkedin_post} className="p-3.5 text-[15px]" />
@@ -265,7 +265,7 @@ export default function Stories() {
                     <Label className="mb-0">Story question of the week</Label>
                     {d.answered_this_week ? <Chip tone="gold">Done this week</Chip> : null}
                   </div>
-                  <p className="mt-3 text-[20px] sm:text-[22px] font-extrabold leading-snug" data-testid="story-question">{d.question.text}</p>
+                  <p className="mt-3 text-[20px] sm:text-[22px] font-display font-[500] leading-snug" data-testid="story-question">{d.question.text}</p>
                 </Card>
               ) : null}
               <Capture question={d.question} onMade={(s) => {

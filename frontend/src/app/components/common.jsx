@@ -31,17 +31,18 @@ export function LockCard({ feature, planNeeded, kind = "locked", msg, once, onAc
   const resets = "It resets on the 1st.";
   const limitText = need ? msg || "You've used this month's limit." : msg && /resets on the 1st/i.test(msg) ? msg : `${msg || "You've used this month's limit."} ${resets}`;
   return (
-    <Card className="border-bz-rule" data-testid={isLimit ? "limit-card" : "lock-card"}>
+    <Card className="border-bz-rule/80 relative overflow-hidden" data-testid={isLimit ? "limit-card" : "lock-card"}>
+      <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-bz-gold via-bz-gold-light to-bz-rule" />
       <div className="flex items-start gap-3">
-        <span className="w-10 h-10 rounded-full bg-bz-gold-tint text-bz-gold grid place-items-center shrink-0"><Lock className="w-5 h-5" aria-hidden /></span>
+        <span className="w-10 h-10 rounded-bzbtn border border-bz-rule text-bz-gold grid place-items-center shrink-0"><Lock className="w-[18px] h-[18px]" strokeWidth={1.75} aria-hidden /></span>
         <div className="min-w-0">
-          <p className="text-[20px] font-extrabold leading-tight">{info.name}</p>
+          <p className="font-display text-[24px] font-[500] leading-tight">{info.name}</p>
           {isLimit ? (
             <p className="text-[15px] mt-1.5">{limitText}</p>
           ) : (
             <>
               <p className="text-[15px] mt-1.5 text-bz-muted">{info.what}</p>
-              <p className="text-[15px] mt-2 font-bold">Part of the <span className="text-bz-gold">{planNeededLabel(need)}</span>.</p>
+              <p className="text-[15px] mt-2 font-semibold">Part of the <span className="text-bz-gold">{planNeededLabel(need)}</span>.</p>
             </>
           )}
         </div>
@@ -76,14 +77,14 @@ export function PlanChip({ plan }) {
 
 export function BackLink({ to, children }) {
   return (
-    <Link to={to} className="no-print inline-flex items-center gap-1.5 text-[13px] font-bold text-bz-gold hover:text-bz-gold-light min-h-[40px] mb-2">
+    <Link to={to} className="no-print inline-flex items-center gap-1.5 text-[14px] font-semibold text-bz-gold hover:text-bz-gold-light min-h-[40px] mb-2">
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M15 6l-6 6 6 6" /></svg>
       {children}
     </Link>
   );
 }
 
-// Gauge-style score ring: gold arc on a hairline track, number in the middle.
+// Score ring: a brass arc (ink-blue for AI scores) on a dark track, the number in the serif.
 export function ScoreRing({ value, max = 100, size = 132, label, sub, ai = false }) {
   const v = Math.max(0, Math.min(max, Number(value) || 0));
   const r = (size - 14) / 2;
@@ -94,13 +95,14 @@ export function ScoreRing({ value, max = 100, size = 132, label, sub, ai = false
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor={ai ? "#7FF0DC" : "#F0D98A"} /><stop offset="1" stopColor={ai ? "#1E9C87" : "#8F7635"} />
+            <stop offset="0" stopColor={ai ? "#C9D3FF" : "#EAD39F"} /><stop offset="1" stopColor={ai ? "#7D8FE6" : "#8F7442"} />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2A2D36" strokeWidth="10" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#0A1E19" strokeWidth="10" />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={`url(#${id})`} strokeWidth="10" strokeLinecap="round"
-          strokeDasharray={`${(v / max) * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ filter: `drop-shadow(0 0 8px ${ai ? "rgba(46,211,183,0.35)" : "rgba(201,168,76,0.35)"})` }} />
-        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fill={ai ? "#2ED3B7" : "#C9A84C"} fontWeight="800" fontSize={size * 0.27} letterSpacing="-1">{v}</text>
+          strokeDasharray={`${(v / max) * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fill={ai ? "#A7B6FF" : "#D4B06A"} fontWeight="500"
+          fontFamily="'Newsreader Variable', Georgia, serif" fontSize={size * 0.32}>{v}</text>
       </svg>
       {sub && <span className="text-[12px] text-bz-muted -mt-1">{sub}</span>}
     </div>

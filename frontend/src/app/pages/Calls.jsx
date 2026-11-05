@@ -14,7 +14,7 @@ function Pill({ href, icon: Icon, children, testid, newTab = true }) {
   if (!href) return null;
   return (
     <a href={href} {...(newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})} data-testid={testid}
-      className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-full border border-bz-line bg-bz-raised text-[14px] font-bold hover:border-bz-line-strong">
+      className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-bzbtn border border-bz-line bg-bz-raised text-[14px] font-bold hover:border-bz-line-strong">
       <Icon className="w-4 h-4 text-bz-gold" aria-hidden /> {children}
     </a>
   );
@@ -32,19 +32,19 @@ function NextCall({ c, title = "Next call" }) {
         {c.live && <Chip tone="solid">Live</Chip>}
         {c.plan_min === "l2" && <Chip tone="gold">L2</Chip>}
       </div>
-      <p className="text-[24px] sm:text-[28px] font-extrabold leading-tight tracking-[-0.01em] mt-2">{c.title}</p>
+      <p className="text-[24px] sm:text-[28px] font-display font-[500] leading-tight tracking-[-0.01em] mt-2">{c.title}</p>
       <p className="text-[17px] font-bold text-bz-gold mt-1.5" data-testid="calls-next-when">{c.when_label}</p>
       <p className="text-[14px] text-bz-muted mt-0.5">{kindLabel(c)} · {c.duration_min} min · group only</p>
       {c.notes && <Para text={c.notes} className="text-[15px] mt-3" />}
       <div className="flex flex-col sm:flex-row gap-2 mt-4">
         {c.link ? (
           <a href={c.link} target="_blank" rel="noopener noreferrer" data-testid="calls-join"
-            className="inline-flex items-center justify-center gap-2 min-h-[52px] px-6 rounded-full bg-bz-gold text-bz-on-accent font-extrabold text-[16px] hover:opacity-90 shadow-goldglow">
+            className="inline-flex items-center justify-center gap-2 min-h-[52px] px-6 rounded-bzbtn bg-bz-gold text-bz-on-accent font-extrabold text-[16px] hover:opacity-90 shadow-goldglow">
             <Video className="w-5 h-5" aria-hidden /> Join the call
           </a>
         ) : <Note className="self-center">The join link shows here before the call.</Note>}
         <a href={apiHref(c.ics_url)} data-testid="calls-calendar"
-          className="inline-flex items-center justify-center gap-2 min-h-[52px] px-6 rounded-full border border-bz-rule text-bz-ink font-bold text-[15px] hover:border-bz-gold">
+          className="inline-flex items-center justify-center gap-2 min-h-[52px] px-6 rounded-bzbtn border border-bz-rule text-bz-ink font-bold text-[15px] hover:border-bz-gold">
           <CalendarPlus className="w-5 h-5 text-bz-gold" aria-hidden /> Add to calendar
         </a>
       </div>

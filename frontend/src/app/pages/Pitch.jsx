@@ -96,7 +96,7 @@ function Tile({ title, children, tone = "muted", className = "" }) {
   const color = { muted: "text-bz-muted", teal: "text-bz-teal", gold: "text-bz-gold", miss: "text-bz-miss" }[tone];
   return (
     <div className={`rounded-bzcard border border-bz-line bg-bz-panel p-4 min-w-0 ${className}`}>
-      <p className={`text-[11.5px] font-medium uppercase tracking-[0.14em] mb-2 ${color}`}>{title}</p>
+      <p className={`text-[12.5px] font-semibold mb-2 ${color}`}>{title}</p>
       {children}
     </div>
   );
@@ -169,7 +169,7 @@ export function Report({ take, metrics }) {
       {cmp && r.weaknesses?.length ? <Tile title="Keep working on" className="mt-3"><Bullets items={r.weaknesses} tone="teal" /></Tile> : null}
 
       <div className="mt-5">
-        <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold mb-3">Your top 5 changes</p>
+        <p className="text-[12px] font-semibold text-bz-gold mb-3">Your top 5 changes</p>
         <ol className="space-y-3" data-testid="pitch-top-changes">
           {r.top_changes.map((c, i) => {
             const { title, items } = parseChange(c);
@@ -191,7 +191,7 @@ export function Report({ take, metrics }) {
       </div>
 
       <div className="mt-5">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2.5">Moments in your video</p>
+        <p className="text-[12px] font-semibold text-bz-teal mb-2.5">Moments in your video</p>
         <ul className="space-y-2">
           {r.specific_observations.map((o) => {
             const { ts, text } = parseObs(o);
@@ -206,7 +206,7 @@ export function Report({ take, metrics }) {
       </div>
 
       <div className="mt-5 rounded-bzcard border border-bz-rule bg-bz-gold-tint p-4">
-        <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold mb-1.5">Your practice this week</p>
+        <p className="text-[12px] font-semibold text-bz-gold mb-1.5">Your practice this week</p>
         <p className="text-[15px] leading-relaxed whitespace-pre-line">{r.practice_assignment}</p>
       </div>
     </AiFrame>
@@ -247,7 +247,7 @@ function Cooldown({ t, fetchedAt, onReady }) {
         <span className="w-10 h-10 rounded-full bg-bz-gold-tint text-bz-gold grid place-items-center shrink-0"><Clock className="w-5 h-5" aria-hidden /></span>
         <div className="min-w-0">
           <p className="text-[13px] text-bz-muted">Next take in</p>
-          <p className="text-[30px] font-extrabold tabular text-bz-gold leading-tight" data-testid="pitch-cooldown-time">{clock(left)}</p>
+          <p className="text-[30px] font-display font-[500] tabular text-bz-gold leading-tight" data-testid="pitch-cooldown-time">{clock(left)}</p>
           <p className="text-[14.5px] mt-1.5">The pause is on purpose. Read your top 5 changes, do the first drill a few times, then record again.</p>
         </div>
       </div>
@@ -383,7 +383,7 @@ function Chat({ t, onUpdate }) {
           {chat.map((m) => m.role === "user" ? (
             <div key={m.id} className="flex justify-end"><p className="max-w-[85%] rounded-bzcard bg-bz-raised border border-bz-line px-3.5 py-2.5 text-[15px] whitespace-pre-line">{m.content}</p></div>
           ) : (
-            <div key={m.id} className="rounded-bzcard border border-[rgba(46,211,183,0.4)] bg-bz-panel px-3.5 py-1"><Markdown text={m.content} /></div>
+            <div key={m.id} className="rounded-bzcard border border-bz-teal/40 bg-bz-panel px-3.5 py-1"><Markdown text={m.content} /></div>
           ))}
         </div>
       ) : <Note className="mb-3">Ask about any score, any moment in your video, or how to say a line better.</Note>}
@@ -429,7 +429,7 @@ function Thread({ id }) {
               <div className="flex flex-wrap gap-2" role="group" aria-label="Takes">
                 {t.takes.map((x) => (
                   <button key={x.n} type="button" onClick={() => setShown(x.n)} aria-pressed={current?.n === x.n} data-testid={`pitch-take-${x.n}`}
-                    className={`min-h-[44px] px-4 rounded-full text-[14px] font-bold border ${current?.n === x.n ? "bg-bz-gold text-bz-on-accent border-bz-gold" : "bg-bz-panel text-bz-ink border-bz-line"}`}>
+                    className={`min-h-[44px] px-4 rounded-bzbtn text-[14px] font-bold border ${current?.n === x.n ? "bg-bz-gold text-bz-on-accent border-bz-gold" : "bg-bz-panel text-bz-ink border-bz-line"}`}>
                     Take {x.n} · {x.overall}
                   </button>
                 ))}

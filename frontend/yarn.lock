@@ -1278,6 +1278,11 @@
   resolved "https://registry.yarnpkg.com/@fontsource-variable/manrope/-/manrope-5.1.1.tgz#91813895a07ec946c21452b1d92c4a1e86e616b2"
   integrity sha512-bJTED5u+nlztikeRJwCgK3ij3qMVsivP4xTxpcrfQ15crvZuW9hjM5f61CgYF3ryL0rJwkjzOpZjB4CwL/pnBw==
 
+"@fontsource-variable/newsreader@5.1.1":
+  version "5.1.1"
+  resolved "https://registry.yarnpkg.com/@fontsource-variable/newsreader/-/newsreader-5.1.1.tgz#23130bcf77f6767ddd0708cc880fb980b528028e"
+  integrity sha512-cW9UGrGSPsPvrNV1uHrRo/21xNtVj/Im9b2mhComwopdXETjIbmqEY2T0akGwp1+FdSfQNpioiw+3FO8hemOhA==
+
 "@humanwhocodes/config-array@^0.13.0":
   version "0.13.0"
   resolved "https://registry.yarnpkg.com/@humanwhocodes/config-array/-/config-array-0.13.0.tgz#fb907624df3256d04b9aa2df50d7aa97ec648748"

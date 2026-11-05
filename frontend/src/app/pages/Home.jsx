@@ -36,7 +36,7 @@ function GroupSession({ s }) {
         </div>
       </div>
       <a href={s.link} target="_blank" rel="noopener noreferrer" onClick={() => track("group_session_clicked", {})}
-        className="mt-4 w-full inline-flex items-center justify-center min-h-[52px] px-6 rounded-full bg-bz-gold text-bz-on-accent font-extrabold text-[16px]">
+        className="mt-4 w-full inline-flex items-center justify-center min-h-[52px] px-6 rounded-bzbtn bg-bz-gold text-bz-on-accent font-extrabold text-[16px]">
         Join the session
       </a>
     </Card>

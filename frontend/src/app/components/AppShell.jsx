@@ -1,5 +1,6 @@
 // Member app shell: left sidebar on a computer; on a phone a top bar and a bottom bar
-// (Home · Cases · Brief · My File · Menu). Dark only.
+// (Home, Cases, Brief, My File, Menu). The sidebar is a file spine: the page you are on sticks out as a brass
+// index tab that runs into the spine's brass edge, like a divider in a consultant's file.
 import { Suspense, useEffect, useState } from "react";
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -40,25 +41,26 @@ const BAR = [
   { ...NAV_MAIN[6], label: "My File" },
 ];
 
-const iconBtn = "w-11 h-11 grid place-items-center rounded-full border border-bz-line text-bz-muted hover:text-bz-ink hover:bg-bz-raised";
+const iconBtn = "w-11 h-11 grid place-items-center rounded-bzbtn border border-bz-line text-bz-muted hover:text-bz-ink hover:bg-bz-raised";
 
 function NavItem({ item, onGo, locked, badge }) {
   const { to, key, label, sub, icon: Icon, end } = item;
   return (
     <NavLink to={to} end={end} onClick={onGo} data-testid={`nav-${key}`}
-      className={({ isActive }) => `relative flex items-center gap-3 px-3 py-2.5 rounded-[12px] min-h-[52px] ${isActive ? "bg-bz-raised" : "hover:bg-bz-raised"}`}>
+      className={({ isActive }) => `relative flex items-center gap-3 pl-3 py-2.5 min-h-[52px] transition-colors ${isActive
+        ? "mr-0 pr-7 rounded-l-bzbtn bg-bz-gold text-bz-on-accent"
+        : "mr-4 pr-3 rounded-bzbtn hover:bg-bz-raised/70"}`}>
       {({ isActive }) => (
         <>
-          {isActive && <span aria-hidden className="absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-r-full bg-bz-gold shadow-goldglow" />}
-          <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-bz-gold" : "text-bz-faint"}`} strokeWidth={1.75} aria-hidden />
+          <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-bz-on-accent" : "text-bz-faint"}`} strokeWidth={1.6} aria-hidden />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5 text-[14px]">
-              <span className={isActive ? "text-bz-gold font-extrabold" : "text-bz-ink font-bold"}>{label}</span>
-              {locked && <Lock className="w-3 h-3 text-bz-faint" aria-label="Locked on your plan" />}
+              <span className={isActive ? "font-bold" : "text-bz-ink font-semibold"}>{label}</span>
+              {locked && <Lock className={`w-3 h-3 ${isActive ? "text-bz-on-accent/70" : "text-bz-faint"}`} aria-label="Locked on your plan" />}
             </span>
-            <span className="block text-[12px] text-bz-muted truncate">{sub}</span>
+            <span className={`block text-[12px] truncate ${isActive ? "text-bz-on-accent/75" : "text-bz-muted"}`}>{sub}</span>
           </span>
-          {badge ? <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-bz-gold text-bz-on-accent text-[11px] font-extrabold grid place-items-center">{badge}</span> : null}
+          {badge ? <span className={`min-w-[20px] h-5 px-1.5 rounded-bztag text-[11px] font-bold grid place-items-center ${isActive ? "bg-bz-on-accent text-bz-gold" : "bg-bz-gold text-bz-on-accent"}`}>{badge}</span> : null}
         </>
       )}
     </NavLink>
@@ -66,7 +68,7 @@ function NavItem({ item, onGo, locked, badge }) {
 }
 
 function GroupLabel({ children }) {
-  return <div className="px-3 pt-4 pb-1 text-[11px] font-medium uppercase tracking-kicker text-bz-gold">{children}</div>;
+  return <div className="px-3 pt-5 pb-1.5 mr-4 text-[12.5px] font-semibold text-bz-gold/90 border-b border-bz-line/70 mb-1">{children}</div>;
 }
 
 // A plan's tools: open by default when the member's plan includes them, folded (with a lock) when not.
@@ -76,8 +78,8 @@ function PlanGroup({ g, mine, onGo, locked }) {
   const here = g.keys.some((k) => FEATURES[k].to && pathname.startsWith(FEATURES[k].to));
   return (
     <details open={open || here} className="group">
-      <summary className="list-none cursor-pointer flex items-center justify-between px-3 pt-4 pb-1 select-none">
-        <span className="text-[11px] font-medium uppercase tracking-kicker text-bz-gold">{g.label}</span>
+      <summary className="list-none cursor-pointer flex items-center justify-between px-3 pt-5 pb-1.5 mr-4 mb-1 select-none border-b border-bz-line/70">
+        <span className="text-[12.5px] font-semibold text-bz-gold/90">{g.label}</span>
         <span className="flex items-center gap-1 text-bz-faint">
           {!open && <Lock className="w-3 h-3" aria-label="Not on your plan" />}
           <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" aria-hidden />
@@ -98,9 +100,9 @@ function MenuBody({ onGo, user, plan, unread, onLogout }) {
   const initial = (user?.name || user?.phone || "?").replace(/^\+91/, "").slice(0, 1).toUpperCase();
   return (
     <div className="flex flex-col h-full min-h-0">
-      <Link to="/app" onClick={onGo} className={`px-2 ${onGo ? "mr-12" : ""}`} aria-label={`${brand.name} home`}><Logo /></Link>
+      <Link to="/app" onClick={onGo} className={`px-2 ${onGo ? "mr-16" : "mr-4"}`} aria-label={`${brand.name} home`}><Logo /></Link>
       <div className="mt-4 px-2"><PlanChip plan={plan} /></div>
-      <nav aria-label="Main" className="mt-2 flex flex-col gap-0.5 overflow-y-auto no-scrollbar -mx-1 px-1 pb-2 flex-1 min-h-0">
+      <nav aria-label="Main" className="mt-2 flex flex-col gap-0.5 overflow-y-auto no-scrollbar pb-2 flex-1 min-h-0">
         <GroupLabel>Your tools</GroupLabel>
         {NAV_MAIN.map((i) => <NavItem key={i.to} item={i} onGo={onGo} locked={locked(i)} />)}
         {MENU_GROUPS.map((g) => <PlanGroup key={g.plan} g={g} mine={admin ? "l2" : plan?.plan || "free"} onGo={onGo} locked={locked} />)}
@@ -108,12 +110,12 @@ function MenuBody({ onGo, user, plan, unread, onLogout }) {
         {NAV_ACCOUNT.map((i) => <NavItem key={i.to} item={i} onGo={onGo} badge={i.key === "inbox" ? unread : 0} />)}
         {admin && <NavItem item={{ to: "/admin", key: "admin", label: "Admin panel", sub: "Team only", icon: Shield }} onGo={onGo} />}
       </nav>
-      <div className="pt-3 border-t border-bz-line flex items-center gap-3 px-2">
-        <Link to="/app/account" onClick={onGo} className="flex items-center gap-3 min-w-0 flex-1 rounded-[12px] hover:bg-bz-raised -m-1 p-1">
-          <span className="w-9 h-9 shrink-0 rounded-full grid place-items-center text-[14px] font-extrabold bg-bz-gold text-bz-on-accent">{initial}</span>
+      <div className="pt-3 mr-4 border-t border-bz-line flex items-center gap-3 px-2">
+        <Link to="/app/account" onClick={onGo} className="flex items-center gap-3 min-w-0 flex-1 rounded-bzbtn hover:bg-bz-raised/70 -m-1 p-1">
+          <span className="font-display w-9 h-9 shrink-0 rounded-full grid place-items-center text-[17px] font-[500] border border-bz-rule text-bz-gold">{initial}</span>
           <span className="min-w-0">
-            <span className="block text-sm font-bold truncate">{user?.name || user?.phone}</span>
-            <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted">Account</span>
+            <span className="block text-sm font-semibold truncate">{user?.name || user?.phone}</span>
+            <span className="block text-[12px] text-bz-muted">Your account</span>
           </span>
         </Link>
         <button type="button" onClick={onLogout} title="Log out" aria-label="Log out" data-testid="logout" className="w-11 h-11 grid place-items-center text-bz-muted hover:text-bz-ink shrink-0">
@@ -148,17 +150,17 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen flex font-bz text-bz-ink antialiased">
-      <aside className="no-print hidden lg:flex flex-col w-[280px] shrink-0 px-4 py-6 sticky top-0 h-screen border-r border-bz-line bg-bz-panel">
+      <aside className="no-print hidden lg:flex flex-col w-[288px] shrink-0 pl-4 pr-0 py-6 sticky top-0 h-screen border-r-2 border-bz-gold/80 bg-bz-spine">
         <MenuBody {...menu} />
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="no-print sticky top-0 z-30 lg:hidden border-b border-bz-line" style={{ backgroundColor: "rgba(20,21,26,0.94)" }}>
+        <header className="no-print sticky top-0 z-30 lg:hidden border-b border-bz-gold/50 bg-bz-spine/95 backdrop-blur">
           <div className="flex items-center justify-between gap-3 px-4 h-16">
             <Link to="/app" aria-label={`${brand.name} home`}><Logo word="hidden min-[380px]:flex" /></Link>
             <Link to="/app/inbox" aria-label={`Inbox${unread ? `, ${unread} unread` : ""}`} className={`${iconBtn} relative`} data-testid="topbar-inbox">
               <Bell className="w-5 h-5" strokeWidth={1.75} aria-hidden />
-              {unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-bz-gold text-bz-on-accent text-[10px] font-extrabold grid place-items-center">{unread > 9 ? "9+" : unread}</span>}
+              {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-bztag bg-bz-gold text-bz-on-accent text-[10px] font-bold grid place-items-center">{unread > 9 ? "9+" : unread}</span>}
             </Link>
           </div>
         </header>
@@ -166,8 +168,8 @@ export default function AppShell() {
         {drawer && (
           <div className="lg:hidden fixed inset-0 z-50">
             <button type="button" aria-label="Close menu" className="absolute inset-0 bg-bz-scrim" onClick={() => setDrawer(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-[320px] max-w-[88vw] bg-bz-panel border-r border-bz-line px-4 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-float flex flex-col">
-              <button type="button" aria-label="Close menu" onClick={() => setDrawer(false)} className={`${iconBtn} absolute right-3 top-4`}>
+            <div className="absolute left-0 top-0 bottom-0 w-[320px] max-w-[88vw] bg-bz-spine border-r-2 border-bz-gold/80 pl-4 pr-0 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-float flex flex-col">
+              <button type="button" aria-label="Close menu" onClick={() => setDrawer(false)} className={`${iconBtn} absolute right-4 top-4 bg-bz-spine`}>
                 <X className="w-5 h-5" strokeWidth={1.75} aria-hidden />
               </button>
               <MenuBody {...menu} onGo={() => setDrawer(false)} />
@@ -186,19 +188,22 @@ export default function AppShell() {
           </div>
         </main>
 
-        <nav aria-label="Quick" className="no-print lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bz-panel border-t border-bz-line pb-[env(safe-area-inset-bottom)]">
+        <nav aria-label="Quick" className="no-print lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bz-spine/95 backdrop-blur border-t border-bz-gold/50 pb-[env(safe-area-inset-bottom)]">
           <ul className="max-w-[600px] mx-auto grid grid-cols-5">
             {BAR.map(({ to, key, label, icon: Icon, end }) => (
               <li key={to}>
                 <NavLink to={to} end={end} data-testid={`bar-${key}`}
-                  className={({ isActive }) => `flex flex-col items-center gap-1 pt-2.5 pb-3 text-[11.5px] font-medium ${isActive ? "text-bz-gold" : "text-bz-faint hover:text-bz-ink"}`}>
-                  <Icon className="w-5 h-5" strokeWidth={1.75} aria-hidden />{label}
+                  className={({ isActive }) => `relative flex flex-col items-center gap-1 pt-2.5 pb-3 text-[12px] font-semibold ${isActive ? "text-bz-gold" : "text-bz-faint hover:text-bz-ink"}`}>
+                  {({ isActive }) => (<>
+                    {isActive && <span aria-hidden className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-[5px] rounded-b-[4px] bg-bz-gold" />}
+                    <Icon className="w-5 h-5" strokeWidth={1.6} aria-hidden />{label}
+                  </>)}
                 </NavLink>
               </li>
             ))}
             <li>
               <button type="button" onClick={() => setDrawer(true)} data-testid="bar-menu"
-                className="w-full flex flex-col items-center gap-1 pt-2.5 pb-3 text-[11.5px] font-medium text-bz-faint hover:text-bz-ink relative">
+                className="w-full flex flex-col items-center gap-1 pt-2.5 pb-3 text-[12px] font-semibold text-bz-faint hover:text-bz-ink relative">
                 <Menu className="w-5 h-5" strokeWidth={1.75} aria-hidden />Menu
                 {unread > 0 && <span className="absolute top-1.5 right-[calc(50%-18px)] w-2 h-2 rounded-full bg-bz-gold" aria-hidden />}
               </button>

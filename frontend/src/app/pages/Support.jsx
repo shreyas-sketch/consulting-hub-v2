@@ -81,7 +81,7 @@ function Thread({ id }) {
           <>
             <div>
               <div className="flex flex-wrap items-center gap-2"><StatusChip status={t.status} /><Chip>{CAT[t.category] || t.category}</Chip></div>
-              <h1 className="text-[24px] sm:text-[30px] font-extrabold tracking-[-0.02em] leading-tight mt-3">{t.subject}</h1>
+              <h1 className="font-display text-[24px] sm:text-[30px] font-[450] tracking-[-0.02em] leading-tight mt-3">{t.subject}</h1>
               <p className="text-[13px] text-bz-muted mt-1">Started {hdate(t.created_at)}</p>
             </div>
             <div className="space-y-3" data-testid="support-thread">

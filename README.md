@@ -36,7 +36,7 @@ search), Google Gemini (pitch videos and audio). Decks are made by the app itsel
 |---|---|
 | `backend/` | FastAPI app (`server.py` composition root, `core/` kernel: settings, errors, middleware, module registry); tools in `features/` (`features/cases/` is the layered reference), plans and limits in `plans.py`, billing in `billing/`, admin in `admin/` |
 | `backend/gpts/` | All 52 GPT prompts from the current hub, one file each, for L1 and L2 (see its README) |
-| `frontend/` | React app in Akshat's design system (dark only), served by FastAPI |
+| `frontend/` | React app ("the chamber" design: bottle green, brass, ivory, ink-blue for AI), served by FastAPI |
 | `scripts/qa_server.py` | Whole app on sample data: no database, no keys, no network |
 | `scripts/loadtest/` | Load test: seed 10,000 accounts, then 500 webinar attendees or 500 paid members (Locust) |
 | `docs/` | A-to-Z guide, handover, WhatsApp templates, QA report, load test, API, backend design, build guide; `docs/reference/` = the current hub's and the Leadership hub's working documents |

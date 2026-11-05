@@ -5,11 +5,10 @@ import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useCheckout } from "@/lib/checkout";
 import { hdate, inr } from "@/lib/format";
-import { PLAN_LABEL } from "@/lib/features";
+import { PLAN_LABEL, usageName } from "@/lib/features";
 import { Button, Card, Field, Input, Label, LinkButton, Meter, OkLine, PageHeader, Sheet } from "../components/ui";
 import { PlanChip } from "../components/common";
 
-const USAGE_NAME = { readiness: "Readiness Scores", start: "Niche Snapshots", goal: "Goal Map saves", case: "Case answers", brief: "Meeting Briefs", linkedin: "LinkedIn checks" };
 const SOURCE = { paid: "Paid subscription", grant: "Given by the team", free: "Free account" };
 
 function Profile() {
@@ -108,7 +107,7 @@ function PlanDetails() {
     <Card>
       <Label>Your plan</Label>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[24px] font-extrabold">{p.label || PLAN_LABEL[p.plan] || "Free account"}</span>
+        <span className="text-[24px] font-display font-[500]">{p.label || PLAN_LABEL[p.plan] || "Free account"}</span>
         {p.period === "yearly" && <PlanChip plan={{ ...p, label: "Yearly" }} />}
       </div>
       <p className="text-[14.5px] text-bz-muted mt-1">
@@ -126,10 +125,10 @@ function PlanDetails() {
             return (
               <div key={k}>
                 <div className="flex justify-between text-[14px]">
-                  <span>{USAGE_NAME[k] || k}</span>
+                  <span>{usageName(k)}</span>
                   <span className="tabular text-bz-muted">{lim === 0 ? "Not on your plan" : lim == null ? `${used} used` : `${used} of ${lim}`}</span>
                 </div>
-                {lim ? <Meter value={(used / lim) * 100} className="mt-1 h-1.5" label={USAGE_NAME[k] || k} /> : null}
+                {lim ? <Meter value={(used / lim) * 100} className="mt-1 h-1.5" label={usageName(k)} /> : null}
               </div>
             );
           })}

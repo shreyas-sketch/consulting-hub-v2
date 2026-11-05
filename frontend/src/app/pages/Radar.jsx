@@ -13,7 +13,7 @@ import {
   AiFrame, Button, Card, Chip, Empty, ErrorLine, Field, Input, Label, Loadable, Note, OkLine, PageHeader, Segmented, Thinking,
 } from "../components/ui";
 
-const smallLink = "inline-flex items-center justify-center min-h-[40px] px-4 rounded-full border border-bz-line bg-bz-raised text-[13px] font-bold hover:border-bz-line-strong";
+const smallLink = "inline-flex items-center justify-center min-h-[40px] px-4 rounded-bzbtn border border-bz-line bg-bz-raised text-[13px] font-bold hover:border-bz-line-strong";
 
 function CompanyCard({ c, onStatus }) {
   const ctx = [c.summary, c.news?.title ? `Saw this in the news: ${c.news.title}` : ""].filter(Boolean).join(" ");

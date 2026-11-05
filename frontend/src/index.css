@@ -2,39 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ==== Consultation Hub tokens: Akshat Dani design system (dark only) ====
-   Token names keep the --bz-* prefix the shared components use; the values are Akshat's palette.
-   gold   = the signal: kickers, key phrases, ₹ figures, numerals, primary buttons, active nav
-   teal   = AI only: AI buttons, AI result frames, "thinking" states
-   miss   = alert red: errors and destructive actions only                                         */
+/* ==== Consultation Hub tokens: "the chamber" (dark, bottle-green leather, brass, ivory, ink) ====
+   Token names keep the --bz-* prefix every component uses, so the whole app follows these values.
+   brass (gold) = the one signal: primary action, ₹ figures, where you are, key numbers
+   ink (teal)   = AI only: AI buttons, AI-written text, "thinking" states (the AI writes in fountain-pen ink)
+   sindoor (miss) = errors and destructive actions only                                                  */
 :root {
-  --bz-bg: #14151a;
-  --bz-panel: #1e2027;
-  --bz-card: #1e2027;
-  --bz-raised: #262932;
-  --bz-ink: #f2eee6;
-  --bz-muted: rgba(242, 238, 230, 0.7);
-  --bz-faint: rgba(242, 238, 230, 0.35);
-  --bz-line: #2a2d36;
-  --bz-line-strong: #3a3e4a;
-  --bz-inset: #262932;
-  --bz-accent: #c9a84c;
-  --bz-accent-deep: #f0d98a;
-  --bz-accent-tint: rgba(201, 168, 76, 0.12);
-  --bz-on-accent: #14151a;
-  --bz-miss: #e0533d;
-  --bz-miss-tint: rgba(224, 83, 61, 0.12);
-  --bz-gold: #c9a84c;
-  --bz-gold-light: #f0d98a;
-  --bz-gold-deep: #c9a84c;     /* text-safe gold; the darker rule colour is --bz-rule */
-  --bz-rule: #8f7635;
-  --bz-gold-tint: rgba(201, 168, 76, 0.12);
-  --bz-teal: #2ed3b7;
-  --bz-teal-ink: #0e2b26;
-  --bz-teal-tint: rgba(46, 211, 183, 0.1);
-  --bz-scrim: rgba(10, 11, 14, 0.7);
-  --card-shadow: none;
-  --focus-ring: 0 0 0 2px rgba(201, 168, 76, 0.55);
+  --bz-bg: #0e2620;              /* blotter green */
+  --bz-panel: #12302a;           /* leather: inputs, sheets */
+  --bz-card: #14352d;            /* sheet of a page */
+  --bz-raised: #1b4137;          /* hover, inset */
+  --bz-spine: #0a1e19;           /* the file spine (sidebar) */
+  --bz-ink: #f1ebdd;             /* ivory */
+  --bz-muted: rgba(241, 235, 221, 0.72);
+  --bz-faint: rgba(241, 235, 221, 0.42);
+  --bz-line: #24493f;
+  --bz-line-strong: #36604f;
+  --bz-inset: #1b4137;
+  --bz-accent: #d4b06a;
+  --bz-accent-deep: #ead39f;
+  --bz-accent-tint: rgba(212, 176, 106, 0.13);
+  --bz-on-accent: #0e2620;
+  --bz-miss: #ff7f66;            /* sindoor */
+  --bz-miss-tint: rgba(255, 127, 102, 0.12);
+  --bz-gold: #d4b06a;            /* brass */
+  --bz-gold-light: #ead39f;
+  --bz-gold-deep: #d4b06a;
+  --bz-rule: #8f7442;            /* brass rule, dimmer */
+  --bz-gold-tint: rgba(212, 176, 106, 0.13);
+  --bz-teal: #a7b6ff;            /* Quink ink-blue: AI only */
+  --bz-teal-ink: #141b3d;
+  --bz-teal-tint: rgba(167, 182, 255, 0.11);
+  --bz-scrim: rgba(5, 14, 11, 0.72);
+  --card-shadow: 0 1px 0 rgba(241, 235, 221, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.55);
+  --focus-ring: 0 0 0 2px var(--bz-bg), 0 0 0 4px rgba(212, 176, 106, 0.85);
+  /* RGB channels of the solid colours, so Tailwind opacity modifiers (bg-bz-raised/60) work everywhere */
+  --bz-bg-rgb: 14 38 32;
+  --bz-spine-rgb: 10 30 25;
+  --bz-panel-rgb: 18 48 42;
+  --bz-card-rgb: 20 53 45;
+  --bz-raised-rgb: 27 65 55;
+  --bz-ink-rgb: 241 235 221;
+  --bz-line-rgb: 36 73 63;
+  --bz-line-strong-rgb: 54 96 79;
+  --bz-gold-rgb: 212 176 106;
+  --bz-gold-light-rgb: 234 211 159;
+  --bz-rule-rgb: 143 116 66;
+  --bz-teal-rgb: 167 182 255;
+  --bz-teal-ink-rgb: 20 27 61;
+  --bz-miss-rgb: 255 127 102;
+  --bz-on-accent-rgb: 14 38 32;
   color-scheme: dark;
 }
 
@@ -51,30 +68,43 @@ body {
   -moz-osx-font-smoothing: grayscale;
   color: var(--bz-ink);
   min-height: 100vh;
-  /* Radial lift + faint 48px grid: dark, never flat */
+  /* Lamp light falling on a leather blotter: one soft pool, darker at the edges */
   background-image:
-    radial-gradient(ellipse 1400px 1000px at 0% 0%, #1e2027 0%, rgba(30, 32, 39, 0.3) 50%, transparent 80%);
+    radial-gradient(ellipse 1200px 900px at 78% -10%, rgba(212, 176, 106, 0.07), transparent 60%),
+    radial-gradient(ellipse 1400px 1100px at 10% 110%, rgba(3, 12, 9, 0.55), transparent 70%);
   background-attachment: fixed;
 }
 
+/* Fine leather grain over everything (a static SVG noise, ~2% visible) */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background-image:
-    linear-gradient(to right, rgba(242, 238, 230, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(242, 238, 230, 0.05) 1px, transparent 1px);
-  background-size: 48px 48px;
-  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 30% 20%, #000 0%, transparent 75%);
-  mask-image: radial-gradient(ellipse 80% 70% at 30% 20%, #000 0%, transparent 75%);
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.92  0 0 0 0 0.86  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
 }
 
 #root {
   position: relative;
   z-index: 1;
   background-color: transparent;
+}
+
+/* Display serif: headlines, tool names, ₹ figures. Optical sizing on, lining figures for money. */
+.font-display {
+  font-family: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
+  font-optical-sizing: auto;
+  font-feature-settings: "lnum" 1, "kern" 1;
+  letter-spacing: -0.012em;
+}
+
+h1, h2 {
+  font-family: "Newsreader Variable", "Newsreader", Georgia, serif;
+  font-optical-sizing: auto;
+  font-feature-settings: "lnum" 1;
 }
 
 *:focus-visible {
@@ -130,7 +160,14 @@ input[type="range"] {
     animation: ch-pulse 1.1s ease-in-out infinite;
   }
   .gold-glow {
-    text-shadow: 0 0 24px rgba(201, 168, 76, 0.35);
+    text-shadow: none;
+  }
+  /* The brass rule under a page's letterhead */
+  .brass-rule {
+    height: 2px;
+    width: 56px;
+    background: linear-gradient(90deg, var(--bz-gold), var(--bz-rule));
+    border-radius: 2px;
   }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
@@ -139,6 +176,7 @@ input[type="range"] {
 @media print {
   body { background: #fff !important; color: #111 !important; }
   body::before { display: none; }
+  h1, h2, .font-display { color: #111 !important; }
   .no-print { display: none !important; }
   .print-plain, .print-plain * { background: transparent !important; color: #111 !important; border-color: #ccc !important; box-shadow: none !important; }
 }

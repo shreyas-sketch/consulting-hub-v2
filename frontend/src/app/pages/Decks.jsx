@@ -19,7 +19,7 @@ const HEADER = <PageHeader kicker="Presentation Builder" ai title="Turn your wor
 const ORIGIN = API_BASE.replace(/\/api$/, "");
 const SOURCE_LABEL = { text: "My notes", case: "A case I solved", brief: "A Meeting Brief" };
 const LOOK_LABEL = { dark: "Dark", light: "Light" };
-const DL_CLS = "inline-flex items-center justify-center gap-2 rounded-full min-h-[52px] px-5 py-3 border border-bz-rule text-bz-ink font-bold text-[15px] hover:border-bz-gold";
+const DL_CLS = "inline-flex items-center justify-center gap-2 rounded-bzbtn min-h-[52px] px-5 py-3 border border-bz-rule text-bz-ink font-bold text-[15px] hover:border-bz-gold";
 
 function sizeLabel(bytes) {
   if (!bytes) return "";
@@ -125,7 +125,7 @@ function DeckView({ id }) {
                   {d.layout.map((sl, i) => (
                     <div key={i} data-testid={`slide-${i + 1}`}>
                       <div className="flex items-center justify-between gap-3 mb-1.5">
-                        <span className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted">
+                        <span className="text-[12px] font-semibold text-bz-muted">
                           {i + 1} · {layoutName(d.deck.slides[i]?.layout)}
                         </span>
                         <Button variant="small" onClick={() => { setEditErr(""); setEditing(i); }} data-testid={`slide-edit-${i + 1}`}>

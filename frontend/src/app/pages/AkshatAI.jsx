@@ -85,7 +85,7 @@ function Answer({ m, innerRef }) {
         <div data-testid="akshat-answer"><Markdown text={m.text} /></div>
         {m.sources?.length > 0 && (
           <div className="mt-3 pt-3 border-t border-bz-line" data-testid="akshat-sources">
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-1.5">From these sessions</p>
+            <p className="text-[12.5px] font-semibold text-bz-muted mb-1.5">From these sessions</p>
             <ul className="space-y-1">
               {m.sources.map((s) => (
                 <li key={s.title} className="flex items-start gap-2 text-[13.5px]"><BookOpen className="w-3.5 h-3.5 mt-1 text-bz-teal shrink-0" aria-hidden />{s.title}</li>
@@ -170,7 +170,7 @@ function Ask() {
     <div className="lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-7">
       <aside className="hidden lg:block">
         <div className="sticky top-6 max-h-[calc(100vh-48px)] overflow-y-auto pr-1">
-          <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-muted mb-2">Your questions</p>
+          <p className="text-[12px] font-semibold text-bz-muted mb-2">Your questions</p>
           {threads.isLoading ? <Skeleton lines={4} /> : listEl}
         </div>
       </aside>

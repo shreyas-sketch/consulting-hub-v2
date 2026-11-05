@@ -16,7 +16,7 @@ import {
   Segmented, Select, Step, Textarea, Thinking,
 } from "../components/ui";
 
-const H = ({ children }) => <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2">{children}</p>;
+const H = ({ children }) => <p className="text-[12px] font-semibold text-bz-teal mb-2">{children}</p>;
 
 function Report({ did, rid }) {
   const q = useQuery({ queryKey: ["diag-resp", did, rid], queryFn: async () => (await api.get(`/diagnostic/${did}/responses/${rid}`)).data });
@@ -30,7 +30,7 @@ function Report({ did, rid }) {
               <div className="flex flex-col sm:flex-row sm:items-center gap-5">
                 <ScoreRing value={r.pct} max={100} size={120} label="Score" sub={r.band} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[22px] font-extrabold leading-tight">{r.name}</p>
+                  <p className="text-[22px] font-display font-[500] leading-tight">{r.name}</p>
                   <p className="text-[14px] text-bz-muted">{r.company || "Company not given"} · {hdate(r.at)}</p>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[14px]">
                     {r.phone && <a href={`tel:${r.phone}`} className="text-bz-gold font-bold min-h-[32px] inline-flex items-center">{r.phone}</a>}
@@ -57,7 +57,7 @@ function Report({ did, rid }) {
               </div>
               <div className="mt-5"><H>Top 3 recommendations</H><div className="space-y-3">{r.report.recommendations.map((x, i) => <Step key={x} n={i + 1} ai title={x} />)}</div></div>
               <div className="mt-5 rounded-bzcard border border-bz-gold bg-bz-gold-tint p-3.5">
-                <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-gold mb-1">The next conversation</p>
+                <p className="text-[12px] font-semibold text-bz-gold mb-1">The next conversation</p>
                 <p className="text-[15px]">{r.report.next_conversation}</p>
               </div>
               {r.report.auto && <Note className="mt-3">The AI was busy when this came in, so this read is worked out from the scores.</Note>}
@@ -74,7 +74,7 @@ function Report({ did, rid }) {
             </Card>
             <div className="flex flex-col sm:flex-row gap-2 no-print">
               <Link to={`/app/outreach?name=${encodeURIComponent(r.name)}&company=${encodeURIComponent(r.company || "")}&context=${encodeURIComponent(ctx)}`}
-                className="inline-flex items-center justify-center min-h-[52px] px-6 rounded-full border border-bz-rule font-bold text-[15px] hover:border-bz-gold" data-testid="diagnostic-outreach">Draft a reply</Link>
+                className="inline-flex items-center justify-center min-h-[52px] px-6 rounded-bzbtn border border-bz-rule font-bold text-[15px] hover:border-bz-gold" data-testid="diagnostic-outreach">Draft a reply</Link>
               <Button variant="secondary" onClick={() => window.print()}>Print or save as PDF</Button>
             </div>
           </div>
@@ -219,7 +219,7 @@ function Detail() {
                       <CopyButton text={url} label="Copy link" />
                     </div>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      <a href={x.public_path} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full border border-bz-line bg-bz-raised text-[13px] font-bold">Open the form<ExternalLink className="w-3.5 h-3.5" aria-hidden /></a>
+                      <a href={x.public_path} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-bzbtn border border-bz-line bg-bz-raised text-[13px] font-bold">Open the form<ExternalLink className="w-3.5 h-3.5" aria-hidden /></a>
                       <Button variant="small" onClick={unpublish} loading={busy} data-testid="diagnostic-unpublish">Take it offline</Button>
                     </div>
                     <Note className="mt-2">Share this link in your outreach, on LinkedIn or on WhatsApp. Anyone with it can answer; no login.</Note>

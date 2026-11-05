@@ -13,12 +13,12 @@ import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, Loadable, 
 export function BriefBody({ b }) {
   return (
     <AiFrame title="Meeting Brief" right={<span className="text-[12px] text-bz-muted">{hdate(b.at)}</span>} className="print-plain">
-      <p className="text-[24px] font-extrabold tracking-[-0.01em] leading-tight">{b.input.company}</p>
+      <p className="text-[24px] font-display font-[500] tracking-[-0.01em] leading-tight">{b.input.company}</p>
       {(b.input.meeting_with || b.input.purpose) && <p className="text-[14px] text-bz-muted mt-1">{[b.input.meeting_with && `Meeting: ${b.input.meeting_with}`, b.input.purpose].filter(Boolean).join(" · ")}</p>}
       <p className="text-[15px] mt-3 leading-relaxed">{b.about}</p>
 
       <div className="mt-5">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2">Recent news</p>
+        <p className="text-[12px] font-semibold text-bz-teal mb-2">Recent news</p>
         {b.news?.length ? (
           <ul className="space-y-3">
             {b.news.map((n) => (
@@ -36,18 +36,18 @@ export function BriefBody({ b }) {
       </div>
 
       <div className="mt-5">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2">Likely problems</p>
+        <p className="text-[12px] font-semibold text-bz-teal mb-2">Likely problems</p>
         <div className="space-y-3">{b.problems.map((p, i) => <Step key={p.problem} n={i + 1} ai title={p.problem}>{p.why}</Step>)}</div>
       </div>
 
       <div className="mt-5">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2">Questions to ask</p>
+        <p className="text-[12px] font-semibold text-bz-teal mb-2">Questions to ask</p>
         <ol className="space-y-1.5 text-[15px] list-decimal pl-5">{b.questions.map((q) => <li key={q}>{q}</li>)}</ol>
       </div>
 
       {b.opening && (
         <div className="mt-5 rounded-bzcard border border-bz-line bg-bz-panel p-3.5">
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1">Opening line</p>
+          <p className="text-[12px] font-semibold text-bz-teal mb-1">Opening line</p>
           <p className="text-[15px] italic">“{b.opening}”</p>
         </div>
       )}

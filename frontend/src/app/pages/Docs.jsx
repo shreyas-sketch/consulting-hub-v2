@@ -107,7 +107,7 @@ export function CitedAnswer({ a, testid = "docs-answer" }) {
       </div>
       {shown && (
         <blockquote className="mt-3 rounded-bzcard border border-bz-line border-l-[3px] border-l-bz-gold bg-bz-panel p-3.5" data-testid={`cite-excerpt-${shown.n}`}>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted">
+          <p className="text-[12px] font-semibold text-bz-muted">
             [{shown.n}] {shown.doc_title}{shown.page ? `, page ${shown.page}` : ""}
           </p>
           <p className="text-[14.5px] mt-1.5 leading-relaxed">“{shown.excerpt}”</p>
@@ -117,7 +117,7 @@ export function CitedAnswer({ a, testid = "docs-answer" }) {
         <div className="mt-3 flex flex-wrap gap-2">
           {cites.map((c) => (
             <button key={c.n} type="button" onClick={() => toggle(c.n)} aria-pressed={open === c.n} data-testid={`cite-chip-${c.n}`}
-              className={`min-h-[44px] max-w-full px-3 rounded-full border text-[13px] font-bold text-left truncate ${open === c.n ? "border-bz-gold text-bz-gold" : "border-bz-line text-bz-muted hover:border-bz-line-strong"}`}>
+              className={`min-h-[44px] max-w-full px-3 rounded-bzbtn border text-[13px] font-bold text-left truncate ${open === c.n ? "border-bz-gold text-bz-gold" : "border-bz-line text-bz-muted hover:border-bz-line-strong"}`}>
               [{c.n}] {c.doc_title}{c.page ? ` · p. ${c.page}` : ""}
             </button>
           ))}
@@ -282,7 +282,7 @@ function List({ items }) {
 }
 
 function Head({ children }) {
-  return <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mt-5 mb-2">{children}</p>;
+  return <p className="text-[12px] font-semibold text-bz-teal mt-5 mb-2">{children}</p>;
 }
 
 function SummaryBody({ s }) {
@@ -345,7 +345,7 @@ function DocView({ id }) {
           <div className="space-y-5">
             <Card>
               <Label>Document</Label>
-              <h1 className="text-[24px] sm:text-[30px] font-extrabold leading-tight tracking-[-0.01em] break-words">{d.title}</h1>
+              <h1 className="font-display text-[24px] sm:text-[30px] font-[450] leading-tight tracking-[-0.01em] break-words">{d.title}</h1>
               <p className="text-[13px] text-bz-muted mt-1.5">{docMeta(d)} · added {hdate(d.at)}</p>
               {d.truncated && <Note className="mt-2">This document is very long. We read the first part of it.</Note>}
               {d.preview && <p className="text-[14px] text-bz-muted mt-3 leading-relaxed line-clamp-4">Starts: “{d.preview}…”</p>}

@@ -24,8 +24,8 @@ function Score({ a, criteria }) {
       </div>
       {a.summary && <p className="mt-4 text-[15px]">{a.summary}</p>}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1.5">What worked</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.good.map((x) => <li key={x}>{x}</li>)}</ul></div>
-        <div><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1.5">To improve</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.improve.map((x) => <li key={x}>{x}</li>)}</ul></div>
+        <div><p className="text-[12px] font-semibold text-bz-teal mb-1.5">What worked</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.good.map((x) => <li key={x}>{x}</li>)}</ul></div>
+        <div><p className="text-[12px] font-semibold text-bz-teal mb-1.5">To improve</p><ul className="space-y-1 text-[14px] list-disc pl-5">{a.improve.map((x) => <li key={x}>{x}</li>)}</ul></div>
       </div>
       <details className="mt-4">
         <summary className="cursor-pointer text-[13px] font-bold text-bz-muted min-h-[40px] flex items-center">Your answer</summary>
@@ -38,7 +38,7 @@ function Score({ a, criteria }) {
 function Phase({ n, name, children }) {
   return (
     <div className="pt-5 mt-5 border-t border-bz-line first:mt-0 first:pt-0 first:border-0">
-      <p className="text-[12px] font-medium uppercase tracking-kicker text-bz-gold">Phase {n} · {name}</p>
+      <p className="text-[12px] font-semibold text-bz-gold">Phase {n} · {name}</p>
       <div className="mt-3 space-y-3">{children}</div>
     </div>
   );
@@ -55,7 +55,7 @@ function ModelAnswer({ m }) {
         <div className="grid grid-cols-3 gap-2">
           {[["From", o.from], ["To", o.to], ["In", o.by]].map(([k, v]) => (
             <div key={k} className="rounded-bzcard bg-bz-raised border border-bz-line p-3 min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted">{k}</p>
+              <p className="text-[12.5px] font-semibold text-bz-muted">{k}</p>
               <p className="text-[14px] font-extrabold text-bz-gold mt-1 leading-snug">{v}</p>
             </div>
           ))}
@@ -81,7 +81,7 @@ function ModelAnswer({ m }) {
         <div className="grid gap-2 sm:grid-cols-3">
           {[["Owner", m.charter?.owner], ["Leading metric", m.charter?.leading], ["Lagging metric", m.charter?.lagging]].map(([k, v]) => (
             <div key={k} className="rounded-bzcard bg-bz-raised border border-bz-line p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-bz-muted">{k}</p>
+              <p className="text-[12.5px] font-semibold text-bz-muted">{k}</p>
               <p className="text-[14px] font-bold mt-1">{v}</p>
             </div>
           ))}

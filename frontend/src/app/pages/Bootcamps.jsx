@@ -41,7 +41,7 @@ function Task({ bid, t, i }) {
   return (
     <Card data-testid={`bootcamp-task-${t.id}`}>
       <div className="flex items-start gap-3">
-        <span className="w-[34px] h-[34px] shrink-0 rounded-full border border-bz-gold text-bz-gold grid place-items-center text-[14px] font-extrabold">{i + 1}</span>
+        <span className="font-display w-[34px] h-[34px] shrink-0 rounded-bzbtn border border-bz-rule text-bz-gold grid place-items-center text-[18px] font-[500]">{i + 1}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[17px] font-extrabold leading-snug">{t.title}</p>
@@ -52,7 +52,7 @@ function Task({ bid, t, i }) {
       </div>
       {s?.feedback && (
         <div className="mt-4 rounded-bzcard border border-bz-rule bg-bz-gold-tint p-3.5" data-testid={`bootcamp-feedback-${t.id}`}>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-gold mb-1">Feedback from the team</p>
+          <p className="text-[12px] font-semibold text-bz-gold mb-1">Feedback from the team</p>
           <Para text={s.feedback} className="text-[15px]" />
         </div>
       )}

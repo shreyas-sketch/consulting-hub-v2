@@ -40,7 +40,7 @@ export function ReportBody({ r }) {
         </div>
         {(s.tools || []).length > 0 && (
           <div className="mt-4">
-            <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-2">Tools you used</p>
+            <p className="text-[12px] font-semibold text-bz-muted mb-2">Tools you used</p>
             <div className="flex flex-wrap gap-2">{s.tools.map((t) => <Chip key={t.key} tone="gold">{t.label} · {t.uses}</Chip>)}</div>
           </div>
         )}

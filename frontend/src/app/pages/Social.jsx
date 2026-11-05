@@ -27,7 +27,7 @@ function Toggles({ items, value, onChange, testid, label }) {
         return (
           <button key={k} type="button" aria-pressed={on} data-testid={`${testid}-${k}`}
             onClick={() => onChange(on ? (value.length > 1 ? value.filter((x) => x !== k) : value) : [...value, k])}
-            className={`min-h-[44px] px-4 rounded-full text-[14px] font-bold border inline-flex items-center gap-1.5 ${on ? "bg-bz-gold text-bz-on-accent border-bz-gold" : "bg-bz-panel border-bz-line hover:border-bz-line-strong"}`}>
+            className={`min-h-[44px] px-4 rounded-bzbtn text-[14px] font-bold border inline-flex items-center gap-1.5 ${on ? "bg-bz-gold text-bz-on-accent border-bz-gold" : "bg-bz-panel border-bz-line hover:border-bz-line-strong"}`}>
             {on && <Check className="w-4 h-4" strokeWidth={3} aria-hidden />}{l}
           </button>
         );
@@ -175,7 +175,7 @@ function Body() {
             </div>
             <Field label="A topic for this batch (optional)"><Input value={f.topic} onChange={(e) => setF({ ...f, topic: e.target.value })} maxLength={200} placeholder="e.g. Why dealers stop ordering" /></Field>
             <label className="flex items-center gap-3 min-h-[44px] cursor-pointer">
-              <input type="checkbox" checked={f.use_stories} onChange={(e) => setF({ ...f, use_stories: e.target.checked })} className="w-5 h-5 accent-[#c9a84c]" data-testid="social-stories" />
+              <input type="checkbox" checked={f.use_stories} onChange={(e) => setF({ ...f, use_stories: e.target.checked })} className="w-5 h-5 accent-bz-gold" data-testid="social-stories" />
               <span className="text-[15px]">Use my career stories{q.data ? ` (${q.data.stories} saved)` : ""}</span>
             </label>
             <ErrorLine>{err}</ErrorLine>

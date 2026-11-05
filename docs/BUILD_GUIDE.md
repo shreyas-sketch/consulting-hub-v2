@@ -72,7 +72,7 @@ Read `docs/ARCHITECTURE.md` first. Reference: `features/cases/` (the layered lay
   an `llm.LLMError` refunds the use.
 - Run `cd backend && python3 -m pytest -q tests/test_<area>.py` and then the whole suite before you finish.
 
-## Frontend (React 19, Tailwind, Akshat Dani design system, dark only)
+## Frontend (React 19, Tailwind, "the chamber" design: bottle green, brass, ivory, ink-blue)
 
 Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; pages `Brief.jsx`, `LinkedIn.jsx`,
 `CaseView.jsx`, `Start.jsx`, `File.jsx`.
@@ -80,12 +80,17 @@ Reference files: `src/app/components/ui.jsx`, `common.jsx`, `Markdown.jsx`; page
 - One page file per route, already stubbed in `src/app/pages/` (and `src/app/admin/`); replace the stub, keep the default
   export. Routes `/app/<path>` and `/app/<path>/:id` both open your page (use `useParams().id`).
 - Wrap the page body in `<Gate feature="...">` (common.jsx) so lower plans see the lock card with the upgrade button.
-- Look: `PageHeader` (kicker + headline with one key phrase in gold, or teal on AI screens via `ai`), `Card`,
-  `Button` (`primary` = gold pill, one per screen; `secondary`; `ai` = teal, only for buttons that call AI), `AiFrame`
-  around anything the AI wrote, `Thinking` while AI works, `Stat` for numbers, `Step` for numbered steps, `Chip`, `Field`,
-  `Input`, `Textarea`, `Select`, `Segmented`, `Meter`, `Loadable`, `Empty`, `ErrorLine`, `OkLine`, `Note`.
-  Gold = the signal (₹ figures, key phrase, primary action). Teal = AI only. Red = errors/destructive only.
-  Manrope only (JetBrains Mono for code/prompts). No new colours, no light mode, no emojis.
+- Look (tokens in `src/index.css`, names kept as `bz-*`): `PageHeader` (the tool's name, a serif headline in one colour,
+  a short brass rule, a sub-line; ink-blue rule on AI screens via `ai`), `Card`, `Button` (`primary` = brass plate, one per
+  screen; `secondary`; `ai` = ink-blue, only for buttons that call AI), `AiFrame` (ink-blue margin rule) around anything the
+  AI wrote, `Thinking`, `Stat` (serif figure), `Step` (only for real sequences), `Chip`, `Field`, `Input`, `Textarea`,
+  `Select`, `Segmented`, `Meter`, `Loadable`, `Empty`, `ErrorLine`, `OkLine`, `Note`.
+  Brass (`bz-gold`) = the one signal (₹ figures, primary action, where you are). Ink-blue (`bz-teal`) = AI only.
+  Sindoor (`bz-miss`) = errors/destructive only. Newsreader (`font-display`, and every h1/h2) for headlines, tool names and
+  figures; Manrope for everything read and tapped. Labels in sentence case, never all caps or letter-spaced; no
+  single-phrase colour accents in headlines. Radius follows role: `rounded-bzframe` 12, `rounded-bzcard` 8,
+  `rounded-bzbtn` 6 (buttons, inputs), `rounded-bztag` 4 (chips); round only for dots, avatars and toggles.
+  No new colours, no light mode, no emojis. Downloaded decks keep Akshat's deck design (`backend/features/deck_*`).
 - `Markdown` (components/Markdown.jsx) renders AI Markdown with copy cards. `UsageLine` shows the plan limit.
   After a metered action call `refreshMe()` from `useAuth()` so limits update.
 - API: for a domain that has a module in `src/services/` (cases, file), use its hooks and add keys to

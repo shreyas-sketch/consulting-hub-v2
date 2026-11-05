@@ -92,7 +92,7 @@ export default function DiagnosticPublic() {
               {result.cta && <p className="text-[15px] font-bold">{result.cta}</p>}
               {result.cta_link && (
                 <a href={result.cta_link} target="_blank" rel="noopener noreferrer" data-testid="d-cta"
-                  className="mt-3 inline-flex w-full items-center justify-center min-h-[52px] px-6 rounded-full bg-bz-gold text-bz-on-accent font-extrabold text-[16px] shadow-goldglow">
+                  className="mt-3 inline-flex w-full items-center justify-center min-h-[52px] px-6 rounded-bzbtn bg-bz-gold text-bz-on-accent font-extrabold text-[16px] shadow-goldglow">
                   {result.brand?.name ? `Talk to ${result.brand.name.split(" ")[0]}` : "Book a conversation"}
                 </a>
               )}
@@ -106,7 +106,7 @@ export default function DiagnosticPublic() {
 
   return (
     <Shell brand={d.brand}>
-      <h1 className="text-[28px] sm:text-[36px] font-extrabold leading-[1.08] tracking-[-0.02em]">{d.title}</h1>
+      <h1 className="font-display text-[28px] sm:text-[36px] font-[450] leading-[1.08] tracking-[-0.02em]">{d.title}</h1>
       {d.intro && <p className="mt-3 text-[16px] font-light leading-relaxed text-bz-muted">{d.intro}</p>}
       <form onSubmit={submit} noValidate className="mt-6 space-y-3">
         {d.questions.map((x, i) => (

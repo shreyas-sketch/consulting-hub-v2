@@ -33,7 +33,7 @@ function Brief({ p }) {
         <Label className="mb-0">A client walks in</Label>
         <Chip>Practice client</Chip>
       </div>
-      <p className="mt-3 text-[22px] font-extrabold leading-tight">{b.company}</p>
+      <p className="mt-3 text-[22px] font-display font-[500] leading-tight">{b.company}</p>
       <p className="text-[14px] text-bz-muted mt-1">{b.company_type} · {b.size} · {b.city} · {b.years} years</p>
       <p className="text-[15px] mt-3"><b>{b.decision_maker_name}</b>, {b.decision_maker_title}</p>
       {b.how_found ? <p className="text-[14px] text-bz-muted mt-1">{b.how_found}</p> : null}
@@ -94,8 +94,8 @@ function Feedback({ p }) {
       </div>
       {r.summary ? <p className="mt-4 text-[15px]">{r.summary}</p> : null}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1.5">What worked</p><ul className="space-y-1 text-[14px] list-disc pl-5">{r.good.map((x) => <li key={x}>{x}</li>)}</ul></div>
-        <div><p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-1.5">To improve</p><ul className="space-y-1 text-[14px] list-disc pl-5">{r.improve.map((x) => <li key={x}>{x}</li>)}</ul></div>
+        <div><p className="text-[12px] font-semibold text-bz-teal mb-1.5">What worked</p><ul className="space-y-1 text-[14px] list-disc pl-5">{r.good.map((x) => <li key={x}>{x}</li>)}</ul></div>
+        <div><p className="text-[12px] font-semibold text-bz-teal mb-1.5">To improve</p><ul className="space-y-1 text-[14px] list-disc pl-5">{r.improve.map((x) => <li key={x}>{x}</li>)}</ul></div>
       </div>
     </AiFrame>
   );
@@ -106,24 +106,24 @@ function CaseStudy({ p }) {
   return (
     <Card className="print-plain border-bz-rule" data-testid="portfolio-case-study">
       <Label>Case study · sample engagement</Label>
-      <h2 className="text-[24px] sm:text-[28px] font-extrabold leading-tight tracking-[-0.01em]">{c.title}</h2>
+      <h2 className="text-[24px] sm:text-[28px] font-[500] leading-tight tracking-[-0.01em]">{c.title}</h2>
       <p className="text-[15px] text-bz-muted mt-2 leading-relaxed">{c.client_context}</p>
       <div className="mt-5">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-gold mb-1.5">The challenge</p>
+        <p className="text-[12px] font-semibold text-bz-gold mb-1.5">The challenge</p>
         <p className="text-[15.5px] leading-relaxed">{c.challenge}</p>
       </div>
       <div className="mt-5">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-gold mb-3">The approach</p>
+        <p className="text-[12px] font-semibold text-bz-gold mb-3">The approach</p>
         <div className="space-y-3.5">{c.approach.map((s) => <Step key={s.step} n={s.step} title={s.name}>{s.text}</Step>)}</div>
       </div>
       <div className="mt-5 rounded-bzcard border border-bz-line bg-bz-raised p-4">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-gold mb-1">Projected outcome</p>
+        <p className="text-[12px] font-semibold text-bz-gold mb-1">Projected outcome</p>
         <p className="text-[15.5px] leading-relaxed">{c.expected_outcome}</p>
         <p className="text-[12.5px] text-bz-muted mt-2">{p.outcome_label}</p>
       </div>
       {c.lessons?.length ? (
         <div className="mt-5">
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-gold mb-1.5">Lessons</p>
+          <p className="text-[12px] font-semibold text-bz-gold mb-1.5">Lessons</p>
           <ul className="space-y-1.5 text-[15px]">{c.lessons.map((x) => <li key={x} className="flex gap-2"><span className="text-bz-gold" aria-hidden>•</span>{x}</li>)}</ul>
         </div>
       ) : null}
@@ -143,7 +143,7 @@ function ScriptAndVideo({ p }) {
         <div className="space-y-3" data-testid="portfolio-script">
           {SCRIPT.map(([k, label]) => (
             <div key={k}>
-              <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal">{label}</p>
+              <p className="text-[12px] font-semibold text-bz-teal">{label}</p>
               <Para text={s[k]} className="text-[15.5px] mt-0.5" />
             </div>
           ))}
@@ -155,7 +155,7 @@ function ScriptAndVideo({ p }) {
         <RecorderBox rec={rec} testid="portfolio-rec">
           {(r) => (
             <a href={r.url} download={`portfolio-video.${r.ext || "webm"}`} data-testid="portfolio-download"
-              className="inline-flex items-center justify-center gap-2 rounded-full min-h-[52px] px-6 py-3 bg-bz-gold text-bz-on-accent font-extrabold text-[16px] hover:opacity-90 shadow-goldglow">
+              className="inline-flex items-center justify-center gap-2 rounded-bzbtn min-h-[52px] px-6 py-3 bg-bz-gold text-bz-on-accent font-extrabold text-[16px] hover:opacity-90 shadow-goldglow">
               <Download className="w-4 h-4" aria-hidden />Download my video
             </a>
           )}

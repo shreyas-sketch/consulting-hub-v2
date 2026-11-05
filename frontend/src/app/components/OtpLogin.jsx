@@ -55,7 +55,7 @@ export default function OtpLogin({ onDone, onStep }) {
     return (
       <form onSubmit={(e) => { e.preventDefault(); send(); }} className="space-y-4">
         <label className="block">
-          <span className="block text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-2">Mobile number</span>
+          <span className="block text-[12px] font-semibold text-bz-muted mb-2">Mobile number</span>
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[17px] font-bold text-bz-muted">+91</span>
             <input id="phone" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="98765 43210" autoFocus
@@ -76,17 +76,17 @@ export default function OtpLogin({ onDone, onStep }) {
     <form onSubmit={(e) => { e.preventDefault(); verify(); }} className="space-y-4">
       <label className="block">
         <span className="flex items-baseline justify-between mb-2">
-          <span className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted">6-digit code</span>
+          <span className="text-[12px] font-semibold text-bz-muted">6-digit code</span>
           <button type="button" onClick={() => { setStep("phone"); setErr(""); }} className="text-[13px] font-bold text-bz-gold py-1" data-testid="login-change">Change number</button>
         </span>
         <input id="code" ref={codeRef} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="······"
           value={code} data-testid="login-code"
           onChange={(e) => { const v = digits(e.target.value).slice(0, 6); setCode(v); if (v.length === 6 && !ch?.is_new) verify(v); }}
-          className={`${inputCls} h-16 text-center text-[28px] font-extrabold tracking-[0.5em] tabular`} />
+          className={`${inputCls} h-16 text-center text-[28px] font-display font-[500] tracking-[0.5em] tabular`} />
       </label>
       {ch?.is_new && (
         <label className="block">
-          <span className="block text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted mb-2">Your name (optional)</span>
+          <span className="block text-[12px] font-semibold text-bz-muted mb-2">Your name (optional)</span>
           <input type="text" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ramesh" maxLength={60}
             data-testid="login-name" className={inputCls} />
         </label>

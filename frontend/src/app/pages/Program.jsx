@@ -14,7 +14,7 @@ function ExtLink({ href, icon: Icon, children, testid }) {
   if (!href) return null;
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" data-testid={testid}
-      className="inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-full border border-bz-line bg-bz-raised text-[14px] font-bold hover:border-bz-line-strong">
+      className="inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-bzbtn border border-bz-line bg-bz-raised text-[14px] font-bold hover:border-bz-line-strong">
       <Icon className="w-4 h-4 text-bz-gold" aria-hidden /> {children}
     </a>
   );
@@ -41,13 +41,13 @@ function CoachCard({ p }) {
   return (
     <Card className="border-bz-rule" data-testid="program-coach">
       <Label>Your coach</Label>
-      <p className="text-[22px] font-extrabold leading-tight">{p.coach.name}</p>
+      <p className="text-[22px] font-display font-[500] leading-tight">{p.coach.name}</p>
       <p className="text-[14px] text-bz-muted mt-1">
         {p.coach_until ? `With you until ${hdate(p.coach_until)}. Ask about your tasks, your niche or your next step.` : "With you while your L2 Mentorship runs."}
       </p>
       {p.coach.whatsapp_link && (
         <a href={p.coach.whatsapp_link} target="_blank" rel="noopener noreferrer" data-testid="program-coach-whatsapp"
-          className="mt-4 inline-flex w-full sm:w-auto items-center justify-center gap-2 min-h-[52px] px-6 rounded-full bg-bz-gold text-bz-on-accent font-extrabold text-[16px] hover:opacity-90 shadow-goldglow">
+          className="mt-4 inline-flex w-full sm:w-auto items-center justify-center gap-2 min-h-[52px] px-6 rounded-bzbtn bg-bz-gold text-bz-on-accent font-extrabold text-[16px] hover:opacity-90 shadow-goldglow">
           <MessageCircle className="w-5 h-5" aria-hidden /> Message {p.coach.name.split(" ")[0]} on WhatsApp
         </a>
       )}
@@ -79,7 +79,7 @@ function Day({ d, next, onToggle, busyId }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-muted">Day {d.n}</span>
+            <span className="text-[12px] font-semibold text-bz-muted">Day {d.n}</span>
             {next && <Chip tone="gold">Next</Chip>}
             {d.total > 0 && <span className="text-[12px] text-bz-muted tabular">{d.done} of {d.total} done</span>}
           </div>
@@ -136,7 +136,7 @@ function Body({ p }) {
               {p.cohort.starts_in_days > 0 ? `Starts ${hdate(p.cohort.start_date)}, in ${p.cohort.starts_in_days} day${p.cohort.starts_in_days === 1 ? "" : "s"}.` : `Started ${hdate(p.cohort.start_date)}.`}
             </p>
           </div>
-          <span className="text-[34px] font-extrabold tracking-[-0.03em] text-bz-gold tabular leading-none">{pr.pct || 0}%</span>
+          <span className="text-[34px] font-display font-[500] tracking-[-0.03em] text-bz-gold tabular leading-none">{pr.pct || 0}%</span>
         </div>
         <Meter value={pr.pct} className="mt-3" label="Tasks done" />
         <p className="text-[13px] text-bz-muted mt-2 tabular">{pr.done || 0} of {pr.total || 0} tasks done</p>

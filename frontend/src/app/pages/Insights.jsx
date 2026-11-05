@@ -16,7 +16,7 @@ const HEADER = <PageHeader kicker="Industry Insight Pack" ai title="What's movin
 function Section({ title, children }) {
   return (
     <div className="mt-6">
-      <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2.5">{title}</p>
+      <p className="text-[12px] font-semibold text-bz-teal mb-2.5">{title}</p>
       {children}
     </div>
   );
@@ -44,7 +44,7 @@ function Listen({ p }) {
     <div className="no-print mt-4 rounded-bzcard border border-bz-line bg-bz-panel p-3.5">
       {url ? (
         <>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-bz-teal mb-2">Listen to this pack</p>
+          <p className="text-[12px] font-semibold text-bz-teal mb-2">Listen to this pack</p>
           <audio controls src={url} className="w-full" data-testid="insight-audio" />
         </>
       ) : (
@@ -67,7 +67,7 @@ export function PackBody({ p }) {
   return (
     <AiFrame title="Industry Insight Pack" className="print-plain rise-in" right={<span className="text-[12px] text-bz-muted">{hdate(p.at)}</span>}>
       <p className="text-[13px] font-bold text-bz-muted">{p.industry}{p.niche ? ` · for ${p.niche}` : ""}</p>
-      <h2 className="mt-1 text-[24px] sm:text-[28px] font-extrabold leading-tight tracking-[-0.01em]" data-testid="insight-headline">{p.headline}</h2>
+      <h2 className="mt-1 text-[24px] sm:text-[28px] font-[500] leading-tight tracking-[-0.01em]" data-testid="insight-headline">{p.headline}</h2>
       <Listen p={p} />
 
       <Section title="Three trends">

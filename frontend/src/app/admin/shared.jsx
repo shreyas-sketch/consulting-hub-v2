@@ -21,7 +21,7 @@ export function Table({ cols, rows, empty = "Nothing here yet.", onRow }) {
       <table className="min-w-full text-sm">
         <thead>
           <tr className="text-left text-bz-muted">
-            {cols.map((c) => <th key={c.key} className={`text-[11px] uppercase tracking-[0.12em] font-medium px-4 py-2 border-b border-bz-line whitespace-nowrap ${c.right ? "text-right" : ""}`}>{c.label}</th>)}
+            {cols.map((c) => <th key={c.key} className={`text-[12.5px] font-semibold px-4 py-2 border-b border-bz-line whitespace-nowrap ${c.right ? "text-right" : ""}`}>{c.label}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -40,8 +40,8 @@ export function Table({ cols, rows, empty = "Nothing here yet.", onRow }) {
 export function Kpi({ label, value, sub, tone }) {
   return (
     <Card className="p-4 min-w-0">
-      <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-bz-muted leading-snug">{label}</div>
-      <div className={`text-[26px] font-extrabold tracking-[-0.02em] mt-1 tabular truncate ${tone === "gold" ? "text-bz-gold" : ""}`}>{value ?? "—"}</div>
+      <div className="text-[12.5px] font-semibold text-bz-muted leading-snug">{label}</div>
+      <div className={`text-[22px] sm:text-[26px] font-display font-[500] leading-[1.15] mt-1 tabular break-words ${tone === "gold" ? "text-bz-gold" : ""}`}>{value ?? "—"}</div>
       {sub && <div className="text-[12.5px] text-bz-muted leading-snug">{sub}</div>}
     </Card>
   );

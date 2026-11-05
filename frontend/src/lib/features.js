@@ -56,3 +56,15 @@ export const MENU_GROUPS = [
   { plan: "l1", label: "L1", keys: ["program", "calls", "recordings", "recaps", "action_tools", "akshat_ai", "offer_card", "story_bank", "insight_pack", "portfolio", "pitch", "research"] },
   { plan: "l2", label: "L2 Mentorship", keys: ["mentorship_tools", "network_finder", "outreach", "radar", "call_prep", "proposal", "client_diagnostic", "social_builder", "bootcamps"] },
 ];
+
+// Plain names for the usage counters the server reports (PlanInfo.limits keys, backend plans.LIMITS).
+export const USAGE_NAME = {
+  readiness: "Readiness Scores", start: "Niche Snapshots", goal: "Goal Map saves", case: "Case answers", brief: "Meeting Briefs",
+  linkedin: "LinkedIn checks", presentation: "Decks", visuals: "Visuals", audio: "Audio versions", doc_q: "Document questions",
+  progress: "Progress Reports", site_ai: "Website AI edits", gpt: "Action Hub and Mentorship messages", akshat_ai: "Akshat AI questions",
+  pitch: "Pitch videos analysed", offer_card: "Offer Cards", story: "Career stories", insight: "Industry Insight Packs",
+  portfolio: "Portfolio Projects", contacts: "Contacts scored", outreach: "Outreach messages", radar: "Companies found by Radar",
+  call_prep: "Discovery Call Preps", proposal: "Proposals", diagnostic: "Client Diagnostics", posts: "Social posts",
+};
+// Anything new the server adds still reads as words, never as a code.
+export const usageName = (k) => USAGE_NAME[k] || k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());

@@ -246,7 +246,7 @@ Real AI costs per member aren't measured yet. Track them in the vendor dashboard
 
 **Pieces**
 - **Backend:** Python (FastAPI) with a MongoDB database. One file per tool in `backend/features/`.
-- **Frontend:** React, in Akshat's design system: dark only, gold for the key thing, teal only for AI, red only for errors, Manrope font.
+- **Frontend:** React. Design (5 Nov): bottle-green and ivory, brass for the key thing, ink-blue only for AI, red only for errors; Newsreader serif for headlines and ₹ figures, Manrope for text. The menu works like a file: the page you're on sticks out as a brass tab. Downloaded decks keep Akshat's deck design.
 - **One Docker image** on Railway serves both. Health check `/api/health`.
 
 **Folders**

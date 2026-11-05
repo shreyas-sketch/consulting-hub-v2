@@ -129,7 +129,7 @@ already use `run_metered`, `plans.require`, typed errors and settings). The larg
 | Domain services | `services/<domain>.js`, `services/queryKeys.js` | HTTP calls + React Query hooks that own their cache invalidation |
 | HTTP client | `lib/api.js` | cookies, silent session renewal, the 402/403 upgrade sheet, one AI-busy retry, error sentences |
 | Session | `context/AuthContext.jsx` | `/auth/me`, plan and limits, logout |
-| UI kit | `app/components/ui.jsx`, `common.jsx` | Akshat Dani design system (dark only; gold = signal, teal = AI, red = errors) |
+| UI kit | `app/components/ui.jsx`, `common.jsx`, tokens in `index.css` | "The chamber": bottle green and ivory, brass = the one signal, ink-blue = AI only, sindoor = errors; Newsreader headlines and figures, Manrope text; the sidebar is a file spine with a brass index tab for the current page |
 | Screens | `app/pages/*`, `app/admin/*` | compose hooks and UI; no URLs or query keys inline in migrated screens |
 
 Rule for screens: use a hook from `services/` (`useCases()`, `useAnswerCase(id, { onDone })`). Adding a domain means
