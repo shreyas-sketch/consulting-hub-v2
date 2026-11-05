@@ -1,6 +1,6 @@
 // Member app shell: left sidebar on a computer; on a phone a top bar and a bottom bar
 // (Home · Cases · Brief · My File · Menu). Dark only.
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { captureAttribution, track } from "@/lib/attribution";
 import { FEATURES, MENU_GROUPS, PLAN_RANK } from "@/lib/features";
 import brand from "@/brand";
+import ErrorBoundary from "./ErrorBoundary";
 import Logo from "./Logo";
 import { PlanChip } from "./common";
 import { Spinner } from "./ui";
@@ -176,7 +177,12 @@ export default function AppShell() {
 
         <main className="flex-1 px-5 md:px-10 lg:px-14 pt-6 md:pt-10 pb-28 lg:pb-16">
           <div className="max-w-[960px] mx-auto">
-            <Outlet />
+            {/* The menu stays usable when a screen is loading its code or has crashed. */}
+            <ErrorBoundary resetKey={pathname}>
+              <Suspense fallback={<div className="min-h-[40vh] grid place-items-center"><Spinner /></div>}>
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
 

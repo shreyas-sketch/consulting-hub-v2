@@ -12,10 +12,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .errors import NotFound
 from .settings import settings
 
 log = logging.getLogger("core.spa")
@@ -59,7 +60,7 @@ def mount_spa(app: FastAPI, build_dir: Path | None = None) -> None:
     async def spa_catch_all(full_path: str, request: Request):
         path = "/" + full_path
         if path.startswith(SERVER_PREFIXES):
-            raise HTTPException(status_code=404, detail="Not found")
+            raise NotFound("Not found.")
         if not has_build:
             return HTMLResponse(_FALLBACK_HTML)
         f = _safe_file(build_dir, full_path) if full_path else None

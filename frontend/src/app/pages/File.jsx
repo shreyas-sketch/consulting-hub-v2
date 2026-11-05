@@ -1,9 +1,8 @@
 // /app/file — My Consulting File: everything the member has made, on one page. Print or save as PDF from the browser.
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, FileText, Printer } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
+import { fileApi, useConsultingFile } from "@/services/file";
 import { useAuth } from "@/context/AuthContext";
 import { hdate, inr } from "@/lib/format";
 import { Button, Card, Empty, Label, LinkButton, Loadable, Meter, PageHeader } from "../components/ui";
@@ -32,9 +31,9 @@ function CopyBlueprint({ text }) {
 
 export default function File() {
   const { user } = useAuth();
-  const q = useQuery({ queryKey: ["file"], queryFn: async () => (await api.get("/file")).data });
+  const q = useConsultingFile();
   // Count one visit when this page opens (Home reads the same data for its progress, so GET /file counts nothing).
-  useEffect(() => { api.post("/file/viewed").catch(() => { /* analytics only */ }); }, []);
+  useEffect(() => { fileApi.markViewed().catch(() => { /* analytics only */ }); }, []);
   return (
     <div className="space-y-5">
       <PageHeader kicker="My Consulting File" title="Everything you've made," accent="in one place."

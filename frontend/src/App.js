@@ -4,6 +4,7 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import AppShell, { RequireAuth } from "@/app/components/AppShell";
+import ErrorBoundary from "@/app/components/ErrorBoundary";
 import GateSheet from "@/app/components/GateSheet";
 import { Spinner } from "@/app/components/ui";
 import Inside from "@/app/pages/Inside";
@@ -47,44 +48,46 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <GateSheet />
-        <Suspense fallback={fallback}>
-          <Routes>
-            <Route path="/" element={<Inside />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/plans" element={<PublicPlans />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/d/:id" element={<DiagnosticPublic />} />
+        <ErrorBoundary>
+          <Suspense fallback={fallback}>
+            <Routes>
+              <Route path="/" element={<Inside />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/plans" element={<PublicPlans />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/d/:id" element={<DiagnosticPublic />} />
 
-            <Route path="/app" element={<RequireAuth><AppShell /></RequireAuth>}>
-              <Route index element={<Home />} />
-              <Route path="readiness" element={<Readiness />} />
-              <Route path="start" element={<Start />} />
-              <Route path="cases" element={<Cases />} />
-              <Route path="cases/:id" element={<CaseView />} />
-              <Route path="brief" element={<Brief />} />
-              <Route path="brief/:id" element={<BriefView />} />
-              <Route path="linkedin" element={<LinkedIn />} />
-              <Route path="file" element={<File />} />
-              <Route path="tools" element={<Tools />} />
-              <Route path="inbox" element={<Inbox />} />
-              <Route path="account" element={<Account />} />
-              <Route path="plans" element={<AppPlans />} />
-              <Route path="hub" element={<Gpts program="action" />} />
-              <Route path="mentorship" element={<Gpts program="mentorship" />} />
-              {TOOL_ROUTES.map(([path, El]) => [
-                <Route key={path} path={path} element={<El />} />,
-                <Route key={`${path}-id`} path={`${path}/:id`} element={<El />} />,
-              ])}
-              <Route path="*" element={<Navigate to="/app" replace />} />
-            </Route>
+              <Route path="/app" element={<RequireAuth><AppShell /></RequireAuth>}>
+                <Route index element={<Home />} />
+                <Route path="readiness" element={<Readiness />} />
+                <Route path="start" element={<Start />} />
+                <Route path="cases" element={<Cases />} />
+                <Route path="cases/:id" element={<CaseView />} />
+                <Route path="brief" element={<Brief />} />
+                <Route path="brief/:id" element={<BriefView />} />
+                <Route path="linkedin" element={<LinkedIn />} />
+                <Route path="file" element={<File />} />
+                <Route path="tools" element={<Tools />} />
+                <Route path="inbox" element={<Inbox />} />
+                <Route path="account" element={<Account />} />
+                <Route path="plans" element={<AppPlans />} />
+                <Route path="hub" element={<Gpts program="action" />} />
+                <Route path="mentorship" element={<Gpts program="mentorship" />} />
+                {TOOL_ROUTES.map(([path, El]) => [
+                  <Route key={path} path={path} element={<El />} />,
+                  <Route key={`${path}-id`} path={`${path}/:id`} element={<El />} />,
+                ])}
+                <Route path="*" element={<Navigate to="/app" replace />} />
+              </Route>
 
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/*" element={<AdminApp />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/*" element={<AdminApp />} />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );

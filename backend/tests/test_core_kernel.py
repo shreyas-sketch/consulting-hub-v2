@@ -1,6 +1,7 @@
 """The application kernel: settings, error envelope, request context middleware, module registry."""
 import pytest
 from fastapi import APIRouter
+
 from tests.conftest import qa_login
 
 
@@ -63,8 +64,9 @@ def test_unknown_route_and_typed_error_envelope(client):
 
 
 def test_unhandled_error_is_a_clean_500(mdb):
-    import server
     from fastapi.testclient import TestClient
+
+    import server
     app = server.create_app(mdb, start_jobs=False, seed=False, serve_spa=False)
     boom = APIRouter()
 
@@ -105,3 +107,13 @@ def test_every_registered_module_mounts_a_router():
     loaded = modules.load()
     assert len(loaded) == len(modules.ALL) == len(set(modules.ALL))
     assert all(isinstance(m.router, APIRouter) for m in loaded)
+
+
+def test_unknown_api_path_uses_the_error_envelope(mdb, tmp_path):
+    from fastapi.testclient import TestClient
+
+    import server
+    app = server.create_app(mdb, start_jobs=False, seed=False, serve_spa=True)
+    with TestClient(app) as c:
+        r = c.get("/api/definitely-not-here")
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "not_found"

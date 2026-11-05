@@ -1,8 +1,8 @@
 // /app/cases/:id — the case, your answer, the AI score on four criteria, then the model answer.
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, apiError } from "@/lib/api";
+import { apiError } from "@/lib/api";
+import { useAnswerCase, useCase } from "@/services/cases";
 import { useAuth } from "@/context/AuthContext";
 import { hdate } from "@/lib/format";
 import { BackLink, LockCard, Para, ScoreRing, UsageLine } from "../components/common";
@@ -95,10 +95,10 @@ function ModelAnswer({ m }) {
 export default function CaseView() {
   const { id } = useParams();
   const { plan, refreshMe } = useAuth();
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["case", id], queryFn: async () => (await api.get(`/cases/${id}`, { _silentGate: true })).data });
+  const q = useCase(id);
+  const send = useAnswerCase(id, { onDone: refreshMe });
+  const busy = send.isPending;
   const [answer, setAnswer] = useState("");
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [writing, setWriting] = useState(false);
   const usage = plan?.limits?.case;
@@ -106,13 +106,11 @@ export default function CaseView() {
 
   const submit = async () => {
     if (answer.trim().length < 40) { setErr("Write a little more: at least a few sentences (40 characters)."); return; }
-    setErr(""); setBusy(true);
+    setErr("");
     try {
-      await api.post(`/cases/${id}/answer`, { answer });
+      await send.mutateAsync(answer);
       setAnswer(""); setWriting(false);
-      await qc.invalidateQueries({ queryKey: ["case", id] });
-      qc.invalidateQueries({ queryKey: ["cases"] }); qc.invalidateQueries({ queryKey: ["file"] }); refreshMe();
-    } catch (e) { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } finally { setBusy(false); }
+    } catch (e) { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); }
   };
 
   if (q.isError && q.error?.response?.status === 403) {
