@@ -14,7 +14,7 @@ export default function PublicLayout({ children, wide = false }) {
   const w = wide ? "max-w-[1120px]" : "max-w-[980px]";
   return (
     <div className="min-h-screen flex flex-col font-bz text-bz-ink antialiased">
-      <header className="sticky top-0 z-30 bg-bz-spine/95 backdrop-blur border-b border-bz-gold/50">
+      <header className="chrome sticky top-0 z-30 bg-bz-spine/95 backdrop-blur border-b border-bz-line">
         <div className={`mx-auto ${w} px-4 md:px-8 h-16 flex items-center justify-between gap-3`}>
           <Link to="/" aria-label={`${brand.name} home`}><Logo word="hidden min-[360px]:flex" /></Link>
           {user ? (
@@ -35,7 +35,7 @@ export default function PublicLayout({ children, wide = false }) {
           <p className="text-[12.5px] leading-relaxed text-bz-muted max-w-[760px]">
             {brand.name} helps experienced professionals get ready to launch as consultants. Results depend on your own work; nothing here is a promise of income.
           </p>
-          <p className="text-[12.5px] font-bold text-bz-rule">AD × SK · © {new Date().getFullYear()}</p>
+          <p className="text-[12.5px] font-bold text-bz-muted">AD × SK · © {new Date().getFullYear()}</p>
         </div>
       </footer>
     </div>

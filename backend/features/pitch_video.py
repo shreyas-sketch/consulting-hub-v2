@@ -27,6 +27,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
 import time
 from typing import Any, AsyncIterator, Callable, Optional
@@ -155,18 +156,18 @@ def vendor_why(r: httpx.Response) -> str:
     return " ".join((why or "").split())[:300]
 
 
-async def generate_parts(c: httpx.AsyncClient, key: str, parts: list, system: str, *, model: str,
-                         temperature: float = 0.4, max_tokens: int = 16384) -> str:
-    """generateContent with any parts (fileData or inlineData + text); JSON answer as text. One retry on 429/5xx."""
-    body = {"systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": parts}],
-            "generationConfig": {"responseMimeType": "application/json", "temperature": temperature,
-                                 "maxOutputTokens": max_tokens}}
+BUSY = (429, 500, 502, 503, 504)
+RETRY_PAUSES_S = (2.0, 5.0, 10.0)        # Google's 503 "high demand" spikes pass in seconds; ride them out
+
+
+async def _generate_once(c: httpx.AsyncClient, key: str, body: dict, model: str) -> str:
+    """One model: try, and on a busy answer (429/5xx) wait and retry (RETRY_PAUSES_S). Raises VideoError."""
     url = f"{BASE}/v1beta/models/{model}:generateContent"
-    for attempt in range(2):
+    for attempt in range(len(RETRY_PAUSES_S) + 1):
         r = await c.post(url, json=body, headers={"x-goog-api-key": key, "Content-Type": "application/json"})
-        if r.status_code in (429, 500, 503) and attempt == 0:
-            await asyncio.sleep(4)
+        if r.status_code in BUSY and attempt < len(RETRY_PAUSES_S):
+            log.info("gemini %s busy (HTTP %s), retry %d", model, r.status_code, attempt + 1)
+            await asyncio.sleep(RETRY_PAUSES_S[attempt] + random.uniform(0, 1))
             continue
         if r.status_code >= 400:
             raise VideoError(f"generate HTTP {r.status_code} (model {model}): {vendor_why(r)}")
@@ -180,6 +181,28 @@ async def generate_parts(c: httpx.AsyncClient, key: str, parts: list, system: st
             raise VideoError(f"empty answer ({cands[0].get('finishReason') or 'unknown'})")
         return text
     raise VideoError("generate failed")
+
+
+async def generate_parts(c: httpx.AsyncClient, key: str, parts: list, system: str, *, model: str,
+                         temperature: float = 0.4, max_tokens: int = 16384) -> str:
+    """generateContent with any parts (fileData or inlineData + text); JSON answer as text.
+    Busy answers are retried with growing pauses; if the model stays busy and GEMINI_FALLBACK_MODEL is set,
+    the same request goes to that model once."""
+    body = {"systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {"responseMimeType": "application/json", "temperature": temperature,
+                                 "maxOutputTokens": max_tokens}}
+    try:
+        return await _generate_once(c, key, body, model)
+    except VideoError as e:
+        backup = settings.gemini.fallback_model
+        if not backup or backup == model or not any(f"HTTP {code} " in str(e) for code in BUSY):
+            raise
+        log.warning("gemini %s stayed busy, trying %s: %s", model, backup, e)
+        try:
+            return await _generate_once(c, key, body, backup)
+        except VideoError as e2:
+            raise VideoError(f"{e} | fallback: {e2}") from e2
 
 
 async def _generate(c: httpx.AsyncClient, key: str, f: dict, mime: str, system: str, prompt: str) -> str:

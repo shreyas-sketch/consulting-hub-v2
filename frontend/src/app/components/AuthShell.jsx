@@ -7,8 +7,7 @@ import { Step } from "./ui";
 export default function AuthShell({ kicker, title, accent, subtitle, children, footer }) {
   return (
     <div className="min-h-screen w-full flex items-stretch text-bz-ink font-bz" data-testid="auth-shell">
-      <aside className="hidden lg:flex lg:w-[46%] relative overflow-hidden border-r-2 border-bz-gold/80 bg-bz-spine">
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 900px 700px at 20% 85%, rgba(212,176,106,0.10), transparent 70%)" }} />
+      <aside className="chrome grid-ground hidden lg:flex lg:w-[46%] relative overflow-hidden bg-bz-spine">
         <div className="relative z-10 flex flex-col justify-between p-14 w-full">
           <Link to="/"><Logo big /></Link>
           <div className="space-y-6 max-w-md">
@@ -20,7 +19,7 @@ export default function AuthShell({ kicker, title, accent, subtitle, children, f
               <Step n={3} title="Solve a live case">Get a score and a model answer.</Step>
             </div>
           </div>
-          <p className="text-[12.5px] font-bold text-bz-rule">Akshat Dani and Siddharth Kapoor</p>
+          <p className="text-[12.5px] font-bold text-bz-muted">Akshat Dani and Siddharth Kapoor</p>
         </div>
       </aside>
       <main className="flex-1 flex flex-col">

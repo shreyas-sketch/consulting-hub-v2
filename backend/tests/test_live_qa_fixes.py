@@ -111,3 +111,63 @@ def test_portfolio_review_still_refuses_a_review_without_a_script():
     with pytest.raises(llm.LLMError) as e:
         _clean_review(raw, {})
     assert "script.hook" in str(e.value)
+
+
+def _gemini_ok(text):
+    return {"candidates": [{"content": {"parts": [{"text": text}]}, "finishReason": "STOP"}]}
+
+
+def test_gemini_rides_out_a_high_demand_spike(monkeypatch):
+    """Live: HTTP 503 UNAVAILABLE "high demand" on gemini-3.8-flash; one 4 s retry was not enough."""
+    import asyncio
+
+    import httpx
+
+    from features import pitch_video
+
+    async def no_sleep(_):
+        return None
+    monkeypatch.setattr(pitch_video.asyncio, "sleep", no_sleep)
+    busy = httpx.Response(503, json={"error": {"status": "UNAVAILABLE", "message": "high demand"}})
+    replies = [busy, busy, busy, httpx.Response(200, json=_gemini_ok('{"text": "ok"}'))]
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda req: replies.pop(0))) as c:
+            return await pitch_video.generate_parts(c, "k", [{"text": "x"}], "s", model="m")
+    assert asyncio.run(go()) == '{"text": "ok"}'
+
+
+def test_gemini_falls_back_to_a_second_model_when_busy(monkeypatch):
+    import asyncio
+
+    import httpx
+
+    from features import pitch_video
+
+    async def no_sleep(_):
+        return None
+    monkeypatch.setattr(pitch_video.asyncio, "sleep", no_sleep)
+    monkeypatch.setenv("GEMINI_FALLBACK_MODEL", "backup-model")
+    seen = []
+
+    def handler(req):
+        seen.append(str(req.url))
+        if "/models/main-model:" in str(req.url):
+            return httpx.Response(503, json={"error": {"status": "UNAVAILABLE", "message": "high demand"}})
+        return httpx.Response(200, json=_gemini_ok('{"text": "from backup"}'))
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await pitch_video.generate_parts(c, "k", [{"text": "x"}], "s", model="main-model")
+    assert asyncio.run(go()) == '{"text": "from backup"}'
+    assert sum("main-model" in u for u in seen) == 4 and "backup-model" in seen[-1]
+    # a non-busy error (bad key, bad request) does not switch models
+    monkeypatch.setattr(pitch_video, "RETRY_PAUSES_S", ())
+
+    async def bad():
+        t = httpx.MockTransport(lambda req: httpx.Response(400, json={"error": {"message": "bad"}}))
+        async with httpx.AsyncClient(transport=t) as c:
+            return await pitch_video.generate_parts(c, "k", [{"text": "x"}], "s", model="main-model")
+    import pytest
+    with pytest.raises(pitch_video.VideoError):
+        asyncio.run(bad())

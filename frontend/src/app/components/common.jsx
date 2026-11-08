@@ -84,7 +84,7 @@ export function BackLink({ to, children }) {
   );
 }
 
-// Score ring: a brass arc (ink-blue for AI scores) on a dark track, the number in the serif.
+// Score ring: a cobalt arc (teal for AI scores) on a pale track, the number in the serif. Colours follow the tokens.
 export function ScoreRing({ value, max = 100, size = 132, label, sub, ai = false }) {
   const v = Math.max(0, Math.min(max, Number(value) || 0));
   const r = (size - 14) / 2;
@@ -95,13 +95,13 @@ export function ScoreRing({ value, max = 100, size = 132, label, sub, ai = false
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor={ai ? "#C9D3FF" : "#EAD39F"} /><stop offset="1" stopColor={ai ? "#7D8FE6" : "#8F7442"} />
+            <stop offset="0" style={{ stopColor: ai ? "rgb(var(--bz-teal-rgb) / 0.55)" : "rgb(var(--bz-gold-rgb) / 0.55)" }} /><stop offset="1" style={{ stopColor: ai ? "rgb(var(--bz-teal-rgb))" : "rgb(var(--bz-gold-rgb))" }} />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#0A1E19" strokeWidth="10" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: "var(--bz-raised)" }} strokeWidth="10" />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={`url(#${id})`} strokeWidth="10" strokeLinecap="round"
           strokeDasharray={`${(v / max) * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fill={ai ? "#A7B6FF" : "#D4B06A"} fontWeight="500"
+        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" style={{ fill: ai ? "rgb(var(--bz-teal-rgb))" : "rgb(var(--bz-spine-rgb))" }} fontWeight="500"
           fontFamily="'Newsreader Variable', Georgia, serif" fontSize={size * 0.32}>{v}</text>
       </svg>
       {sub && <span className="text-[12px] text-bz-muted -mt-1">{sub}</span>}
