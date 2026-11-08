@@ -52,9 +52,9 @@ export const WEBINAR_TOOLS = ["readiness", "start", "case", "brief", "linkedin",
 
 // Menu groups (AppShell). Keys must exist in FEATURES.
 export const MENU_GROUPS = [
-  { plan: "member", label: "₹1,999 plan", keys: ["presentation", "visuals", "website", "listen", "doc_reader", "progress"] },
-  { plan: "l1", label: "L1", keys: ["program", "calls", "recordings", "recaps", "action_tools", "akshat_ai", "offer_card", "story_bank", "insight_pack", "portfolio", "pitch", "research"] },
-  { plan: "l2", label: "L2 Mentorship", keys: ["mentorship_tools", "network_finder", "outreach", "radar", "call_prep", "proposal", "client_diagnostic", "social_builder", "bootcamps"] },
+  { plan: "member", label: "₹1,999 plan", title: "Build your presence", keys: ["presentation", "visuals", "website", "listen", "doc_reader", "progress"] },
+  { plan: "l1", label: "L1", title: "Program and coaching", keys: ["program", "calls", "recordings", "recaps", "action_tools", "akshat_ai", "offer_card", "story_bank", "insight_pack", "portfolio", "pitch", "research"] },
+  { plan: "l2", label: "L2 Mentorship", title: "Win clients", keys: ["mentorship_tools", "network_finder", "outreach", "radar", "call_prep", "proposal", "client_diagnostic", "social_builder", "bootcamps"] },
 ];
 
 // Plain names for the usage counters the server reports (PlanInfo.limits keys, backend plans.LIMITS).

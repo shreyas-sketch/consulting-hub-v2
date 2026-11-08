@@ -1,12 +1,16 @@
 // Member app shell: left sidebar on a computer; on a phone a top bar and a bottom bar
-// (Home, Cases, Brief, My File, Menu). The sidebar is a file spine: the page you are on sticks out as a brass
-// index tab that runs into the spine's brass edge, like a divider in a consultant's file.
-import { Suspense, useEffect, useState } from "react";
+// (Home, Cases, Brief, My File, Menu). The sidebar is a navy binder. The page you are on is an index tab cut from the
+// page's own paper: it runs out of the binder and joins the open page, so "where am I" needs no second colour.
+// Rows are one line (the description is the tooltip); tools are grouped by what they are for, the plan is the quiet
+// second fact, and a plan you don't have folds to one "Unlock" row.
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Bell, BriefcaseBusiness, CreditCard, FileText, Gauge, Grid2x2, Home, IdCard, Lock, LogOut, Menu, Shield, Target, User, X,
-  ClipboardList, LifeBuoy, ChevronRight, Sparkles,
+  Bell, BriefcaseBusiness, CreditCard, FileText, Gauge, Grid2x2, Home, IdCard, Lock, LogOut, Menu, Shield, Target, X,
+  ClipboardList, LifeBuoy, ChevronRight, Sparkles, Presentation, Shapes, Globe, Headphones, FileSearch, TrendingUp,
+  CalendarCheck, Video, Library, ScrollText, Wrench, MessagesSquare, BadgeIndianRupee, Mic, Newspaper, FolderKanban,
+  Megaphone, BookOpen, GraduationCap, Users, Send, Radar, PhoneCall, FileSignature, Stethoscope, Share2, Flag,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -15,7 +19,6 @@ import { FEATURES, MENU_GROUPS, PLAN_RANK } from "@/lib/features";
 import brand from "@/brand";
 import ErrorBoundary from "./ErrorBoundary";
 import Logo from "./Logo";
-import { PlanChip } from "./common";
 import { Spinner } from "./ui";
 
 export const NAV_MAIN = [
@@ -28,12 +31,20 @@ export const NAV_MAIN = [
   { to: "/app/file", key: "file", label: "My Consulting File", sub: "Everything you've made", icon: FileText, feature: "file" },
 ];
 const NAV_ACCOUNT = [
-  { to: "/app/tools", key: "tools", label: "All tools", sub: "What each plan opens", icon: Grid2x2 },
-  { to: "/app/plans", key: "plans", label: "Plans", sub: "₹1,999 plan and L1", icon: CreditCard },
-  { to: "/app/support", key: "support", label: "Support", sub: "Ask the team", icon: LifeBuoy, feature: "support" },
   { to: "/app/inbox", key: "inbox", label: "Inbox", sub: "Messages from the team", icon: Bell },
-  { to: "/app/account", key: "account", label: "Account", sub: "Profile, plan, usage", icon: User },
+  { to: "/app/support", key: "support", label: "Support", sub: "Ask the team", icon: LifeBuoy, feature: "support" },
+  { to: "/app/tools", key: "tools", label: "All tools", sub: "What each plan opens", icon: Grid2x2 },
+  { to: "/app/plans", key: "plans", label: "Plans and prices", sub: "₹1,999 plan and L1", icon: CreditCard },
 ];
+// One icon per tool, so a list of tools can be scanned by shape as well as by name.
+const TOOL_ICON = {
+  presentation: Presentation, visuals: Shapes, website: Globe, listen: Headphones, doc_reader: FileSearch, progress: TrendingUp,
+  program: CalendarCheck, calls: Video, recordings: Library, recaps: ScrollText, action_tools: Wrench, akshat_ai: MessagesSquare,
+  offer_card: BadgeIndianRupee, story_bank: Mic, insight_pack: Newspaper, portfolio: FolderKanban, pitch: Megaphone,
+  research: BookOpen, mentorship_tools: GraduationCap, network_finder: Users, outreach: Send, radar: Radar,
+  call_prep: PhoneCall, proposal: FileSignature, client_diagnostic: Stethoscope, social_builder: Share2, bootcamps: Flag,
+};
+const PLAN_NAME = { free: "Free account", member: "₹1,999 plan", l1: "L1", l2: "L2 Mentorship" };
 const BAR = [
   { ...NAV_MAIN[0] },
   { ...NAV_MAIN[3] },
@@ -46,50 +57,60 @@ const iconBtn = "w-11 h-11 grid place-items-center rounded-bzbtn border border-b
 function NavItem({ item, onGo, locked, badge }) {
   const { to, key, label, sub, icon: Icon, end } = item;
   return (
-    <NavLink to={to} end={end} onClick={onGo} data-testid={`nav-${key}`}
-      className={({ isActive }) => `relative flex items-center gap-3 pl-3 py-2.5 min-h-[52px] transition-colors ${isActive
-        ? "mr-0 pr-7 rounded-l-bzbtn bg-bz-gold text-bz-on-accent"
-        : "mr-4 pr-3 rounded-bzbtn hover:bg-bz-raised/70"}`}>
+    <NavLink to={to} end={end} onClick={onGo} data-testid={`nav-${key}`} title={sub}
+      aria-label={locked ? `${label} (not on your plan)` : undefined}
+      className={({ isActive }) => `relative flex items-center gap-3 pl-3 min-h-[42px] text-[14px] transition-colors ${isActive
+        ? "mr-0 pr-4 rounded-l-bzbtn bg-[var(--bz-paper)] text-[var(--bz-paper-ink)] font-bold shadow-[inset_3px_0_0_rgb(29_78_216)]"
+        : `mr-3 pr-3 rounded-bzbtn hover:bg-bz-raised ${locked ? "text-bz-faint" : "text-bz-ink font-medium"}`}`}>
       {({ isActive }) => (
         <>
-          <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-bz-on-accent" : "text-bz-faint"}`} strokeWidth={1.6} aria-hidden />
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5 text-[14px]">
-              <span className={isActive ? "font-bold" : "text-bz-ink font-semibold"}>{label}</span>
-              {locked && <Lock className={`w-3 h-3 ${isActive ? "text-bz-on-accent/70" : "text-bz-faint"}`} aria-label="Locked on your plan" />}
-            </span>
-            <span className={`block text-[12px] truncate ${isActive ? "text-bz-on-accent/75" : "text-bz-muted"}`}>{sub}</span>
-          </span>
-          {badge ? <span className={`min-w-[20px] h-5 px-1.5 rounded-bztag text-[11px] font-bold grid place-items-center ${isActive ? "bg-bz-on-accent text-bz-gold" : "bg-bz-gold text-bz-on-accent"}`}>{badge}</span> : null}
+          <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? "text-[rgb(29_78_216)]" : locked ? "text-bz-faint" : "text-bz-muted"}`}
+            strokeWidth={1.7} aria-hidden />
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {locked && !isActive && <Lock className="w-3.5 h-3.5 shrink-0 text-bz-faint" aria-hidden />}
+          {badge ? <span className="min-w-[20px] h-5 px-1.5 rounded-bztag text-[11px] font-bold grid place-items-center bg-bz-gold text-bz-on-accent">{badge}</span> : null}
         </>
       )}
     </NavLink>
   );
 }
 
-function GroupLabel({ children }) {
-  return <div className="px-3 pt-5 pb-1.5 mr-4 text-[12.5px] font-semibold text-bz-gold/90 border-b border-bz-line/70 mb-1">{children}</div>;
+function GroupLabel({ children, note }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 pl-3 pr-3 mr-3 pt-5 pb-1.5">
+      <span className="text-[13px] font-semibold text-bz-ink">{children}</span>
+      {note && <span className="text-[12px] text-bz-faint">{note}</span>}
+    </div>
+  );
 }
 
-// A plan's tools: open by default when the member's plan includes them, folded (with a lock) when not.
+// A plan's tools. Included in your plan: listed. Not included: one row that says how many tools and links to the
+// plans, with "Show tools" to see their names (still marked locked).
 function PlanGroup({ g, mine, onGo, locked }) {
-  const open = PLAN_RANK[mine] >= PLAN_RANK[g.plan];
+  const included = PLAN_RANK[mine] >= PLAN_RANK[g.plan];
   const { pathname } = useLocation();
   const here = g.keys.some((k) => FEATURES[k].to && pathname.startsWith(FEATURES[k].to));
+  const [show, setShow] = useState(false);
+  const items = g.keys.map((k) => (
+    <NavItem key={k} onGo={onGo} locked={locked({ feature: k })}
+      item={{ to: FEATURES[k].to, key: k, label: FEATURES[k].name, sub: FEATURES[k].what, icon: TOOL_ICON[k] || Sparkles }} />
+  ));
+  if (included) return (<><GroupLabel note={g.label}>{g.title}</GroupLabel>{items}</>);
   return (
-    <details open={open || here} className="group">
-      <summary className="list-none cursor-pointer flex items-center justify-between px-3 pt-5 pb-1.5 mr-4 mb-1 select-none border-b border-bz-line/70">
-        <span className="text-[12.5px] font-semibold text-bz-gold/90">{g.label}</span>
-        <span className="flex items-center gap-1 text-bz-faint">
-          {!open && <Lock className="w-3 h-3" aria-label="Not on your plan" />}
-          <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" aria-hidden />
-        </span>
-      </summary>
-      {g.keys.map((k) => (
-        <NavItem key={k} onGo={onGo} locked={locked({ feature: k })}
-          item={{ to: FEATURES[k].to, key: k, label: FEATURES[k].name, sub: FEATURES[k].what, icon: Sparkles }} />
-      ))}
-    </details>
+    <>
+      <GroupLabel note={g.label}>{g.title}</GroupLabel>
+      <div className="mr-3 flex items-center min-h-[42px] rounded-bzbtn hover:bg-bz-raised">
+        <button type="button" onClick={() => setShow((v) => !v)} aria-expanded={show || here} data-testid={`nav-show-${g.plan}`}
+          className="flex-1 min-w-0 flex items-center gap-3 pl-3 pr-2 min-h-[42px] text-[13.5px] text-bz-muted hover:text-bz-ink text-left">
+          <Lock className="w-[18px] h-[18px] shrink-0 text-bz-faint" strokeWidth={1.7} aria-hidden />
+          <span className="truncate">{show || here ? "Hide" : "Show"} {g.keys.length} tools</span>
+          <ChevronRight className={`w-3.5 h-3.5 shrink-0 text-bz-faint transition-transform ${show || here ? "rotate-90" : ""}`} aria-hidden />
+        </button>
+        <Link to="/app/plans" onClick={onGo} data-testid={`nav-unlock-${g.plan}`}
+          className="shrink-0 px-3 min-h-[42px] grid place-items-center text-[13.5px] font-semibold text-bz-gold hover:text-bz-gold-light">Unlock</Link>
+      </div>
+      {(show || here) && <div className="mt-1">{items}</div>}
+    </>
   );
 }
 
@@ -97,28 +118,38 @@ function MenuBody({ onGo, user, plan, unread, onLogout }) {
   const feat = plan?.features || {};
   const admin = user?.role === "admin";
   const locked = (i) => i.feature && !admin && !feat[i.feature];
+  const mine = admin ? "l2" : plan?.plan || "free";
   const initial = (user?.name || user?.phone || "?").replace(/^\+91/, "").slice(0, 1).toUpperCase();
+  const navRef = useRef(null);
+  const { pathname } = useLocation();
+  useEffect(() => {                      // keep the open tab in view when the list is long
+    const el = navRef.current?.querySelector('[aria-current="page"]');
+    if (el) el.scrollIntoView({ block: "center" });
+  }, [pathname]);
   return (
     <div className="flex flex-col h-full min-h-0">
-      <Link to="/app" onClick={onGo} className={`px-2 ${onGo ? "mr-16" : "mr-4"}`} aria-label={`${brand.name} home`}><Logo /></Link>
-      <div className="mt-4 px-2"><PlanChip plan={plan} /></div>
-      <nav aria-label="Main" className="mt-2 flex flex-col gap-0.5 overflow-y-auto no-scrollbar pb-2 flex-1 min-h-0">
-        <GroupLabel>Your tools</GroupLabel>
+      <Link to="/app" onClick={onGo} className={`px-2 ${onGo ? "mr-16" : "mr-3"}`} aria-label={`${brand.name} home`}><Logo /></Link>
+      <nav ref={navRef} aria-label="Main" className="nav-scroll mt-3 flex flex-col gap-0.5 overflow-y-auto no-scrollbar pt-1 pb-6 flex-1 min-h-0">
+        <GroupLabel>Start here</GroupLabel>
         {NAV_MAIN.map((i) => <NavItem key={i.to} item={i} onGo={onGo} locked={locked(i)} />)}
-        {MENU_GROUPS.map((g) => <PlanGroup key={g.plan} g={g} mine={admin ? "l2" : plan?.plan || "free"} onGo={onGo} locked={locked} />)}
-        <GroupLabel>You</GroupLabel>
-        {NAV_ACCOUNT.map((i) => <NavItem key={i.to} item={i} onGo={onGo} badge={i.key === "inbox" ? unread : 0} />)}
+        {MENU_GROUPS.map((g) => <PlanGroup key={g.plan} g={g} mine={mine} onGo={onGo} locked={locked} />)}
+        <GroupLabel>Help and plans</GroupLabel>
+        {NAV_ACCOUNT.map((i) => <NavItem key={i.to} item={i} onGo={onGo} locked={locked(i)} badge={i.key === "inbox" ? unread : 0} />)}
         {admin && <NavItem item={{ to: "/admin", key: "admin", label: "Admin panel", sub: "Team only", icon: Shield }} onGo={onGo} />}
       </nav>
-      <div className="pt-3 mr-4 border-t border-bz-line flex items-center gap-3 px-2">
-        <Link to="/app/account" onClick={onGo} className="flex items-center gap-3 min-w-0 flex-1 rounded-bzbtn hover:bg-bz-raised/70 -m-1 p-1">
-          <span className="font-display w-9 h-9 shrink-0 rounded-full grid place-items-center text-[17px] font-[500] border border-bz-rule text-bz-gold">{initial}</span>
+      <div className="pt-3 mr-3 border-t border-bz-line flex items-center gap-2 px-1">
+        <Link to="/app/account" onClick={onGo} data-testid="nav-account"
+          className="flex items-center gap-3 min-w-0 flex-1 rounded-bzbtn hover:bg-bz-raised p-1.5">
+          <span className="font-display w-9 h-9 shrink-0 rounded-full grid place-items-center text-[17px] font-[500] bg-bz-raised text-bz-ink">{initial}</span>
           <span className="min-w-0">
             <span className="block text-sm font-semibold truncate">{user?.name || user?.phone}</span>
-            <span className="block text-[12px] text-bz-muted">Your account</span>
+            <span className="block text-[12px] text-bz-muted truncate" data-testid="nav-plan">
+              {admin ? "Team" : (plan?.label || PLAN_NAME[mine])}{plan?.period === "yearly" ? ", yearly" : ""}
+            </span>
           </span>
         </Link>
-        <button type="button" onClick={onLogout} title="Log out" aria-label="Log out" data-testid="logout" className="w-11 h-11 grid place-items-center text-bz-muted hover:text-bz-ink shrink-0">
+        <button type="button" onClick={onLogout} title="Log out" aria-label="Log out" data-testid="logout"
+          className="w-11 h-11 grid place-items-center rounded-bzbtn text-bz-muted hover:text-bz-ink hover:bg-bz-raised shrink-0">
           <LogOut className="w-4 h-4" strokeWidth={1.75} />
         </button>
       </div>
@@ -150,7 +181,7 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen flex font-bz text-bz-ink antialiased">
-      <aside className="chrome grid-ground no-print hidden lg:flex flex-col w-[288px] shrink-0 pl-4 pr-0 py-6 sticky top-0 h-screen bg-bz-spine">
+      <aside className="chrome no-print hidden lg:flex flex-col w-[272px] shrink-0 pl-3 pr-0 py-5 sticky top-0 h-screen bg-bz-spine">
         <MenuBody {...menu} />
       </aside>
 
@@ -168,7 +199,7 @@ export default function AppShell() {
         {drawer && (
           <div className="lg:hidden fixed inset-0 z-50">
             <button type="button" aria-label="Close menu" className="absolute inset-0 bg-bz-scrim" onClick={() => setDrawer(false)} />
-            <div className="chrome grid-ground absolute left-0 top-0 bottom-0 w-[320px] max-w-[88vw] bg-bz-spine pl-4 pr-0 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-float flex flex-col">
+            <div className="chrome absolute left-0 top-0 bottom-0 w-[320px] max-w-[88vw] bg-bz-spine pl-3 pr-0 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-float flex flex-col">
               <button type="button" aria-label="Close menu" onClick={() => setDrawer(false)} className={`${iconBtn} absolute right-4 top-4 bg-bz-spine`}>
                 <X className="w-5 h-5" strokeWidth={1.75} aria-hidden />
               </button>

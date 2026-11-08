@@ -36,6 +36,8 @@
   --bz-teal-ink: #ffffff;
   --bz-teal-tint: rgba(15, 118, 110, 0.08);
   --bz-scrim: rgba(15, 39, 71, 0.45);
+  --bz-paper: #f3f6fb;           /* the page itself; NOT re-mapped by .chrome, so a nav tab can join the page */
+  --bz-paper-ink: #0f2747;
   --bz-grid: #e4eaf3;            /* 24 px squares */
   --bz-grid-major: #d5dfec;      /* every fifth line, 120 px */
   --card-shadow: 0 1px 2px rgba(15, 39, 71, 0.05), 0 10px 28px -18px rgba(15, 39, 71, 0.22);
@@ -105,6 +107,12 @@
   --bz-on-accent-rgb: 15 39 71;
   color-scheme: dark;
   color: var(--bz-ink);
+}
+
+/* The nav list: fades at the edge that has more to scroll, so a clipped row reads as "more below" */
+.nav-scroll {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
 }
 
 /* Squared paper: 24 px squares, a stronger line every 120 px. On .chrome it becomes a faint blueprint grid. */
