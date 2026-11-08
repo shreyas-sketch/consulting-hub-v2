@@ -1,6 +1,7 @@
-// Small primitives in "the chamber" design: bottle-green sheets, ivory text, Newsreader for headlines and figures,
-// Manrope for everything read and tapped. brass (bz-gold) = the one signal, ink-blue (bz-teal) = AI only,
-// sindoor (bz-miss) = errors only. Labels are sentence case; radius follows role (frame 12, sheet 8, control 6, tag 4).
+// Small primitives in the "graph paper" design: white sheets on squared paper, navy binder, Newsreader for headlines
+// and figures, Manrope for everything read and tapped. cobalt (bz-gold) = the one signal, teal (bz-teal) = AI only,
+// red (bz-miss) = errors only. Labels are sentence case; radius follows role (frame 12, sheet 8, control 6, tag 4).
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Loader2, RotateCw, Sparkles } from "lucide-react";
 import { apiError } from "@/lib/api";
@@ -291,8 +292,21 @@ export function Note({ children, className = "" }) {
 }
 
 export function ErrorLine({ children }) {
+  // A failed AI call often re-renders the form after a "thinking" state that shortened the page, so the message can
+  // land below the fold on a phone. Bring a new message into view; one that is already visible stays put.
+  const ref = useRef(null);
+  const text = typeof children === "string" ? children : children ? "x" : "";
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !text) return;
+    const r = el.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight - 80) {
+      const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
+    }
+  }, [text]);
   if (!children) return null;
-  return <p className="text-sm text-bz-miss mt-2" role="alert">{children}</p>;
+  return <p ref={ref} className="text-sm text-bz-miss mt-2 scroll-mt-24" role="alert">{children}</p>;
 }
 
 export function OkLine({ children }) {

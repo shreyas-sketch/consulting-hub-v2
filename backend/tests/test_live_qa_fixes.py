@@ -171,3 +171,23 @@ def test_gemini_falls_back_to_a_second_model_when_busy(monkeypatch):
     import pytest
     with pytest.raises(pitch_video.VideoError):
         asyncio.run(bad())
+
+
+def test_a_cut_chat_reply_is_kept_and_logged(monkeypatch, caplog):
+    """QA 8 Nov: a coaching-chat reply cut at max_tokens was shown half-finished with no log line at all."""
+    import asyncio
+    import logging
+    from types import SimpleNamespace
+
+    import llm
+
+    class Msgs:
+        async def create(self, **_):
+            return SimpleNamespace(content=[SimpleNamespace(text="Start with the scope of the")], stop_reason="max_tokens")
+    monkeypatch.setattr(llm, "mode", lambda: "live")
+    monkeypatch.setattr(llm, "_client", lambda: SimpleNamespace(messages=Msgs()))
+    with caplog.at_level(logging.WARNING, logger="llm"):
+        out = asyncio.run(llm.complete_chat(task="gpt:define-your-niche", system="s",
+                                            messages=[{"role": "user", "content": "hi"}], fake=str))
+    assert out == "Start with the scope of the"
+    assert "chat reply cut" in caplog.text and "gpt:define-your-niche" in caplog.text

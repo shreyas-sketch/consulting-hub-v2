@@ -213,6 +213,9 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
 
     async def call():
         resp = await _client().messages.create(model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs)
+        if getattr(resp, "stop_reason", None) == "max_tokens":    # a chat keeps what was written; the log says it was cut
+            log.warning("LLM chat reply cut at max_tokens=%s (task %s, model %s); raise LLM_MAX_OUTPUT_TOKENS",
+                        max_tokens, task, model)
         return "".join(getattr(b, "text", "") for b in resp.content)
     try:
         return (await _guarded(call, task, time_budget(max_tokens, timeout), **_wait_kw(queue_wait))).strip()
