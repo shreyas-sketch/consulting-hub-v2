@@ -319,7 +319,7 @@ def fake_review(k: dict, target: str) -> dict:
                       f"get it back without a big project.\n\nToday I help {who} with {niche}. We start with a two-week diagnosis, "
                       "agree one number to move, and work on it together for 90 days.\n\nWhat that has looked like: "
                       "[result 1], [result 2], [result 3].\n\nIf this sounds like your business, send me a message here and "
-                      "we.ll find a time for a 30-minute call. ").strip(),
+                      "we'll find a time for a 30-minute call. ").strip(),
             "experience": [{"role": "General Manager – Operations, ABC Ltd", "bullets": ["Cut wastage from [number]% to [number]% in [number] months",
                                                                                           "Led a team of [number] across [number] plants"]}],
             "featured": ["A one-page case study of your best result", "Your Offer Card as a PDF", "Your best post"],
