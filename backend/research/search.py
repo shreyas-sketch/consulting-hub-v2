@@ -89,6 +89,7 @@ async def _cache_put(key: str, results: list[dict]) -> None:
 
 SEARCH_TOOL = "web_search_20250305"
 FETCH_TOOL = "web_fetch_20250910"
+FORCE_SEARCH = {"type": "tool", "name": "web_search"}   # tool_choice: the first thing the AI does is search
 SEARCH_TIMEOUT_S = 75             # a web search turn (search, read results, answer) often takes 20-40 s; 45 s cut some off
 MAX_SEARCHES = 2                 # per news() call: the given query plus one refinement if the first comes back thin
 FETCH_MAX_TOKENS = 60_000        # per page; keeps each read well under the model's 100K-token higher price tier
@@ -276,12 +277,18 @@ async def _news(query: str, max_results: int = 6, *, queue_wait: Optional[float]
     prompt = (f"Search query: {q}\n\nSearch for this, then pick up to {n} recent news reports that match it. "
               "Reply with the JSON object only.")
     tool = {"type": SEARCH_TOOL, "name": "web_search", "max_uses": MAX_SEARCHES, "user_location": USER_LOCATION}
+    force = FORCE_SEARCH                 # the search must run: the AI may not answer from memory
     for attempt in range(2):
         try:
             reply = await llm.complete_with_tools(task="web_search", system=SEARCH_SYSTEM, prompt=prompt, tools=[tool],
                                                   model="fast", max_tokens=1500, timeout=SEARCH_TIMEOUT_S,
-                                                  queue_wait=queue_wait)
+                                                  queue_wait=queue_wait, tool_choice=force)
         except llm.LLMError as e:      # a brief without news beats no brief
+            why = str(e).lower()
+            if force and attempt == 0 and ("tool_choice" in why or "badrequest" in why or "invalid_request" in why):
+                log.warning("search for %r: forcing the search tool was refused (%s); asking without forcing", q[:80], e)
+                force = None
+                continue
             log.warning("search failed for %r: %s", q[:80], e)
             return []
         blocks = reply.get("content") or []

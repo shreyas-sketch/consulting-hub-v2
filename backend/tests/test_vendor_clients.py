@@ -423,3 +423,24 @@ async def test_news_search_error_code_is_a_warning(live_search, caplog):
     with caplog.at_level(logging.WARNING, logger="search"):
         assert await search.news("Acme err India", max_results=3) == []
     assert "too_many_requests" in caplog.text and "found no usable news" in caplog.text
+
+
+async def test_news_forces_the_search_tool(live_search):
+    """The AI must search: the request carries tool_choice = web_search (first turn only)."""
+    answer = json.dumps({"items": [{"url": TOOL_URLS[0], "summary": "Acme will double its Pune plant by March 2027."}]})
+    rec = live_search(_msg(_search_blocks(answer)))
+    await search.news("Acme forced India", max_results=3)
+    assert rec.requests[0]["tool_choice"] == {"type": "tool", "name": "web_search"}
+
+
+async def test_news_falls_back_if_forcing_is_refused(live_search, caplog):
+    import logging
+    refused = httpx.Response(400, json={"type": "error", "error": {"type": "invalid_request_error",
+                                                                   "message": "tool_choice is not supported with this tool"}})
+    answer = json.dumps({"items": [{"url": TOOL_URLS[0], "summary": "Acme will double its Pune plant by March 2027."}]})
+    rec = live_search(refused, _msg(_search_blocks(answer)))
+    with caplog.at_level(logging.WARNING, logger="search"):
+        out = await search.news("Acme refused India", max_results=3)
+    assert [r["url"] for r in out] == [TOOL_URLS[0]]
+    assert "tool_choice" in rec.requests[0] and "tool_choice" not in rec.requests[1]
+    assert "forcing the search tool was refused" in caplog.text

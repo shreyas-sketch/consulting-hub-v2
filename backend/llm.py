@@ -228,7 +228,7 @@ async def complete_chat(*, task: str, system: str, messages: list[dict], fake: C
 
 async def complete_with_tools(*, task: str, system: str, prompt: str, tools: list[dict], model: str = "fast",
                               max_tokens: int = 1200, timeout: Optional[float] = None, max_continues: int = 2,
-                              queue_wait: Optional[float] = None) -> dict:
+                              queue_wait: Optional[float] = None, tool_choice: Optional[dict] = None) -> dict:
     """One live call that uses Anthropic's server-side tools (web search, web fetch: the API runs them itself).
 
     Returns the reply as plain JSON, not SDK objects, so newer block types (web_search_tool_result,
@@ -239,6 +239,7 @@ async def complete_with_tools(*, task: str, system: str, prompt: str, tools: lis
     (default LLM_TIMEOUT_S). No fake here: the caller checks its own vendor switch first and keeps its own fake.
     Raises LLMError on any failure."""
     max_tokens = out_tokens(max_tokens)
+    choice = {"tool_choice": tool_choice} if tool_choice else {}   # e.g. {"type": "tool", "name": "web_search"}
 
     async def call():
         msgs: list = [{"role": "user", "content": prompt}]
@@ -247,7 +248,8 @@ async def complete_with_tools(*, task: str, system: str, prompt: str, tools: lis
         stop = None
         for _ in range(max(0, max_continues) + 1):
             raw = await _client().messages.with_raw_response.create(
-                model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs, tools=tools)
+                model=MODELS[model](), max_tokens=max_tokens, system=system, messages=msgs, tools=tools,
+                **(choice if not blocks else {}))           # forcing applies to the first turn only
             data = raw.http_response.json() or {}
             blocks.extend(b for b in (data.get("content") or []) if isinstance(b, dict))
             usage.append(data.get("usage") or {})
@@ -262,4 +264,4 @@ async def complete_with_tools(*, task: str, system: str, prompt: str, tools: lis
         raise
     except Exception as e:  # noqa: BLE001
         log.warning("LLM task %s failed: %s", task, e)
-        raise LLMError(f"AI call failed: {type(e).__name__}") from e
+        raise LLMError(f"AI call failed: {type(e).__name__}: {str(e)[:200]}") from e

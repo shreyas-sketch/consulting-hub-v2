@@ -8,6 +8,7 @@ that wasn't really found. With search off, the brief says it was made without li
 """
 from __future__ import annotations
 
+import re
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -16,7 +17,6 @@ from pydantic import BaseModel, Field
 import llm
 from core.deps import user_dep
 from core.errors import NotFound
-from core.flags import is_on
 from growth import events
 from growth.clock import utcnow
 from research import search
@@ -91,9 +91,9 @@ async def make(body: BriefIn, user: dict = Depends(user_dep())):
 
     async def work(plan: str):
         results = []
-        if is_on("BRIEF_WEB_SEARCH"):
-            q = f"{body.company} India" + (f" {body.website}" if body.website else "")
-            results = await search.news(q, max_results=6, queue_wait=45)
+        host = re.sub(r"^(https?://)?(www\.)?", "", body.website.strip(), flags=re.I).split("/")[0]
+        q = f"{body.company} India" + (f" {host}" if host else "")     # every brief searches the news
+        results = await search.news(q, max_results=6, queue_wait=45)
         raw = as_dict(await llm.complete_json(task="meeting_brief", system=SYSTEM, prompt=_prompt(body, results),
                                               fake=lambda: _fake(body, results), model="fast", max_tokens=1400,
                                               queue_wait=WEBINAR_QUEUE_WAIT))

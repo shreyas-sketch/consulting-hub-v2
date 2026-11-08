@@ -105,11 +105,25 @@ def test_meeting_brief_links_only_from_search(seeded_client, mdb):
     assert c.get("/api/briefs").json()["items"][0]["company"] == "Haldiram's"
 
 
-def test_meeting_brief_without_search(seeded_client):
+def test_meeting_brief_always_searches(seeded_client, monkeypatch):
+    """Every brief searches the news (no switch turns it off), by company + India + the site's host, not a full URL."""
+    from research import search
+    asked = []
+    real = search.news
+
+    async def spy(q, **kw):
+        asked.append(q)
+        return await real(q, **kw)
+    monkeypatch.setattr(search, "news", spy)
     c = seeded_client
-    qa_login(c, role="admin")
-    c.post("/api/admin/flags", json={"key": "BRIEF_WEB_SEARCH", "on": False})
-    c.post("/api/auth/logout")
+    qa_login(c, plan="member")
+    b = c.post("/api/briefs", json={"company": "Acme Pumps", "website": "https://www.acmepumps.in/about"}).json()
+    assert asked == ["Acme Pumps India acmepumps.in"] and b["live_news"] is True
+
+
+def test_meeting_brief_when_search_finds_nothing(seeded_client, monkeypatch):
+    monkeypatch.setenv("SEARCH_MODE", "off")
+    c = seeded_client
     qa_login(c, plan="member")
     b = c.post("/api/briefs", json={"company": "Acme Pumps"}).json()
     assert b["live_news"] is False and b["news"] == []
