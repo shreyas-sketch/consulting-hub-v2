@@ -2,57 +2,119 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ==== Consultation Hub tokens: "the chamber" (dark, bottle-green leather, brass, ivory, ink) ====
-   Token names keep the --bz-* prefix every component uses, so the whole app follows these values.
-   brass (gold) = the one signal: primary action, ₹ figures, where you are, key numbers
-   ink (teal)   = AI only: AI buttons, AI-written text, "thinking" states (the AI writes in fountain-pen ink)
-   sindoor (miss) = errors and destructive actions only                                                  */
+/* ==== Consultation Hub tokens: "graph paper" (Option A) =====================================================
+   The member works on pale squared paper (a consultant's working pad); the binder around it (sidebar, top bar,
+   bottom bar, drawers) is deep navy. Token names keep the --bz-* prefix every component already uses.
+   cobalt (gold*)  = the one signal: primary action, links, where you are, key numbers
+   teal   (teal*)  = AI only: AI buttons, AI-written text, "thinking" states
+   red    (miss*)  = errors and destructive actions only
+   (*names kept from the first theme so no component has to change)                                       */
 :root {
-  --bz-bg: #0e2620;              /* blotter green */
-  --bz-panel: #12302a;           /* leather: inputs, sheets */
-  --bz-card: #14352d;            /* sheet of a page */
-  --bz-raised: #1b4137;          /* hover, inset */
-  --bz-spine: #0a1e19;           /* the file spine (sidebar) */
-  --bz-ink: #f1ebdd;             /* ivory */
-  --bz-muted: rgba(241, 235, 221, 0.72);
-  --bz-faint: rgba(241, 235, 221, 0.42);
-  --bz-line: #24493f;
-  --bz-line-strong: #36604f;
-  --bz-inset: #1b4137;
-  --bz-accent: #d4b06a;
-  --bz-accent-deep: #ead39f;
-  --bz-accent-tint: rgba(212, 176, 106, 0.13);
-  --bz-on-accent: #0e2620;
-  --bz-miss: #ff7f66;            /* sindoor */
-  --bz-miss-tint: rgba(255, 127, 102, 0.12);
-  --bz-gold: #d4b06a;            /* brass */
-  --bz-gold-light: #ead39f;
-  --bz-gold-deep: #d4b06a;
-  --bz-rule: #8f7442;            /* brass rule, dimmer */
-  --bz-gold-tint: rgba(212, 176, 106, 0.13);
-  --bz-teal: #a7b6ff;            /* Quink ink-blue: AI only */
-  --bz-teal-ink: #141b3d;
-  --bz-teal-tint: rgba(167, 182, 255, 0.11);
-  --bz-scrim: rgba(5, 14, 11, 0.72);
-  --card-shadow: 0 1px 0 rgba(241, 235, 221, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.55);
-  --focus-ring: 0 0 0 2px var(--bz-bg), 0 0 0 4px rgba(212, 176, 106, 0.85);
+  --bz-bg: #f3f6fb;              /* paper */
+  --bz-panel: #f8fafd;           /* inputs, inset sheets */
+  --bz-card: #ffffff;            /* a sheet on the pad */
+  --bz-raised: #eaf0f8;          /* hover, inset */
+  --bz-spine: #0f2747;           /* navy binder: sidebar, bars */
+  --bz-ink: #13213a;
+  --bz-muted: #56657d;
+  --bz-faint: #8794a8;
+  --bz-line: #d7e0ec;
+  --bz-line-strong: #b7c5d9;
+  --bz-inset: #eef2f8;
+  --bz-accent: #1d4ed8;
+  --bz-accent-deep: #1e40af;
+  --bz-accent-tint: rgba(29, 78, 216, 0.08);
+  --bz-on-accent: #ffffff;
+  --bz-miss: #c2372b;
+  --bz-miss-tint: rgba(194, 55, 43, 0.08);
+  --bz-gold: #1d4ed8;            /* cobalt */
+  --bz-gold-light: #1e40af;      /* hover: a step deeper */
+  --bz-gold-deep: #1d4ed8;
+  --bz-rule: #9fb3d4;            /* quiet cobalt rule */
+  --bz-gold-tint: rgba(29, 78, 216, 0.08);
+  --bz-teal: #0f766e;            /* AI only */
+  --bz-teal-ink: #ffffff;
+  --bz-teal-tint: rgba(15, 118, 110, 0.08);
+  --bz-scrim: rgba(15, 39, 71, 0.45);
+  --bz-grid: #e4eaf3;            /* 24 px squares */
+  --bz-grid-major: #d5dfec;      /* every fifth line, 120 px */
+  --card-shadow: 0 1px 2px rgba(15, 39, 71, 0.05), 0 10px 28px -18px rgba(15, 39, 71, 0.22);
+  --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px rgba(29, 78, 216, 0.75);
   /* RGB channels of the solid colours, so Tailwind opacity modifiers (bg-bz-raised/60) work everywhere */
-  --bz-bg-rgb: 14 38 32;
-  --bz-spine-rgb: 10 30 25;
-  --bz-panel-rgb: 18 48 42;
-  --bz-card-rgb: 20 53 45;
-  --bz-raised-rgb: 27 65 55;
-  --bz-ink-rgb: 241 235 221;
-  --bz-line-rgb: 36 73 63;
-  --bz-line-strong-rgb: 54 96 79;
-  --bz-gold-rgb: 212 176 106;
-  --bz-gold-light-rgb: 234 211 159;
-  --bz-rule-rgb: 143 116 66;
-  --bz-teal-rgb: 167 182 255;
-  --bz-teal-ink-rgb: 20 27 61;
-  --bz-miss-rgb: 255 127 102;
-  --bz-on-accent-rgb: 14 38 32;
+  --bz-bg-rgb: 243 246 251;
+  --bz-spine-rgb: 15 39 71;
+  --bz-panel-rgb: 248 250 253;
+  --bz-card-rgb: 255 255 255;
+  --bz-raised-rgb: 234 240 248;
+  --bz-ink-rgb: 19 33 58;
+  --bz-line-rgb: 215 224 236;
+  --bz-line-strong-rgb: 183 197 217;
+  --bz-gold-rgb: 29 78 216;
+  --bz-gold-light-rgb: 30 64 175;
+  --bz-rule-rgb: 159 179 212;
+  --bz-teal-rgb: 15 118 110;
+  --bz-teal-ink-rgb: 255 255 255;
+  --bz-miss-rgb: 194 55 43;
+  --bz-on-accent-rgb: 255 255 255;
+  color-scheme: light;
+}
+
+/* The navy binder. Put .chrome on a navy surface and everything inside it reads light-on-navy. */
+.chrome {
+  --bz-bg: #0f2747;
+  --bz-panel: #15325a;
+  --bz-card: #15325a;
+  --bz-raised: #1a3863;
+  --bz-spine: #0f2747;
+  --bz-ink: #f2f6fc;
+  --bz-muted: #a9b9d3;
+  --bz-faint: #8296b8;
+  --bz-line: #24456f;
+  --bz-line-strong: #33598a;
+  --bz-inset: #1a3863;
+  --bz-accent: #9ec0ff;
+  --bz-accent-tint: rgba(158, 192, 255, 0.14);
+  --bz-on-accent: #0f2747;
+  --bz-miss: #ff8a7a;
+  --bz-miss-tint: rgba(255, 138, 122, 0.14);
+  --bz-gold: #9ec0ff;            /* light cobalt: where you are */
+  --bz-gold-light: #c4d8ff;
+  --bz-gold-deep: #9ec0ff;
+  --bz-rule: #3b6299;
+  --bz-gold-tint: rgba(158, 192, 255, 0.14);
+  --bz-teal: #5ed3c3;
+  --bz-teal-ink: #062420;
+  --bz-teal-tint: rgba(94, 211, 195, 0.12);
+  --bz-grid: rgba(158, 192, 255, 0.06);
+  --bz-grid-major: rgba(158, 192, 255, 0.11);
+  --focus-ring: 0 0 0 2px #0f2747, 0 0 0 4px rgba(158, 192, 255, 0.9);
+  --bz-bg-rgb: 15 39 71;
+  --bz-spine-rgb: 15 39 71;
+  --bz-panel-rgb: 21 50 90;
+  --bz-card-rgb: 21 50 90;
+  --bz-raised-rgb: 26 56 99;
+  --bz-ink-rgb: 242 246 252;
+  --bz-line-rgb: 36 69 111;
+  --bz-line-strong-rgb: 51 89 138;
+  --bz-gold-rgb: 158 192 255;
+  --bz-gold-light-rgb: 196 216 255;
+  --bz-rule-rgb: 59 98 153;
+  --bz-teal-rgb: 94 211 195;
+  --bz-teal-ink-rgb: 6 36 32;
+  --bz-miss-rgb: 255 138 122;
+  --bz-on-accent-rgb: 15 39 71;
   color-scheme: dark;
+  color: var(--bz-ink);
+}
+
+/* Squared paper: 24 px squares, a stronger line every 120 px. On .chrome it becomes a faint blueprint grid. */
+.grid-ground {
+  background-image:
+    linear-gradient(var(--bz-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bz-grid-major) 1px, transparent 1px),
+    linear-gradient(var(--bz-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bz-grid) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
 }
 
 html,
@@ -68,23 +130,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
   color: var(--bz-ink);
   min-height: 100vh;
-  /* Lamp light falling on a leather blotter: one soft pool, darker at the edges */
+  /* The working pad: squared paper under every page */
   background-image:
-    radial-gradient(ellipse 1200px 900px at 78% -10%, rgba(212, 176, 106, 0.07), transparent 60%),
-    radial-gradient(ellipse 1400px 1100px at 10% 110%, rgba(3, 12, 9, 0.55), transparent 70%);
-  background-attachment: fixed;
-}
-
-/* Fine leather grain over everything (a static SVG noise, ~2% visible) */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.07;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.92  0 0 0 0 0.86  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  mix-blend-mode: overlay;
+    linear-gradient(var(--bz-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bz-grid-major) 1px, transparent 1px),
+    linear-gradient(var(--bz-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bz-grid) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  background-position: -1px -1px;
 }
 
 #root {
@@ -162,11 +215,11 @@ input[type="range"] {
   .gold-glow {
     text-shadow: none;
   }
-  /* The brass rule under a page's letterhead */
+  /* The cobalt rule under a page's letterhead */
   .brass-rule {
     height: 2px;
     width: 56px;
-    background: linear-gradient(90deg, var(--bz-gold), var(--bz-rule));
+    background: var(--bz-gold);
     border-radius: 2px;
   }
   .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -175,7 +228,6 @@ input[type="range"] {
 
 @media print {
   body { background: #fff !important; color: #111 !important; }
-  body::before { display: none; }
   h1, h2, .font-display { color: #111 !important; }
   .no-print { display: none !important; }
   .print-plain, .print-plain * { background: transparent !important; color: #111 !important; border-color: #ccc !important; box-shadow: none !important; }

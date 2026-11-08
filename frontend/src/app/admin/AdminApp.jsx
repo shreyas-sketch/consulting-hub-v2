@@ -87,10 +87,10 @@ function Shell() {
   const page = ALL.find((p) => p.path === sub) || ALL[0];
   return (
     <div className="min-h-screen font-bz text-bz-ink antialiased lg:flex">
-      <aside className="hidden lg:flex flex-col w-[248px] shrink-0 border-r-2 border-bz-gold/80 bg-bz-spine px-4 py-6 h-screen sticky top-0">
+      <aside className="chrome grid-ground hidden lg:flex flex-col w-[248px] shrink-0 bg-bz-spine px-4 py-6 h-screen sticky top-0">
         <SideNav />
       </aside>
-      <header className="lg:hidden sticky top-0 z-30 bg-bz-spine/95 backdrop-blur border-b border-bz-gold/50 h-14 px-4 flex items-center justify-between">
+      <header className="chrome lg:hidden sticky top-0 z-30 bg-bz-spine/95 backdrop-blur border-b border-bz-line h-14 px-4 flex items-center justify-between">
         <button aria-label="Menu" onClick={() => setDrawer(true)} className="w-11 h-11 grid place-items-center rounded-bzbtn border border-bz-line bg-bz-raised/60" data-testid="admin-menu">
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
@@ -102,7 +102,7 @@ function Shell() {
       {drawer && (
         <div className="lg:hidden fixed inset-0 z-40">
           <button aria-label="Close menu" className="absolute inset-0 bg-bz-scrim" onClick={() => setDrawer(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-bz-spine border-r-2 border-bz-gold/80 px-4 py-5 overflow-y-auto shadow-bzsheet flex flex-col">
+          <div className="chrome grid-ground absolute left-0 top-0 bottom-0 w-[280px] bg-bz-spine px-4 py-5 overflow-y-auto shadow-bzsheet flex flex-col">
             <SideNav onGo={() => setDrawer(false)} />
           </div>
         </div>

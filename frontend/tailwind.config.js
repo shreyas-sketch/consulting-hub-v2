@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-// Consultation Hub tokens live in src/index.css (--bz-* vars, "the chamber": bottle green, brass, ivory, ink-blue).
+// Consultation Hub tokens live in src/index.css (--bz-* vars, "graph paper": paper, navy binder, cobalt, teal for AI).
 module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
   theme: {
@@ -10,10 +10,10 @@ module.exports = {
         bzmono: ['"JetBrains Mono Variable"', '"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       boxShadow: {
-        bzsheet: "0 -12px 48px rgba(2,10,8,0.6)",
+        bzsheet: "0 -12px 40px rgba(15,39,71,0.18)",
         bzframe: "var(--card-shadow)",
-        float: "0 40px 90px rgba(2,10,8,0.65)",
-        goldglow: "0 10px 24px -12px rgba(212,176,106,0.55)",
+        float: "0 30px 70px rgba(15,39,71,0.28)",
+        goldglow: "0 8px 18px -10px rgba(29,78,216,0.55)",
         tealglow: "none",
       },
       borderRadius: {

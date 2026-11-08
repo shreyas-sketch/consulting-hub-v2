@@ -1,17 +1,17 @@
-// Visual Builder palette and SVG helpers. Hex values from the Akshat Dani tokens (index.css), because an exported
+// Visual Builder palette and SVG helpers. Hex values from the hub tokens (index.css, "graph paper"), because an exported
 // SVG/PNG can't read CSS variables. "light" is only an export option for slides on a white background.
 export const FONT = "Manrope, 'Manrope Variable', Inter, system-ui, sans-serif";
 
 export const THEMES = {
   dark: {
-    bg: "#1e2027", panel: "#262932", ink: "#f2eee6", muted: "#b9b6af", faint: "#6f6d69",
-    line: "#2a2d36", lineStrong: "#3a3e4a", gold: "#c9a84c", goldLight: "#f0d98a", goldDeep: "#8f7635",
-    onGold: "#14151a", goldTint: "rgba(201,168,76,0.12)",
+    bg: "#0f2747", panel: "#15325a", ink: "#f2f6fc", muted: "#a9b9d3", faint: "#8296b8",
+    line: "#24456f", lineStrong: "#33598a", gold: "#6fa0ff", goldLight: "#a9c6ff", goldDeep: "#3f74e0",
+    onGold: "#0f2747", goldTint: "rgba(111,160,255,0.14)",
   },
   light: {
-    bg: "#ffffff", panel: "#f5f2ea", ink: "#1b1c20", muted: "#55575e", faint: "#9a978f",
-    line: "#e7e2d6", lineStrong: "#cfc8b8", gold: "#a8862e", goldLight: "#d9bc68", goldDeep: "#7a6326",
-    onGold: "#ffffff", goldTint: "rgba(168,134,46,0.10)",
+    bg: "#ffffff", panel: "#f3f6fb", ink: "#13213a", muted: "#56657d", faint: "#8794a8",
+    line: "#d7e0ec", lineStrong: "#b7c5d9", gold: "#1d4ed8", goldLight: "#6f95f0", goldDeep: "#0f2747",
+    onGold: "#ffffff", goldTint: "rgba(29,78,216,0.08)",
   },
 };
 

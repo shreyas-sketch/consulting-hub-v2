@@ -150,12 +150,12 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen flex font-bz text-bz-ink antialiased">
-      <aside className="no-print hidden lg:flex flex-col w-[288px] shrink-0 pl-4 pr-0 py-6 sticky top-0 h-screen border-r-2 border-bz-gold/80 bg-bz-spine">
+      <aside className="chrome grid-ground no-print hidden lg:flex flex-col w-[288px] shrink-0 pl-4 pr-0 py-6 sticky top-0 h-screen bg-bz-spine">
         <MenuBody {...menu} />
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="no-print sticky top-0 z-30 lg:hidden border-b border-bz-gold/50 bg-bz-spine/95 backdrop-blur">
+        <header className="chrome no-print sticky top-0 z-30 lg:hidden border-b border-bz-line bg-bz-spine/95 backdrop-blur">
           <div className="flex items-center justify-between gap-3 px-4 h-16">
             <Link to="/app" aria-label={`${brand.name} home`}><Logo word="hidden min-[380px]:flex" /></Link>
             <Link to="/app/inbox" aria-label={`Inbox${unread ? `, ${unread} unread` : ""}`} className={`${iconBtn} relative`} data-testid="topbar-inbox">
@@ -168,7 +168,7 @@ export default function AppShell() {
         {drawer && (
           <div className="lg:hidden fixed inset-0 z-50">
             <button type="button" aria-label="Close menu" className="absolute inset-0 bg-bz-scrim" onClick={() => setDrawer(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-[320px] max-w-[88vw] bg-bz-spine border-r-2 border-bz-gold/80 pl-4 pr-0 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-float flex flex-col">
+            <div className="chrome grid-ground absolute left-0 top-0 bottom-0 w-[320px] max-w-[88vw] bg-bz-spine pl-4 pr-0 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-float flex flex-col">
               <button type="button" aria-label="Close menu" onClick={() => setDrawer(false)} className={`${iconBtn} absolute right-4 top-4 bg-bz-spine`}>
                 <X className="w-5 h-5" strokeWidth={1.75} aria-hidden />
               </button>
@@ -188,7 +188,7 @@ export default function AppShell() {
           </div>
         </main>
 
-        <nav aria-label="Quick" className="no-print lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bz-spine/95 backdrop-blur border-t border-bz-gold/50 pb-[env(safe-area-inset-bottom)]">
+        <nav aria-label="Quick" className="chrome no-print lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bz-spine/95 backdrop-blur border-t border-bz-line pb-[env(safe-area-inset-bottom)]">
           <ul className="max-w-[600px] mx-auto grid grid-cols-5">
             {BAR.map(({ to, key, label, icon: Icon, end }) => (
               <li key={to}>

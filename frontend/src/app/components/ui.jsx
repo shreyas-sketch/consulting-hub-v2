@@ -206,7 +206,7 @@ export function RowLink({ to, href, onClick, title, sub, right, testid, icon: Ic
 
 // ---- form controls -------------------------------------------------------
 export const inputCls =
-  "w-full min-h-[48px] rounded-bzbtn border border-bz-line bg-bz-spine/60 text-bz-ink px-3.5 py-2.5 text-[16px] " +
+  "w-full min-h-[48px] rounded-bzbtn border border-bz-line-strong bg-bz-card text-bz-ink px-3.5 py-2.5 text-[16px] " +
   "outline-none focus:border-bz-gold transition-colors";
 export const textareaCls = `${inputCls} min-h-[120px] leading-relaxed resize-y`;
 
@@ -254,7 +254,7 @@ export function Segmented({ options, value, onChange, label, testid, className =
         return (
           <button key={String(v)} type="button" onClick={() => onChange(v)} aria-pressed={on}
             data-testid={testid ? `${testid}-${v}` : undefined}
-            className={`min-h-[44px] px-4 rounded-bzbtn text-[14px] font-semibold border transition-colors ${on ? "bg-bz-gold text-bz-on-accent border-bz-gold" : "bg-bz-spine/50 text-bz-ink border-bz-line hover:border-bz-line-strong"}`}>
+            className={`min-h-[44px] px-4 rounded-bzbtn text-[14px] font-semibold border transition-colors ${on ? "bg-bz-gold text-bz-on-accent border-bz-gold" : "bg-bz-card text-bz-ink border-bz-line-strong hover:border-bz-line-strong"}`}>
             {l}
           </button>
         );
@@ -268,7 +268,7 @@ export function Meter({ value = 0, tone = "gold", className = "", label }) {
   const v = Math.max(0, Math.min(100, Number(value) || 0));
   const fill = tone === "teal" ? "bg-bz-teal" : tone === "miss" ? "bg-bz-miss" : "bg-gradient-to-r from-bz-rule to-bz-gold-light";
   return (
-    <div className={`h-2 rounded-full bg-bz-spine overflow-hidden ring-1 ring-inset ring-bz-line ${className}`} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={v} aria-label={label}>
+    <div className={`h-2 rounded-full bg-bz-raised overflow-hidden ring-1 ring-inset ring-bz-line ${className}`} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={v} aria-label={label}>
       <div className={`h-full rounded-full ${fill}`} style={{ width: `${v}%` }} />
     </div>
   );
