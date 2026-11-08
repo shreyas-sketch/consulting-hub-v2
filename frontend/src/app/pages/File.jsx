@@ -101,7 +101,7 @@ export default function File() {
               {f.linkedin && (
                 <Card>
                   <div className="flex items-baseline justify-between gap-3">
-                    <Label className="mb-0">LinkedIn Score</Label>
+                    <Label className="mb-0">{f.linkedin.label || "LinkedIn Score"}</Label>
                     <span className="text-[24px] font-display font-[500] text-bz-gold tabular">{f.linkedin.score}<span className="text-[13px] text-bz-muted">/100</span></span>
                   </div>
                   <ul className="mt-2 space-y-1 text-[14px] list-disc pl-5">{f.linkedin.problems.map((p) => <li key={p.key}>{p.tip}</li>)}</ul>

@@ -68,7 +68,7 @@ export default function Home() {
                 <Stat label="Readiness" value={f.readiness ? `${f.readiness.total}/60` : "—"} sub={f.readiness?.band || "Not scored yet"} />
                 <Stat label="Clients a month" value={f.goal ? f.goal.clients_per_month : "—"} sub={f.goal ? `for ${inr(f.goal.monthly_goal_inr)} a month` : "Set your goal"} />
                 <Stat label="Last case" value={lastCase ? `${lastCase.overall}/10` : "—"} sub={lastCase ? lastCase.title : "Solve the live case"} />
-                <Stat label="LinkedIn" value={f.linkedin ? `${f.linkedin.score}/100` : "—"} sub={f.linkedin ? "Latest score" : "Not checked yet"} />
+                <Stat label="LinkedIn" value={f.linkedin ? `${f.linkedin.score}/100` : "—"} sub={f.linkedin ? (f.linkedin.kind === "review" ? "Client fit" : "Latest score") : "Not checked yet"} />
               </div>
 
               {niche && (

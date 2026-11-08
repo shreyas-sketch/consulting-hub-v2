@@ -40,7 +40,7 @@ Admin = Depends(admin_dep())
 
 TOOL_EVENTS = {"readiness_done": "Readiness Score", "snapshot_run": "Niche Snapshot", "goal_saved": "Goal Map",
                "case_answered": "Case answers", "brief_made": "Meeting Brief", "linkedin_checked": "LinkedIn Score",
-               "file_viewed": "My Consulting File"}
+               "linkedin_reviewed": "LinkedIn Review", "file_viewed": "My Consulting File"}
 
 
 def ist_day_start(d: date) -> datetime:

@@ -34,6 +34,15 @@ MP4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" + b"\x00" * 2048
 import struct  # noqa: E402
 WAV = (b"RIFF" + struct.pack("<I", 36 + 16000) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 8000, 16000, 2, 16)
        + b"data" + struct.pack("<I", 16000) + b"\x00\x01" * 8000)
+def _png():
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (1080, 900), (243, 242, 239)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+PNG = _png()
 CSV = "First Name,Last Name,URL,Email Address,Company,Position,Connected On\n" + "\n".join(
     f"Person{i},Shah,https://linkedin.com/in/p{i},,Company {i} Pvt Ltd,{'Managing Director' if i % 2 else 'VP Operations'},0{i % 9 + 1} Jan 2024"
     for i in range(12))
@@ -156,6 +165,8 @@ def tools(ctx):
         ("Proposal", "anthropic", "POST", "/api/proposals", {"json": {"company": "Desai Pumps", "person": "Rahul Desai", "role": "MD", "fee_low_inr": 150000, "fee_high_inr": 400000, "notes": "Sales flat for two years at ₹40 crore. Dealers in Gujarat complain about delivery times."}}),
         ("Client Diagnostic", "anthropic", "POST", "/api/diagnostic", {"json": {"topic": "Dealer network health", "audience": "Pump makers"}}),
         ("Social posts", "anthropic", "POST", "/api/social/generate", {"json": {"count": 3}}),
+        ("LinkedIn profile review", "anthropic", "POST", "/api/linkedin-review", {"files": [("files", ("top.png", PNG, "image/png"))], "data": {"target": "Owners of auto component makers in Pune"}}),
+        ("LinkedIn 30-day plan", "anthropic", "POST", "/api/linkedin-review/plan", {"json": {"target": "Owners of auto component makers in Pune"}}),
         ("Voice-note story", "gemini", "POST", "/api/stories/voice", {"files": {"file": ("note.wav", WAV, "audio/wav")}, "data": {"duration_s": "60"}}),
         ("Pitch video scorecard", "gemini", "POST", f"/api/pitch/{p['pitch']}/take", {"content": MP4, "headers": {"content-type": "video/mp4"}, "params": {"duration_s": 60, "filename": "p.mp4"}}),
     ]

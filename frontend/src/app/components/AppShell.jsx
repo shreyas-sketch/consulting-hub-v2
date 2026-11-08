@@ -27,7 +27,7 @@ export const NAV_MAIN = [
   { to: "/app/start", key: "start", label: "Starting Point", sub: "Your niche and your numbers", icon: Target, feature: "start" },
   { to: "/app/cases", key: "cases", label: "Cases", sub: "Solve it, get a score", icon: ClipboardList, feature: "case" },
   { to: "/app/brief", key: "brief", label: "Meeting Brief", sub: "Prepare for any company", icon: BriefcaseBusiness, feature: "brief" },
-  { to: "/app/linkedin", key: "linkedin", label: "LinkedIn Score", sub: "Fix your profile", icon: IdCard, feature: "linkedin" },
+  { to: "/app/linkedin", key: "linkedin", label: "LinkedIn Review", sub: "Your profile through a client's eyes", icon: IdCard, feature: "linkedin" },
   { to: "/app/file", key: "file", label: "My Consulting File", sub: "Everything you've made", icon: FileText, feature: "file" },
 ];
 const NAV_ACCOUNT = [

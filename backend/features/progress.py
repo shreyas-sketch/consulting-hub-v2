@@ -46,7 +46,7 @@ registry.register("progress_nudge", "Tell members their monthly Progress Report 
 WINDOW_DAYS = 30
 TOOL_EVENTS = {"readiness_done": "Readiness Score", "snapshot_run": "Niche Snapshot", "goal_saved": "Goal Map",
                "case_answered": "Cases", "brief_made": "Meeting Brief", "linkedin_checked": "LinkedIn Score",
-               "deck_made": "Presentation Builder", "visual_made": "Visual Builder", "audio_made": "Listen mode"}
+               "linkedin_reviewed": "LinkedIn Review", "linkedin_plan_made": "LinkedIn post plan", "deck_made": "Presentation Builder", "visual_made": "Visual Builder", "audio_made": "Listen mode"}
 
 SYSTEM = (
     "You write a short monthly progress note for a senior Indian professional who is becoming a consultant in Akshat "
@@ -88,10 +88,11 @@ async def build_stats(d, user: dict, now=None) -> dict:
     briefs = {"made": await d.briefs.count_documents({"user_id": uid, "at": win}),
               "prev": await d.briefs.count_documents({"user_id": uid, "at": prev})}
 
-    li_now = await d.linkedin_checks.find_one({"user_id": uid, "at": {"$lt": now}}, sort=[("at", -1)])
-    li_before = await d.linkedin_checks.find_one({"user_id": uid, "at": {"$lt": start}}, sort=[("at", -1)])
-    if li_now and li_before and li_now["_id"] == li_before["_id"]:
-        li_before = await d.linkedin_checks.find_one({"user_id": uid, "at": {"$lt": as_utc(li_now["at"])}}, sort=[("at", -1)])
+    from .linkedin_review import latest_linkedin  # a screenshot review or a quick check, whichever is newer
+    li_now = await latest_linkedin(d, uid, before=now)
+    li_before = await latest_linkedin(d, uid, before=start)
+    if li_now and li_before and li_now["_at"] == li_before["_at"]:
+        li_before = await latest_linkedin(d, uid, before=as_utc(li_now["_at"]))
     linkedin = {"now": li_now["score"], "before": li_before["score"] if li_before else None,
                 "change": _diff(li_now["score"], li_before["score"] if li_before else None)} if li_now else None
 

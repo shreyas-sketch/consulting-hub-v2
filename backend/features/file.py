@@ -12,7 +12,7 @@ from core.deps import user_dep
 from growth import events
 from state import db
 
-from . import brief, linkedin, readiness, start
+from . import brief, readiness, start
 from .case_bank import CRITERIA
 from .knowledge import knowledge
 
@@ -25,7 +25,10 @@ async def my_file(user: dict = Depends(user_dep())):
     uid = str(user["_id"])
     r = await d.readiness.find_one({"user_id": uid}, sort=[("at", -1)])
     sp = await start.mine(user)
-    li = await d.linkedin_checks.find_one({"user_id": uid}, sort=[("at", -1)])
+    from .linkedin_review import latest_linkedin
+    li = await latest_linkedin(d, uid)
+    if li:
+        li.pop("_at", None)
     briefs = [brief._public(b) async for b in d.briefs.find({"user_id": uid}).sort("at", -1).limit(5)]
     titles = {c["_id"]: c["title"] async for c in d.cases.find({}, {"title": 1})}
     answers = [{"case_id": a["case_id"], "title": titles.get(a["case_id"], a["case_id"]), "overall": a["overall"],
@@ -34,7 +37,7 @@ async def my_file(user: dict = Depends(user_dep())):
     snap = sp["snapshot"]
     niche = snap["options"][snap.get("chosen") or 0] if snap and snap.get("options") else None
     return {"name": user.get("name"), "readiness": readiness._public(r) if r else None, "niche": niche,
-            "snapshot": snap, "goal": sp["goal"], "linkedin": linkedin._public(li) if li else None,
+            "snapshot": snap, "goal": sp["goal"], "linkedin": li,
             "cases": answers, "criteria": [{"key": k, "label": lbl} for k, lbl in CRITERIA], "briefs": briefs,
             "knowledge": await knowledge(d, user)}
 
