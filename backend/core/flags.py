@@ -22,7 +22,6 @@ REFRESH_SECONDS = 30
 FLAGS: dict[str, tuple] = {
     "WHATSAPP_OTP": ("WhatsApp OTP", "Login", "Send login codes on WhatsApp (AiSensy). Off: SMS only.", False, ("OTP_WHATSAPP_ENABLED",)),
     "WEBINAR_TOOLS": ("Webinar tools for free accounts", "Webinar", "Let free accounts use each webinar tool once (Readiness Score, Niche Snapshot, live case, Meeting Brief, LinkedIn Score).", True, ()),
-    "BRIEF_WEB_SEARCH": ("Web search in Meeting Briefs", "Tools", "Look up recent news for each brief. Off: briefs use only what the member types.", True, ()),
     "LINKEDIN_REWRITES": ("LinkedIn rewrites", "Tools", "Write new headline and About text for paid members.", True, ()),
     "WHATSAPP_ALERTS": ("Alerts on WhatsApp", "Alerts", "Also send inbox alerts on WhatsApp (needs AiSensy templates).", False, ()),
 }

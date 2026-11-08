@@ -89,6 +89,8 @@ async def _cache_put(key: str, results: list[dict]) -> None:
 
 SEARCH_TOOL = "web_search_20250305"
 FETCH_TOOL = "web_fetch_20250910"
+FORCE_SEARCH = {"type": "tool", "name": "web_search"}   # tool_choice: the first thing the AI does is search
+SEARCH_TIMEOUT_S = 75             # a web search turn (search, read results, answer) often takes 20-40 s; 45 s cut some off
 MAX_SEARCHES = 2                 # per news() call: the given query plus one refinement if the first comes back thin
 FETCH_MAX_TOKENS = 60_000        # per page; keeps each read well under the model's 100K-token higher price tier
 EXTRACT_MAX_CHARS = 400_000
@@ -196,7 +198,7 @@ def parse_search_reply(blocks: list[dict], n: int) -> list[dict]:
             last_result = i
             content = b.get("content")
             if isinstance(content, dict):
-                log.info("web search error: %s", str(content.get("error_code"))[:60])
+                log.warning("web search error: %s", str(content.get("error_code"))[:60])
                 continue
             for r in content or []:
                 if not isinstance(r, dict) or r.get("type") != "web_search_result":
@@ -275,13 +277,31 @@ async def _news(query: str, max_results: int = 6, *, queue_wait: Optional[float]
     prompt = (f"Search query: {q}\n\nSearch for this, then pick up to {n} recent news reports that match it. "
               "Reply with the JSON object only.")
     tool = {"type": SEARCH_TOOL, "name": "web_search", "max_uses": MAX_SEARCHES, "user_location": USER_LOCATION}
-    try:
-        reply = await llm.complete_with_tools(task="web_search", system=SEARCH_SYSTEM, prompt=prompt, tools=[tool],
-                                              model="fast", max_tokens=1500, queue_wait=queue_wait)
-    except llm.LLMError as e:          # a brief without news beats no brief
-        log.warning("search failed: %s", e)
-        return []
-    return parse_search_reply(reply.get("content") or [], n)
+    force = FORCE_SEARCH                 # the search must run: the AI may not answer from memory
+    for attempt in range(2):
+        try:
+            reply = await llm.complete_with_tools(task="web_search", system=SEARCH_SYSTEM, prompt=prompt, tools=[tool],
+                                                  model="fast", max_tokens=1500, timeout=SEARCH_TIMEOUT_S,
+                                                  queue_wait=queue_wait, tool_choice=force)
+        except llm.LLMError as e:      # a brief without news beats no brief
+            why = str(e).lower()
+            if force and attempt == 0 and ("tool_choice" in why or "badrequest" in why or "invalid_request" in why):
+                log.warning("search for %r: forcing the search tool was refused (%s); asking without forcing", q[:80], e)
+                force = None
+                continue
+            log.warning("search failed for %r: %s", q[:80], e)
+            return []
+        blocks = reply.get("content") or []
+        if any(b.get("type") == "web_search_tool_result" for b in blocks):
+            out = parse_search_reply(blocks, n)
+            if not out:
+                log.warning("search for %r: the search ran but found no usable news", q[:80])
+            return out
+        # The model answered without searching (it happens with fast models): ask once more, firmly.
+        log.warning("search for %r: the model did not search (stop_reason=%s)%s", q[:80], reply.get("stop_reason"),
+                    "; trying once more" if attempt == 0 else "; giving up")
+        prompt = ("Use the web_search tool now. Do not answer from memory.\n\n" + prompt)
+    return []
 
 
 def fake_extract(url: str) -> dict:

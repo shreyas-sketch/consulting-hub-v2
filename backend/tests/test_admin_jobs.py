@@ -43,7 +43,7 @@ def test_pulse_users_grant(client, mdb):
 def test_flags_settings_vendors(client):
     qa_login(client, role="admin")
     items = client.get("/api/admin/flags").json()["items"]
-    assert {f["key"] for f in items} == {"WHATSAPP_OTP", "WEBINAR_TOOLS", "BRIEF_WEB_SEARCH", "LINKEDIN_REWRITES", "WHATSAPP_ALERTS"}
+    assert {f["key"] for f in items} == {"WHATSAPP_OTP", "WEBINAR_TOOLS", "LINKEDIN_REWRITES", "WHATSAPP_ALERTS"}
     out = client.post("/api/admin/flags", json={"key": "LINKEDIN_REWRITES", "on": False}).json()["items"]
     assert next(f for f in out if f["key"] == "LINKEDIN_REWRITES")["on"] is False
     s = client.post("/api/admin/settings", json={"group_session": {"title": "Saturday group call", "when": "Sat 11 am",
