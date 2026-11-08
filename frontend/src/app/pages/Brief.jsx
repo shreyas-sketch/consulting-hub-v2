@@ -1,6 +1,6 @@
 // /app/brief and /app/brief/:id — Meeting Brief: company in, one-page brief out (news with real links, likely problems,
 // questions to ask, an opening line). Past briefs listed under the form.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
@@ -10,7 +10,31 @@ import { hdate } from "@/lib/format";
 import { BackLink, UsageLine } from "../components/common";
 import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, Loadable, PageHeader, RowLink, Step, Thinking } from "../components/ui";
 
-export function BriefBody({ b }) {
+// A brief made without news can look again, free, a few times (a failed search shouldn't stay in it for good).
+function NewsAgain({ b, onNews }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (b.test || b.news?.length || !(b.news_tries_left > 0)) return null;
+  const go = async () => {
+    setBusy(true); setErr("");
+    try {
+      const { data } = await api.post(`/briefs/${b.id}/news`, {}, { _noAiRetry: true });
+      onNews(data);
+      if (!data.news?.length) setErr(data.live_news ? "Still no news worth flagging for this company." : "Still no recent news found. Search the company yourself before the meeting.");
+    } catch (e) { setErr(apiError(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-2 no-print">
+      <Button variant="small" onClick={go} loading={busy} data-testid="brief-news-again">Look for news again</Button>
+      <span className="text-[12px] text-bz-muted ml-2">Free. {b.news_tries_left} {b.news_tries_left === 1 ? "try" : "tries"} left.</span>
+      <ErrorLine>{err}</ErrorLine>
+    </div>
+  );
+}
+
+export function BriefBody({ b: initial }) {
+  const [b, setB] = useState(initial);
+  useEffect(() => { setB(initial); }, [initial]);
   return (
     <AiFrame title="Meeting Brief" right={<span className="text-[12px] text-bz-muted">{hdate(b.at)}</span>} className="print-plain">
       <p className="text-[24px] font-display font-[500] tracking-[-0.01em] leading-tight">{b.input.company}</p>
@@ -32,6 +56,7 @@ export function BriefBody({ b }) {
             ))}
           </ul>
         ) : <p className="text-[14px] text-bz-muted">{b.live_news ? "No news worth flagging." : "Made without live news. Search the company before the meeting."}</p>}
+        <NewsAgain b={b} onNews={setB} />
         {b.test && <p className="text-[12px] text-bz-muted mt-2">Test mode: these are sample links, not real news.</p>}
       </div>
 

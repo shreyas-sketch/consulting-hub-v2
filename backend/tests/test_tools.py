@@ -208,3 +208,54 @@ def test_gpt_catalogue_complete():
     assert len(cat) == 52 and sum(1 for g in cat if g["program"] == "action") == 18
     for g in cat:
         assert (root / "prompts" / f"{g['slug']}.md").read_text().strip(), g["slug"]
+
+
+def test_brief_without_news_can_look_again_free_three_times(seeded_client, monkeypatch):
+    """Production 9 Nov: a free member's only brief was made without news and stayed that way. They can look again."""
+    monkeypatch.setenv("SEARCH_MODE", "off")
+    c = seeded_client
+    qa_login(c, plan="free")
+    b = c.post("/api/briefs", json={"company": "Acme Pumps", "website": "acmepumps.in"}).json()
+    assert b["live_news"] is False and b["news"] == [] and b["news_tries_left"] == 3
+
+    def brief_uses():
+        def find(d):
+            if isinstance(d, dict):
+                if "limits" in d:
+                    return d["limits"]
+                for v in d.values():
+                    r = find(v)
+                    if r:
+                        return r
+        return (find(c.get("/api/auth/me").json()) or {}).get("brief", {}).get("used")
+    used_before = brief_uses()
+    assert used_before == 1                                       # the brief itself used the free go
+    r = c.post(f"/api/briefs/{b['id']}/news").json()             # search still off: nothing, one try used
+    assert r["news"] == [] and r["news_tries_left"] == 2
+    monkeypatch.setenv("SEARCH_MODE", "fake")                     # search works now
+    r = c.post(f"/api/briefs/{b['id']}/news").json()
+    assert r["live_news"] is True and 1 <= len(r["news"]) <= 3 and all(n["url"].startswith("http") for n in r["news"])
+    assert c.get(f"/api/briefs/{b['id']}").json()["news"] == r["news"]      # saved in the brief
+    assert brief_uses() == used_before                              # free: no go used
+    assert c.post(f"/api/briefs/{b['id']}/news").json()["news"] == r["news"]  # has news: nothing more to do
+
+
+def test_brief_news_tries_run_out(seeded_client, monkeypatch):
+    monkeypatch.setenv("SEARCH_MODE", "off")
+    c = seeded_client
+    qa_login(c, plan="member")
+    b = c.post("/api/briefs", json={"company": "Acme Pumps"}).json()
+    for _ in range(3):
+        assert c.post(f"/api/briefs/{b['id']}/news").status_code == 200
+    r = c.post(f"/api/briefs/{b['id']}/news")
+    assert r.status_code == 429 and r.json()["detail"]["code"] == "news_tries"
+
+
+def test_brief_news_again_only_for_your_own_brief(app):
+    from fastapi.testclient import TestClient
+    with TestClient(app) as a:
+        qa_login(a, plan="member", phone="+919811100201")
+        bid = a.post("/api/briefs", json={"company": "Acme Pumps"}).json()["id"]
+    with TestClient(app) as other:
+        qa_login(other, plan="member", phone="+919811100202")
+        assert other.post(f"/api/briefs/{bid}/news").status_code == 404
