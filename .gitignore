@@ -9,4 +9,5 @@ backend/.env
 .venv/
 # QA script output
 scripts/qa/e2e_results.json
+scripts/qa/ai_busy_results.json
 scripts/qa/*-shots/
