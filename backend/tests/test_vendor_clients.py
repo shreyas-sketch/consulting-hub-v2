@@ -390,3 +390,36 @@ async def test_news_is_cached_for_six_hours(monkeypatch, mdb):
     await mdb.search_cache.update_many({}, {"$set": {"purge_at": search.utcnow() - search.timedelta(minutes=1)}})
     await search.news("cache test co india", 5)
     assert len(calls) == 2                                    # expired → searched again
+
+
+async def test_news_retries_once_when_the_model_did_not_search(live_search, caplog):
+    """Production 9 Nov: briefs said "Made without live news". One cause: the fast model answers without searching."""
+    import logging
+    no_search = _msg([{"type": "text", "text": '{"items": []}'}])
+    answer = json.dumps({"items": [{"url": TOOL_URLS[0], "summary": "Acme will double its Pune plant by March 2027."}]})
+    rec = live_search(no_search, _msg(_search_blocks(answer)))
+    with caplog.at_level(logging.WARNING, logger="search"):
+        out = await search.news("Acme retry India", max_results=3)
+    assert [r["url"] for r in out] == [TOOL_URLS[0]]
+    assert len(rec.requests) == 2 and "Use the web_search tool now" in json.dumps(rec.requests[1]["messages"])
+    assert "did not search" in caplog.text
+
+
+async def test_news_gives_up_after_two_answers_without_a_search_and_logs_it(live_search, caplog):
+    import logging
+    rec = live_search(_msg([{"type": "text", "text": "Acme is a big company."}]))
+    with caplog.at_level(logging.WARNING, logger="search"):
+        assert await search.news("Acme nosearch India", max_results=3) == []
+    assert len(rec.requests) == 2 and "giving up" in caplog.text
+
+
+async def test_news_search_error_code_is_a_warning(live_search, caplog):
+    import logging
+    err = _msg([{"type": "server_tool_use", "id": "s1", "name": "web_search", "input": {"query": "q"}},
+                {"type": "web_search_tool_result", "tool_use_id": "s1",
+                 "content": {"type": "web_search_tool_result_error", "error_code": "too_many_requests"}},
+                {"type": "text", "text": '{"items": []}'}])
+    live_search(err)
+    with caplog.at_level(logging.WARNING, logger="search"):
+        assert await search.news("Acme err India", max_results=3) == []
+    assert "too_many_requests" in caplog.text and "found no usable news" in caplog.text
