@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 import llm
 from core.deps import user_dep
-from core.errors import NotFound
+from core.errors import NotFound, TooManyRequests
 from growth import events
 from growth.clock import utcnow
 from research import search
@@ -35,6 +35,7 @@ from .common import (
 from .knowledge import links_in, no_links
 
 router = APIRouter(prefix="/briefs", tags=["meeting-brief"])
+events.register("brief_news_retried", "Meeting Brief: looked for news again (props.found)")
 WEBINAR_QUEUE_WAIT = 45          # seconds a brief may wait for an AI slot when the whole webinar makes one at once
 
 SYSTEM = (
@@ -82,7 +83,7 @@ def _prompt(body: BriefIn, results: list[dict]) -> str:
 
 def _public(b: dict) -> dict:
     return {k: b.get(k) for k in ("about", "news", "problems", "questions", "opening", "live_news", "test", "input")} | {
-        "id": b["_id"], "at": iso(b["at"])}
+        "id": b["_id"], "at": iso(b["at"]), "news_tries_left": max(0, 3 - int(b.get("news_tries") or 0))}
 
 
 @router.post("")
@@ -91,9 +92,7 @@ async def make(body: BriefIn, user: dict = Depends(user_dep())):
 
     async def work(plan: str):
         results = []
-        host = re.sub(r"^(https?://)?(www\.)?", "", body.website.strip(), flags=re.I).split("/")[0]
-        q = f"{body.company} India" + (f" {host}" if host else "")     # every brief searches the news
-        results = await search.news(q, max_results=6, queue_wait=45)
+        results = await search.news(_query(body.model_dump()), max_results=6, queue_wait=45)   # every brief searches
         raw = as_dict(await llm.complete_json(task="meeting_brief", system=SYSTEM, prompt=_prompt(body, results),
                                               fake=lambda: _fake(body, results), model="fast", max_tokens=1400,
                                               queue_wait=WEBINAR_QUEUE_WAIT))
@@ -139,3 +138,57 @@ async def one(brief_id: str, user: dict = Depends(user_dep())):
     if not b:
         raise NotFound("Brief not found.")
     return _public(b)
+
+
+NEWS_TRIES = 3          # "Look for news again" on one brief: free, at most this many times
+
+
+def _query(inp: dict) -> str:
+    host = re.sub(r"^(https?://)?(www\.)?", "", (inp.get("website") or "").strip(), flags=re.I).split("/")[0]
+    return f"{inp['company']} India" + (f" {host}" if host else "")
+
+
+@router.post("/{brief_id}/news")
+async def news_again(brief_id: str, user: dict = Depends(user_dep())):
+    """A brief made without news (the search failed or found nothing) can look again, free, up to NEWS_TRIES times.
+    A free account has one brief for life, so without this a failed search would stay in their brief for good."""
+    uid = str(user["_id"])
+    b = await db().briefs.find_one({"_id": brief_id, "user_id": uid})
+    if not b:
+        raise NotFound("Brief not found.")
+    if b.get("news"):
+        return _public(b)
+    tries = int(b.get("news_tries") or 0)
+    if tries >= NEWS_TRIES:
+        raise TooManyRequests("We've looked for news on this company three times. Search the company yourself "
+                              "before the meeting.", code="news_tries")
+    inp = b["input"]
+    results = await search.news(_query(inp), max_results=6, queue_wait=45)
+    news = []
+    if results:
+        listing = "\n".join(f"[{i + 1}] {r['title']} ({r['source']}, {r['published'] or 'date unknown'}): "
+                            f"{r['snippet'][:400]}" for i, r in enumerate(results))
+        raw = as_dict(await llm.complete_json(
+            task="meeting_brief_news", system=SYSTEM,
+            prompt=(f"Company: {inp['company']}\nMeeting purpose: {inp.get('purpose') or 'first conversation'}\n\n"
+                    f"NEWS ITEMS:\n{listing}\n\nPick up to 3 of the numbered items that matter most for this meeting, "
+                    'each with why it matters.\nJSON: {"news": [{"i": 1, "why": ""}]}'),
+            fake=lambda: {"news": [{"i": i + 1, "why": r.get("snippet", "")[:200]} for i, r in enumerate(results[:3])]},
+            model="fast", max_tokens=600, fallback_on_error=True))
+        for n in as_list(raw.get("news"))[:3]:
+            try:
+                i = int(n.get("i"))
+                r = results[i - 1] if i >= 1 else None
+            except (TypeError, ValueError, IndexError, AttributeError):
+                r = None
+            if r and not any(x["url"] == r["url"] for x in news):
+                news.append({"title": r["title"], "url": r["url"], "source": r["source"], "published": r["published"],
+                             "why": strip_providers(text(n.get("why"), 240))})
+        if not news:                     # the AI picked nothing usable: the top results, links still only from search
+            news = [{"title": r["title"], "url": r["url"], "source": r["source"], "published": r["published"],
+                     "why": strip_providers(text(r.get("snippet"), 240))} for r in results[:3]]
+    await db().briefs.update_one({"_id": brief_id}, {"$set": {
+        "news": news, "live_news": bool(results), "test": any(r.get("test") for r in results),
+        "news_tries": tries + 1, "news_at": utcnow()}})
+    await events.track(db(), "brief_news_retried", user_id=uid, props={"found": len(news)})
+    return _public(await db().briefs.find_one({"_id": brief_id})) | {"news_tries_left": NEWS_TRIES - tries - 1}

@@ -155,6 +155,9 @@ qa = APIRouter()
 async def scenario(body: dict):
     STATE["name"] = body.get("name", "ok")
     STATE["failed_once"] = False
+    for k, v in (body.get("env") or {}).items():       # e.g. {"SEARCH_MODE": "off"}; settings are read per request
+        if k in ("SEARCH_MODE",):
+            os.environ[k] = v
     GEM["tries"] = 0
     if STATE["name"] == "g_fallback":
         os.environ["GEMINI_FALLBACK_MODEL"] = "backup-model"
