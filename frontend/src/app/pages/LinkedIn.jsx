@@ -90,17 +90,17 @@ function Shots({ files, setFiles, max, maxMb, onError }) {
   const urls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
   useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)), [urls]);
   const add = (list) => {
+    // setFiles clears any old message, so the new message (if any) is set after it
     const picked = [...list].filter((f) => /^image\//.test(f.type));
-    if (picked.length < list.length) onError("Only images: PNG or JPG screenshots.");
     const big = picked.find((f) => f.size > maxMb * 1024 * 1024);
-    if (big) { onError(`“${big.name}” is over ${maxMb} MB.`); return; }
-    const next = [...files, ...picked].slice(0, max);
-    if (files.length + picked.length > max) onError(`Up to ${max} screenshots. We kept the first ${max}.`);
-    setFiles(next);
+    if (big) { onError(`“${big.name}” is over ${maxMb} MB. Take a normal screenshot and try again.`); return; }
+    setFiles([...files, ...picked].slice(0, max));
+    if (picked.length < list.length) onError("Only images can be used: PNG or JPG screenshots.");
+    else if (files.length + picked.length > max) onError(`Up to ${max} screenshots. We kept the first ${max}.`);
   };
   return (
     <div>
-      <label className="flex flex-col items-center justify-center gap-2 rounded-bzcard border-2 border-dashed border-bz-line-strong bg-bz-panel px-4 py-7 text-center cursor-pointer hover:border-bz-gold"
+      <label className="flex flex-col items-center justify-center gap-2 rounded-bzcard border-2 border-dashed border-bz-line-strong bg-bz-panel px-4 py-7 text-center cursor-pointer hover:border-bz-gold focus-within:border-bz-gold focus-within:ring-2 focus-within:ring-bz-gold focus-within:ring-offset-2"
         onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); add(e.dataTransfer.files); }} data-testid="li-drop">
         <ImagePlus className="w-7 h-7 text-bz-gold" strokeWidth={1.6} aria-hidden />
         <span className="text-[15px] font-bold">{files.length ? "Add more screenshots" : "Choose your LinkedIn screenshots"}</span>

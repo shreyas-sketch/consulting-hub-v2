@@ -36,7 +36,7 @@ from growth.clock import IST, utcnow
 from state import db
 from util import iso
 
-from .common import NO_VENDOR, as_dict, as_list, clamp_int, run_metered, strip_providers, text
+from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text
 from .knowledge import knowledge
 
 router = APIRouter(prefix="/linkedin-review", tags=["linkedin"])
@@ -50,6 +50,7 @@ MAX_FILES = 5
 MAX_MB = 8
 MAX_IMAGES_TO_AI = 8          # after tall screenshots are cut into readable pieces
 LONG_EDGE = 1568              # the size the vision model reads best at; larger only costs more
+MAX_PIXELS = 30_000_000       # a full-page capture of a long profile is ~10 MP; anything far bigger is refused unread
 SECTIONS = [                  # (key, what the member sees)
     ("headline", "Headline"), ("photo", "Profile photo"), ("banner", "Banner"), ("about", "About"),
     ("experience", "Experience"), ("featured", "Featured"), ("skills", "Skills"), ("activity", "Posts and activity"),
@@ -66,11 +67,13 @@ def prepare_images(files: list[tuple[str, bytes]]) -> list[tuple[str, bytes]]:
     most ~1.4:1 (with a small overlap) so its text stays readable after resizing. Raises InvalidInput /
     UnsupportedMedia for anything that isn't an image."""
     from PIL import Image, ImageOps, UnidentifiedImageError
-    Image.MAX_IMAGE_PIXELS = 50_000_000                     # refuses decompression bombs
+    Image.MAX_IMAGE_PIXELS = MAX_PIXELS                     # Pillow's own guard as a second line
     out: list[tuple[str, bytes]] = []
     for name, data in files:
         try:
-            im = Image.open(io.BytesIO(data))
+            im = Image.open(io.BytesIO(data))           # reads the header only: size is known before decoding
+            if im.size[0] * im.size[1] > MAX_PIXELS:
+                raise UnsupportedMedia(f"“{name}” is far larger than a screenshot. Upload a normal screenshot.")
             im.load()
         except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as e:
             raise UnsupportedMedia(f"“{name}” isn't an image we can read. Upload PNG or JPG screenshots.") from e
@@ -193,6 +196,17 @@ def _s(v: Any, n: int) -> str:
     return text(v, n)
 
 
+def _number(v: Any) -> Optional[float]:
+    """72, "72", "72/100", "Score: 72 out of 100" → 72.0; anything without a number → None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    import re
+    m = re.search(r"-?\d+(?:\.\d+)?", str(v or ""))
+    return float(m.group()) if m else None
+
+
 def _lines(v: Any, n_items: int, n: int) -> list[str]:
     if isinstance(v, str):
         v = [x.strip(" -•\t") for x in v.split("\n")]
@@ -256,8 +270,9 @@ def clean_review(raw: Any) -> dict:
                                ("sections", len(sections) >= 3), ("about", len(review["about"]) >= 200)) if not ok]
     if missing:
         raise llm.LLMError(f"linkedin_review: incomplete ({', '.join(missing)})")
-    if raw.get("score") is not None:
-        review["score"] = clamp_int(raw.get("score"), 0, 100, 50)
+    score = _number(raw.get("score"))
+    if score is not None:
+        review["score"] = max(0, min(100, round(score)))
     else:                                                   # no score given: from the section statuses
         pts = {"strong": 10, "improve": 5, "missing": 0, "not_shown": 5}
         review["score"] = round(100 * sum(pts[s["status"]] for s in sections) / (10 * len(sections)))
@@ -344,6 +359,25 @@ def fake_plan(k: dict, target: str) -> dict:
                       "cta": "If you want to run this check together, message me."})
     return {"pillars": pillars, "rhythm": "Post at 8:30 am on weekdays; spend 15 minutes a day commenting on posts by your ideal clients.",
             "posts": posts}
+
+
+# ------------------------------------------------------------------ the rest of the hub ----
+async def latest_linkedin(d, uid: str, before=None) -> Optional[dict]:
+    """The member's latest LinkedIn result, screenshot review or quick check, whichever is newer, in one shape for
+    Home, My Consulting File and the Progress Report: {kind, label, score, problems: [{key, tip}], at}."""
+    from . import linkedin as quick
+    when = {"at": {"$lt": before}} if before else {}
+    rv = await d.li_reviews.find_one({"user_id": uid, **when}, sort=[("at", -1)])
+    ck = await d.linkedin_checks.find_one({"user_id": uid, **when}, sort=[("at", -1)])
+    if rv and (not ck or rv["at"] >= ck["at"]):
+        r = rv.get("review") or {}
+        tips = [{"key": s["key"], "tip": f"{s['label']}: {s['fix']}"} for s in r.get("sections") or []
+                if s.get("status") in ("improve", "missing") and s.get("fix")][:3]
+        return {"kind": "review", "id": rv["_id"], "label": "LinkedIn client fit", "score": r.get("score"),
+                "verdict": r.get("verdict"), "problems": tips, "at": iso(rv["at"]), "_at": rv["at"]}
+    if ck:
+        return {**quick._public(ck), "kind": "check", "label": "LinkedIn Score", "_at": ck["at"]}
+    return None
 
 
 # ------------------------------------------------------------------ routes ----
