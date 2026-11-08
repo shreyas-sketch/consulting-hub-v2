@@ -10,7 +10,7 @@ export const FEATURES = {
   start: { name: "Starting Point", what: "Find your niche with the EDE framework and turn your income goal into weekly numbers.", plan: "free", to: "/app/start" },
   case: { name: "Weekly Case", what: "Solve a real business case, get a score out of 10 and see a model answer.", plan: "free", to: "/app/cases" },
   brief: { name: "Meeting Brief", what: "Before you meet a company, get a one-page brief: news, likely problems and questions to ask.", plan: "free", to: "/app/brief" },
-  linkedin: { name: "LinkedIn Score", what: "Score your profile out of 100 and see the three things to fix first.", plan: "free", to: "/app/linkedin" },
+  linkedin: { name: "LinkedIn Profile Review", what: "Upload screenshots of your profile: see it through your ideal client's eyes, get the rewrites and a 30-day post plan.", plan: "free", to: "/app/linkedin" },
   file: { name: "My Consulting File", what: "Everything you've made, on one page you can print or save as PDF.", plan: "free", to: "/app/file" },
   // ₹1,999 plan
   linkedin_improve: { name: "LinkedIn rewrites", what: "New headline options, an About section and post ideas written around your niche.", plan: "member", to: "/app/linkedin" },
@@ -60,7 +60,7 @@ export const MENU_GROUPS = [
 // Plain names for the usage counters the server reports (PlanInfo.limits keys, backend plans.LIMITS).
 export const USAGE_NAME = {
   readiness: "Readiness Scores", start: "Niche Snapshots", goal: "Goal Map saves", case: "Case answers", brief: "Meeting Briefs",
-  linkedin: "LinkedIn checks", presentation: "Decks", visuals: "Visuals", audio: "Audio versions", doc_q: "Document questions",
+  linkedin: "LinkedIn checks", li_review: "LinkedIn profile reviews", li_plan: "30-day post plans", presentation: "Decks", visuals: "Visuals", audio: "Audio versions", doc_q: "Document questions",
   progress: "Progress Reports", site_ai: "Website AI edits", gpt: "Action Hub and Mentorship messages", akshat_ai: "Akshat AI questions",
   pitch: "Pitch videos analysed", offer_card: "Offer Cards", story: "Career stories", insight: "Industry Insight Packs",
   portfolio: "Portfolio Projects", contacts: "Contacts scored", outreach: "Outreach messages", radar: "Companies found by Radar",

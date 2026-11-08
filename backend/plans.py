@@ -112,6 +112,8 @@ LIMITS: dict[str, dict[str, Optional[int]]] = {
     "case": _lim(8, 12, 12, free=1),
     "brief": _lim(4, 8, 8, free=1),
     "linkedin": _lim(2, 4, 4, free=1),
+    "li_review": _lim(3, 6, 6, free=1),   # LinkedIn screenshot reviews (vision)
+    "li_plan": _lim(1, 2, 2, free=1),     # 30-day LinkedIn post plans
     # ₹1,999 plan
     "presentation": _lim(2, 6, 6),
     "visuals": _lim(10, 30, 30),
@@ -137,7 +139,7 @@ LIMITS: dict[str, dict[str, Optional[int]]] = {
     "posts": _lim(0, 0, 30),
 }
 LIMIT_UNITS = {"readiness": "Readiness Scores", "start": "Niche Snapshots", "goal": "Goal Map changes",
-               "case": "case answers", "brief": "Meeting Briefs", "linkedin": "LinkedIn checks",
+               "case": "case answers", "brief": "Meeting Briefs", "linkedin": "LinkedIn checks", "li_review": "LinkedIn profile reviews", "li_plan": "30-day post plans",
                "presentation": "decks", "visuals": "visuals", "audio": "audio versions", "doc_q": "document questions",
                "progress": "Progress Reports", "site_ai": "website AI edits", "gpt": "messages to the tools",
                "akshat_ai": "questions to Akshat AI", "pitch": "pitch practices", "offer_card": "Offer Cards",

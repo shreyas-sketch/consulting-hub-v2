@@ -23,6 +23,7 @@ PLATFORM = ("auth", "accounts.routes", "misc_routes", "notify.service", "billing
 
 # Free account (webinar) tools
 WEBINAR = ("features.readiness", "features.start", "features.cases", "features.brief", "features.linkedin",
+           "features.linkedin_review",
            "features.file")
 
 # ₹1,999 plan
