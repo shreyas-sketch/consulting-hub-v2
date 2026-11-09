@@ -99,8 +99,10 @@ USER_LOCATION = {"type": "approximate", "country": "IN", "timezone": "Asia/Kolka
 SEARCH_SYSTEM = (
     "You find recent business news for a tool used by Indian consultants. Use the web_search tool. "
     "Prefer reports from established news and business media about India, from the last four months. "
-    "Skip results that are not news about the query: company home pages, job ads, directories, social posts, "
-    "encyclopedia pages and press-release aggregators. "
+    "Pick only individual news reports: one story, with a date. Never pick topic, tag or 'latest news' pages, "
+    "company profile or stock-quote pages, company home pages, job ads, directories, social posts, encyclopedia pages "
+    "or press-release aggregators, even if they rank first. If the first search gives only such pages, search again "
+    "with words from a likely recent story (results, expansion, plant, deal, appointment). "
     "After searching, reply with one JSON object only, no other words: "
     '{"items": [{"url": "", "summary": ""}]}. '
     "url: copy it exactly from a search result; never write a URL that was not in the results. "
@@ -143,6 +145,33 @@ def _key(url: str) -> str:
 def _web_url(u: Any) -> str:
     u = str(u or "").strip()
     return u if u.startswith(("https://", "http://")) and len(u) <= 2000 else ""
+
+
+# News hubs, topic and tag pages are lists of stories, not a story: a member who clicks one lands on an index page.
+_INDEX_SEGMENTS = {"topic", "topics", "tag", "tags", "infopage", "latest-news", "latestnews", "category", "categories",
+                   "section", "author", "authors", "search", "quote", "quotes", "stock-price", "stocks", "keyword",
+                   "keywords", "profile", "company-profile", "live-updates", "about", "about-us"}
+_INDEX_TITLE = re.compile(r"\b(latest news|top news|news updates|breaking news|news,? (photos|videos)|headlines,|"
+                          r"live updates|stock price|share price today|all news)\b", re.I)
+
+
+def is_index_page(url: str, title: str = "") -> bool:
+    """True for pages that list stories (topic, tag, "latest news" hubs, company profiles), not one news report.
+    A report's address usually ends in a long, hyphenated headline or a numeric story id."""
+    try:
+        parts = [p for p in urlparse(url).path.lower().split("/") if p]
+    except ValueError:
+        return True
+    if not parts:
+        return True                                    # a home page
+    if _INDEX_TITLE.search(title or ""):
+        return True
+    if any(p in _INDEX_SEGMENTS for p in parts):
+        return True
+    last = re.sub(r"\.(cms|html?|php|aspx?)$", "", parts[-1])
+    has_id = bool(re.search(r"\d{5,}", "/".join(parts)))
+    words = [w for w in re.split(r"[-_]+", last) if w]
+    return not has_id and len(words) < 3              # "/tata-motors" or "/news": an index, not a headline
 
 
 _URLISH = re.compile(r"(https?://\S+|www\.\S+)", re.I)
@@ -205,6 +234,8 @@ def parse_search_reply(blocks: list[dict], n: int) -> list[dict]:
                     continue
                 url = _web_url(r.get("url"))
                 k = _key(url)
+                if url and is_index_page(url, str(r.get("title") or "")):
+                    continue                  # a list of stories, not a story
                 if url and k and k not in found:
                     found[k] = {"url": url, "title": r.get("title"), "page_age": r.get("page_age")}
         elif kind == "text":

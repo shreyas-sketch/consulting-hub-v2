@@ -106,7 +106,7 @@ def test_meeting_brief_links_only_from_search(seeded_client, mdb):
 
 
 def test_meeting_brief_always_searches(seeded_client, monkeypatch):
-    """Every brief searches the news (no switch turns it off), by company + India + the site's host, not a full URL."""
+    """Every brief searches the news (no switch turns it off): '<company> India news <Month YYYY>'."""
     from research import search
     asked = []
     real = search.news
@@ -118,7 +118,9 @@ def test_meeting_brief_always_searches(seeded_client, monkeypatch):
     c = seeded_client
     qa_login(c, plan="member")
     b = c.post("/api/briefs", json={"company": "Acme Pumps", "website": "https://www.acmepumps.in/about"}).json()
-    assert asked == ["Acme Pumps India acmepumps.in"] and b["live_news"] is True
+    import re
+    assert len(asked) == 1 and re.fullmatch(r"Acme Pumps India news [A-Z][a-z]+ 20\d\d", asked[0]), asked
+    assert b["live_news"] is True
 
 
 def test_meeting_brief_when_search_finds_nothing(seeded_client, monkeypatch):
