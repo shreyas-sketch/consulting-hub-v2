@@ -19,11 +19,12 @@ def test_readiness_score_bands_and_focus(seeded_client):
     assert c.post("/api/readiness", json={"scores": scores, "potential": 9}).status_code == 402   # 1 a month
 
 
-def test_readiness_clamps_values(seeded_client):
+def test_readiness_refuses_out_of_range_instead_of_guessing(seeded_client):
+    """QA 9 Nov: out-of-range or missing scores used to be clamped silently (50 → 10, a missing skill → 1)."""
     c = seeded_client
     qa_login(c, plan="free")
-    r = c.post("/api/readiness", json={"scores": {"diagnosis": 50, "offer": -3}, "potential": 5}).json()
-    assert r["scores"]["diagnosis"] == 10 and r["scores"]["offer"] == 1 and r["total"] == 10 + 1 + 4
+    r = c.post("/api/readiness", json={"scores": {"diagnosis": 50, "offer": -3}, "potential": 5})
+    assert r.status_code == 422
 
 
 def test_snapshot_and_goal(seeded_client):

@@ -65,7 +65,8 @@ def test_webinar_report_live_and_csv(seeded_client):
     c = seeded_client
     for ph in ("9876500011", "9876500012"):
         login(c, phone=ph, utm={"src": "webinar"})
-        c.post("/api/readiness", json={"scores": {"diagnosis": 7}, "potential": 6})
+        c.post("/api/readiness", json={"scores": {"diagnosis": 7, "offer": 1, "acquisition": 1, "pricing": 1,
+                                                        "delivery": 1, "visibility": 1}, "potential": 6})
         c.post("/api/auth/logout")
     login(c, phone="9876500013", utm={"src": "webinar"})
     co = c.post("/api/billing/checkout", json={"plan": "l1"}).json()

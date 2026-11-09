@@ -96,7 +96,9 @@ async def make(body: BriefIn, user: dict = Depends(user_dep())):
                                               fake=lambda: _fake(body, results), model="fast", max_tokens=1400,
                                               queue_wait=WEBINAR_QUEUE_WAIT))
         news = []
-        for n in as_list(raw.get("news"))[:3]:
+        for n in as_list(raw.get("news"))[:12]:
+            if len(news) >= 3:
+                break                        # three good picks; repeats and bad numbers no longer use up a slot
             try:
                 i = int(n.get("i"))
                 if i < 1:                    # 0 or negative would wrap to the end of the list: not a real pick
