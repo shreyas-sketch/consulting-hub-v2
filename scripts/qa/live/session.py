@@ -19,6 +19,9 @@ def login(phone, name):
             return c, {"reused": True}
     c = httpx.Client(base_url=U, timeout=200)
     r = c.post("/api/auth/otp/request", json={"phone": phone})
+    if r.status_code == 429 and r.json().get("detail", {}).get("code") == "resend_cooldown":
+        time.sleep(int(r.json()["detail"].get("retry_in", 30)) + 1)      # the 30 s gap between login codes
+        r = c.post("/api/auth/otp/request", json={"phone": phone})
     assert r.status_code == 200, f"otp request {r.status_code} {r.text}"
     ch = r.json()
     r = c.post("/api/auth/otp/verify", json={"challenge_id": ch["challenge_id"], "phone": phone, "code": CODES[phone], "name": name})
