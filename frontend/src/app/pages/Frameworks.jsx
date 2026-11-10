@@ -1,16 +1,18 @@
 // /app/frameworks and /app/frameworks/:id — Work along with Akshat. The three frameworks from the live workshop
 // (1 Nov 2026) as hands-on cases: learn the framework, do the exercise yourself, Save (appears once the exercise is
 // complete), see how Akshat read it, then Generate a Proposal for that client.
+// "My own case" runs the same exercise on a client from the member's own niche (Starting Point): suggested by the AI or
+// written by the member, editable, checked against the framework's rules, then a proposal.
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { Check, ChevronRight, X } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Check, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiError } from "@/lib/api";
 import { inr } from "@/lib/format";
-import { useFramework, useFrameworkProposal, useFrameworks, useSaveFramework } from "@/services/frameworks";
+import { useFramework, useFrameworkProposal, useFrameworks, useSaveFramework, useSaveOwn, useSuggestCase } from "@/services/frameworks";
 import Markdown, { CopyButton } from "../components/Markdown";
 import { BackLink, UsageLine } from "../components/common";
-import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, Loadable, Note, PageHeader, Segmented, Textarea, Thinking } from "../components/ui";
+import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, LinkButton, Loadable, Note, PageHeader, Segmented, Textarea, Thinking } from "../components/ui";
 
 const ZONE_TONE = { green: "text-[#0f7a3d] bg-[#e7f6ec]", orange: "text-[#a35200] bg-[#fdf0e1]", red: "text-bz-miss bg-bz-miss-tint" };
 const zoneFor = (p) => (p <= 20 ? "green" : p <= 40 ? "orange" : "red");
@@ -34,6 +36,7 @@ export function FrameworkList({ compact = false }) {
                   <span className="flex flex-wrap gap-1.5 mt-1.5">
                     {f.saved ? <Chip tone={f.score === f.out_of ? "gold" : "muted"}>Saved · {f.score} of {f.out_of}</Chip> : <Chip>Not started</Chip>}
                     {f.proposal && <Chip tone="teal">Proposal ready</Chip>}
+                    {f.own_saved && <Chip tone="muted">Own case: {f.own_client}</Chip>}
                   </span>
                 </span>
                 <ChevronRight className="w-4 h-4 mt-2 text-bz-faint shrink-0" aria-hidden />
@@ -80,24 +83,25 @@ function Venn({ fw, value }) {
   );
 }
 
-function MarketFit({ fw, a, set }) {
+function MarketFit({ fw, c, own, a, set }) {
   const circles = a.circles || {};
   const setC = (k, patch) => set({ ...a, circles: { ...circles, [k]: { ...circles[k], ...patch } } });
+  const where = own ? `in ${c.new_region}` : "for Nokia";
   return (
     <div className="space-y-5">
       <Venn fw={fw} value={circles} />
-      {fw.structure.map((c) => (
-        <div key={c.key} className="rounded-bzcard border border-bz-line bg-bz-panel p-3.5" data-testid={`fw-circle-${c.key}`}>
-          <p className="font-bold text-[15px]">{c.name}</p>
-          <p className="text-[13.5px] text-bz-muted">{c.ask}</p>
-          <Segmented label={`${c.name}: works or fails`} className="mt-2" value={circles[c.key]?.verdict || ""} testid={`fw-${c.key}`}
-            onChange={(v) => setC(c.key, { verdict: v })}
-            options={[{ value: "works", label: "Works for Nokia" }, { value: "fails", label: "Fails for Nokia" }]} />
-          <Textarea rows={2} className="mt-2" value={circles[c.key]?.why || ""} maxLength={400} placeholder="Why? One sentence."
-            onChange={(e) => setC(c.key, { why: e.target.value })} aria-label={`${c.name}: why`} data-testid={`fw-${c.key}-why`} />
+      {fw.structure.map((s) => (
+        <div key={s.key} className="rounded-bzcard border border-bz-line bg-bz-panel p-3.5" data-testid={`fw-circle-${s.key}`}>
+          <p className="font-bold text-[15px]">{s.name}</p>
+          <p className="text-[13.5px] text-bz-muted">{s.ask}</p>
+          <Segmented label={`${s.name}: works or fails`} className="mt-2" value={circles[s.key]?.verdict || ""} testid={`fw-${s.key}`}
+            onChange={(v) => setC(s.key, { verdict: v })}
+            options={[{ value: "works", label: `Works ${where}` }, { value: "fails", label: `Fails ${where}` }]} />
+          <Textarea rows={2} className="mt-2" value={circles[s.key]?.why || ""} maxLength={400} placeholder="Why? One sentence."
+            onChange={(e) => setC(s.key, { why: e.target.value })} aria-label={`${s.name}: why`} data-testid={`fw-${s.key}-why`} />
         </div>
       ))}
-      <Field label="Your diagnosis: why did Nokia fail in India?">
+      <Field label={own ? `Your diagnosis: will ${c.product} succeed in ${c.new_region}?` : "Your diagnosis: why did Nokia fail in India?"}>
         <Textarea rows={3} value={a.summary || ""} maxLength={800} onChange={(e) => set({ ...a, summary: e.target.value })}
           placeholder="In a sentence or two, as you'd tell the client." data-testid="fw-summary" />
       </Field>
@@ -108,9 +112,13 @@ const marketFitDone = (a) => ["price", "value", "availability"].every((k) => a.c
   && words(a.summary) >= 20;
 
 // ============================================================================ framework 2: concentration ====
-function Concentration({ fw, a, set }) {
-  const { sources, total } = fw.case;
-  const pc = a.percents || ["", "", ""];
+const fitLen = (arr, n) => Array.from({ length: n }, (_, i) => (arr || [])[i] ?? "");
+const caseTotal = (c) => (c.sources || []).reduce((t, x) => t + (Number(x.amount) || 0), 0);
+
+function Concentration({ fw, c, own, a, set }) {
+  const sources = c.sources || [];
+  const total = caseTotal(c);
+  const pc = fitLen(a.percents, sources.length);
   const setP = (i, v) => set({ ...a, percents: pc.map((x, j) => (j === i ? v : x)) });
   return (
     <div className="space-y-5">
@@ -125,18 +133,18 @@ function Concentration({ fw, a, set }) {
               const v = parseFloat(pc[i]);
               const z = Number.isFinite(v) ? zoneFor(v) : null;
               return (
-                <tr key={s.name} className="border-t border-bz-line">
-                  <td className="py-2.5 pr-2">{s.name}</td>
-                  <td className="py-2.5 text-right tabular">{inr(s.amount)}</td>
+                <tr key={i} className="border-t border-bz-line">
+                  <td className="py-2.5 pr-2">{s.name || `Source ${i + 1}`}</td>
+                  <td className="py-2.5 text-right tabular">{inr(Number(s.amount) || 0)}</td>
                   <td className="py-2.5 text-right">
                     <Input type="number" inputMode="decimal" min={0} max={100} step="0.1" value={pc[i]} onChange={(e) => setP(i, e.target.value)}
-                      className="!min-h-[40px] text-right w-[100px] ml-auto" aria-label={`${s.name}: concentration %`} data-testid={`fw-pct-${i}`} />
+                      className="!min-h-[40px] text-right w-[100px] ml-auto" aria-label={`${s.name || `Source ${i + 1}`}: concentration %`} data-testid={`fw-pct-${i}`} />
                   </td>
                   <td className="py-2.5 text-right">{z ? <span className={`text-[12px] font-bold px-2 py-[3px] rounded-bztag ${ZONE_TONE[z]}`}>{z}</span> : <span className="text-bz-faint">–</span>}</td>
                 </tr>
               );
             })}
-            <tr className="border-t border-bz-line-strong font-semibold"><td className="py-2.5">Total revenue</td><td className="py-2.5 text-right tabular">{inr(total)}</td><td className="py-2.5 text-right tabular text-bz-muted">{pc.reduce((t, x) => t + (parseFloat(x) || 0), 0)}%</td><td /></tr>
+            <tr className="border-t border-bz-line-strong font-semibold"><td className="py-2.5">Total revenue</td><td className="py-2.5 text-right tabular">{inr(total)}</td><td className="py-2.5 text-right tabular text-bz-muted">{Math.round(pc.reduce((t, x) => t + (parseFloat(x) || 0), 0) * 10) / 10}%</td><td /></tr>
           </tbody>
         </table>
       </div>
@@ -144,11 +152,11 @@ function Concentration({ fw, a, set }) {
         {fw.zones.map((z) => <span key={z.key} className={`px-2 py-1 rounded-bztag ${ZONE_TONE[z.key]}`}><b className="capitalize">{z.key}</b> {z.range}</span>)}
       </div>
       <div>
-        <p className="text-[14px] font-semibold mb-2">Your recommendation to the founder</p>
+        <p className="text-[14px] font-semibold mb-2">{own ? "Your recommendation to the owner" : "Your recommendation to the founder"}</p>
         <Segmented label="Expand now or wait" value={a.recommendation || ""} onChange={(v) => set({ ...a, recommendation: v })} testid="fw-rec"
-          options={[{ value: "expand", label: "Expand to Mumbai now" }, { value: "wait", label: "Wait" }]} />
+          options={[{ value: "expand", label: own ? "Expand now" : "Expand to Mumbai now" }, { value: "wait", label: "Wait" }]} />
       </div>
-      <Field label="Why? Tell him in a sentence or two.">
+      <Field label={own ? "Why? Tell the owner in a sentence or two." : "Why? Tell him in a sentence or two."}>
         <Textarea rows={3} value={a.reason || ""} maxLength={800} onChange={(e) => set({ ...a, reason: e.target.value })} data-testid="fw-reason" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
@@ -158,11 +166,14 @@ function Concentration({ fw, a, set }) {
     </div>
   );
 }
-const concentrationDone = (a) => (a.percents || []).length === 3 && a.percents.every((x) => x !== "" && Number.isFinite(parseFloat(x)))
-  && a.recommendation && words(a.reason) >= 20 && Number(a.target_pct) >= 5 && Number(a.months) >= 1;
+const concentrationDone = (a, c) => {
+  const pc = fitLen(a.percents, (c.sources || []).length);
+  return pc.length >= 2 && pc.every((x) => x !== "" && Number.isFinite(parseFloat(x)))
+    && a.recommendation && words(a.reason) >= 20 && Number(a.target_pct) >= 5 && Number(a.months) >= 1;
+};
 
 // ============================================================================ framework 3: the compass ====
-function Compass({ fw, a, set }) {
+function Compass({ fw, c, own, a, set }) {
   const byZone = Object.fromEntries(fw.zones.map((z) => [z.zone, z]));
   const cell = (n) => {
     const z = byZone[n];
@@ -175,14 +186,15 @@ function Compass({ fw, a, set }) {
       </button>
     );
   };
+  const level = (l) => (l ? <span className="block text-[12px] text-bz-muted">Research says: <b>{l}</b></span> : null);
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 text-center">
-        <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3"><p className="text-[12.5px] text-bz-muted">Reach</p><p className="font-display text-[26px] tabular">{fw.case.reach_per_month}<span className="text-[13px] text-bz-muted"> a month</span></p></div>
-        <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3"><p className="text-[12.5px] text-bz-muted">Conversion</p><p className="font-display text-[26px] tabular">{fw.case.conversion_pct}%<span className="text-[13px] text-bz-muted"> a month</span></p></div>
+        <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3"><p className="text-[12.5px] text-bz-muted">Reach</p><p className="font-display text-[26px] tabular">{Number(c.reach_per_month || 0).toLocaleString("en-IN")}<span className="text-[13px] text-bz-muted"> a month</span></p>{own && level(c.reach_level)}</div>
+        <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3"><p className="text-[12.5px] text-bz-muted">Conversion</p><p className="font-display text-[26px] tabular">{c.conversion_pct}%<span className="text-[13px] text-bz-muted"> a month</span></p>{own && level(c.conversion_level)}</div>
       </div>
       <div>
-        <p className="text-[14px] font-semibold mb-2">Where is she on the compass? Tap a zone.</p>
+        <p className="text-[14px] font-semibold mb-2">{own ? "Where is the client on the compass? Tap a zone." : "Where is she on the compass? Tap a zone."}</p>
         <div className="text-center text-[12px] font-semibold text-bz-muted">North · high reach</div>
         <div className="flex items-center gap-2">
           <span className="text-[12px] font-semibold text-bz-muted [writing-mode:vertical-rl] rotate-180">West · low conversion</span>
@@ -192,12 +204,12 @@ function Compass({ fw, a, set }) {
         <div className="text-center text-[12px] font-semibold text-bz-muted mt-1">South · low reach</div>
       </div>
       <div>
-        <p className="text-[14px] font-semibold mb-2">What should she work on?</p>
+        <p className="text-[14px] font-semibold mb-2">{own ? "What should they work on?" : "What should she work on?"}</p>
         <Segmented label="What to fix" value={a.fix || ""} onChange={(v) => set({ ...a, fix: v })} testid="fw-fix"
           options={[{ value: "scale", label: "Keep going, scale" }, { value: "offer", label: "Fix the offer" }, { value: "reach", label: "Fix the reach" }, { value: "both", label: "Both" }]} />
       </div>
       <div className="space-y-2">
-        <p className="text-[14px] font-semibold">Three actions for her next 90 days</p>
+        <p className="text-[14px] font-semibold">{own ? "Three actions for the client's next 90 days" : "Three actions for her next 90 days"}</p>
         {[0, 1, 2].map((i) => (
           <Input key={i} value={(a.actions || [])[i] || ""} maxLength={240} placeholder={`Action ${i + 1}`} aria-label={`Action ${i + 1}`} data-testid={`fw-action-${i}`}
             onChange={(e) => { const acts = [...(a.actions || ["", "", ""])]; acts[i] = e.target.value; set({ ...a, actions: acts }); }} />
@@ -209,13 +221,196 @@ function Compass({ fw, a, set }) {
 const compassDone = (a) => Number(a.zone) >= 1 && a.fix && [0, 1, 2].every((i) => words((a.actions || [])[i]) >= 8);
 
 const ACTIVITY = {
-  "market-fit": { El: MarketFit, done: marketFitDone, blank: { circles: {}, summary: "" } },
-  "concentration-risk": { El: Concentration, done: concentrationDone, blank: { percents: ["", "", ""], recommendation: "", reason: "", target_pct: "", months: "" } },
-  "growth-compass": { El: Compass, done: compassDone, blank: { zone: 0, fix: "", actions: ["", "", ""] } },
+  "market-fit": { El: MarketFit, done: marketFitDone, blank: () => ({ circles: {}, summary: "" }) },
+  "concentration-risk": { El: Concentration, done: concentrationDone,
+    blank: (c) => ({ percents: fitLen([], (c?.sources || []).length || 3), recommendation: "", reason: "", target_pct: "", months: "" }) },
+  "growth-compass": { El: Compass, done: compassDone, blank: () => ({ zone: 0, fix: "", actions: ["", "", ""] }) },
 };
-const toPayload = (key, a) => (key === "concentration-risk"
-  ? { ...a, percents: a.percents.map((x) => parseFloat(x)), target_pct: Number(a.target_pct), months: Number(a.months) }
+const toPayload = (key, a, c) => (key === "concentration-risk"
+  ? { ...a, percents: fitLen(a.percents, (c?.sources || []).length).map((x) => parseFloat(x)), target_pct: Number(a.target_pct), months: Number(a.months) }
   : key === "growth-compass" ? { ...a, zone: Number(a.zone) } : a);
+
+// ============================================================================ the member's own client case ====
+const BLANK_CASE = {
+  "market-fit": () => ({ client: "", product: "", new_region: "", situation: "" }),
+  "concentration-risk": () => ({ client: "", situation: "", sources: [{ name: "", amount: "" }, { name: "", amount: "" }, { name: "", amount: "" }] }),
+  "growth-compass": () => ({ client: "", situation: "", reach_per_month: "", conversion_pct: "", reach_level: "", conversion_level: "" }),
+};
+const CASE_FIELDS = ["client", "situation", "product", "new_region", "sources", "reach_per_month", "conversion_pct", "reach_level", "conversion_level"];
+const pickCase = (c) => Object.fromEntries(CASE_FIELDS.filter((f) => c && f in c).map((f) => [f, c[f]]));
+const caseOk = (key, c) => {
+  if (!c || words(c.client) < 3 || words(c.situation) < 40) return false;
+  if (key === "market-fit") return words(c.product) >= 3 && words(c.new_region) >= 2;
+  if (key === "concentration-risk") return (c.sources || []).length >= 2 && c.sources.every((s) => words(s.name) >= 2 && Number(s.amount) > 0);
+  const conv = parseFloat(c.conversion_pct);
+  return Number(c.reach_per_month) >= 1 && Number.isFinite(conv) && conv >= 0 && conv <= 100 && c.reach_level && c.conversion_level;
+};
+const casePayload = (key, c) => {
+  const p = pickCase(c);
+  if (key === "concentration-risk") p.sources = (p.sources || []).map((s) => ({ name: s.name, amount: Math.round(Number(s.amount)) }));
+  if (key === "growth-compass") { p.reach_per_month = Math.round(Number(p.reach_per_month)); p.conversion_pct = parseFloat(p.conversion_pct); }
+  return p;
+};
+const ownTitle = (key, c) => {
+  const who = (c.client || "").trim() || "Your client";
+  if (key === "market-fit") return `Will ${(c.product || "").trim() || "the product"} succeed in ${(c.new_region || "").trim() || "the new region"}?`;
+  if (key === "concentration-risk") return `Is it safe for ${who} to expand?`;
+  return `${who}: revenue is flat. What should they fix?`;
+};
+
+function CaseEditor({ fkey, c, set }) {
+  const up = (patch) => set({ ...c, ...patch });
+  const src = c.sources || [];
+  const setS = (i, patch) => up({ sources: src.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
+  return (
+    <div className="space-y-3" data-testid="fw-case-editor">
+      <Field label="The client" hint="A short description, like “a family-run sweet shop chain in Pune”.">
+        <Input value={c.client || ""} maxLength={120} onChange={(e) => up({ client: e.target.value })} data-testid="fw-case-client" />
+      </Field>
+      {fkey === "market-fit" && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="The product or service"><Input value={c.product || ""} maxLength={160} onChange={(e) => up({ product: e.target.value })} data-testid="fw-case-product" /></Field>
+          <Field label="Where it wants to launch"><Input value={c.new_region || ""} maxLength={80} onChange={(e) => up({ new_region: e.target.value })} data-testid="fw-case-region" /></Field>
+        </div>
+      )}
+      <Field label="The situation" hint="What you know about the client: 2 to 5 sentences.">
+        <Textarea rows={4} value={c.situation || ""} maxLength={1500} onChange={(e) => up({ situation: e.target.value })} data-testid="fw-case-situation" />
+      </Field>
+      {fkey === "concentration-risk" && (
+        <div className="space-y-2">
+          <p className="text-[14px] font-semibold">Revenue sources (a year, in ₹)</p>
+          {src.map((s, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <Input value={s.name} maxLength={100} placeholder={`Source ${i + 1}`} aria-label={`Source ${i + 1}: name`} className="flex-1 min-w-0"
+                onChange={(e) => setS(i, { name: e.target.value })} data-testid={`fw-case-src-name-${i}`} />
+              <Input type="number" inputMode="numeric" min={1} value={s.amount} placeholder="₹" aria-label={`Source ${i + 1}: revenue in rupees`}
+                className="w-[130px] sm:w-[160px] text-right" onChange={(e) => setS(i, { amount: e.target.value })} data-testid={`fw-case-src-amt-${i}`} />
+              <button type="button" onClick={() => up({ sources: src.filter((_, j) => j !== i) })} disabled={src.length <= 2}
+                className="w-10 h-10 shrink-0 grid place-items-center rounded-bzbtn text-bz-muted hover:text-bz-miss disabled:opacity-30" aria-label={`Remove source ${i + 1}`}>
+                <Trash2 className="w-4 h-4" aria-hidden />
+              </button>
+            </div>
+          ))}
+          {src.length < 6 && (
+            <Button variant="secondary" onClick={() => up({ sources: [...src, { name: "", amount: "" }] })} data-testid="fw-case-src-add">
+              <Plus className="w-4 h-4" aria-hidden /> Add a source
+            </Button>
+          )}
+          <p className="text-[13px] text-bz-muted">Total: <b className="tabular">{inr(caseTotal(c))}</b></p>
+        </div>
+      )}
+      {fkey === "growth-compass" && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Reach (people a month)"><Input type="number" inputMode="numeric" min={1} value={c.reach_per_month ?? ""} onChange={(e) => up({ reach_per_month: e.target.value })} data-testid="fw-case-reach" /></Field>
+          <Field label="Conversion (% who pay)"><Input type="number" inputMode="decimal" min={0} max={100} step="0.1" value={c.conversion_pct ?? ""} onChange={(e) => up({ conversion_pct: e.target.value })} data-testid="fw-case-conv" /></Field>
+          <div><p className="text-[14px] font-semibold mb-1.5">Research says reach is</p>
+            <Segmented label="Reach level" value={c.reach_level || ""} onChange={(v) => up({ reach_level: v })} testid="fw-case-reach-level" options={["high", "low"]} /></div>
+          <div><p className="text-[14px] font-semibold mb-1.5">Research says conversion is</p>
+            <Segmented label="Conversion level" value={c.conversion_level || ""} onChange={(v) => up({ conversion_level: v })} testid="fw-case-conv-level" options={["high", "low"]} /></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OwnStart({ fkey, niche, onWrite, hasCase }) {
+  const { plan, refreshMe } = useAuth();
+  const usage = plan?.limits?.fw_case;
+  const canRun = !usage || usage.limit == null || usage.used < usage.limit;
+  const [hint, setHint] = useState("");
+  const [err, setErr] = useState("");
+  const suggest = useSuggestCase(fkey, { onDone: () => refreshMe() });
+  const run = () => { setErr(""); suggest.mutate(hint, { onError: (e) => { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } }); };
+  if (suggest.isPending) return <AiFrame title="Finding a client from your niche"><Thinking label="Writing a realistic client case for your niche. This takes a few seconds." /></AiFrame>;
+  return (
+    <Card data-testid="fw-own-start">
+      <Label>Your own client</Label>
+      {niche ? (
+        <>
+          <p className="text-[15px]">Practise on a client you could really serve. From your niche: <b data-testid="fw-own-niche">{niche.niche}</b>.</p>
+          <Field label="Have a client in mind? (optional)" className="mt-3">
+            <Input value={hint} maxLength={300} onChange={(e) => setHint(e.target.value)} placeholder="e.g. a dental clinic chain in Chennai" data-testid="fw-own-hint" />
+          </Field>
+          <ErrorLine>{err}</ErrorLine>
+          <div className="flex flex-col sm:flex-row gap-2 mt-3">
+            <Button variant="ai" onClick={run} disabled={!canRun} data-testid="fw-own-suggest">{hasCase ? "Suggest another client" : "Suggest a client from my niche"}</Button>
+            {!hasCase && <Button variant="secondary" onClick={onWrite} data-testid="fw-own-write">Write my own client</Button>}
+          </div>
+          <UsageLine usage={usage} what="client suggestions" className="mt-2" />
+        </>
+      ) : (
+        <>
+          <p className="text-[15px]">Choose your niche in Starting Point and we'll suggest a client from it. Or write your own client now.</p>
+          <div className="flex flex-col sm:flex-row gap-2 mt-3">
+            <LinkButton to="/app/start" variant="secondary" data-testid="fw-own-start-link">Go to Starting Point</LinkButton>
+            {!hasCase && <Button variant="secondary" onClick={onWrite} data-testid="fw-own-write">Write my own client</Button>}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function OwnCase({ d }) {
+  const fw = d.framework;
+  const key = fw.key;
+  const { El, done, blank } = ACTIVITY[key];
+  const own = d.own || {};
+  const savedCase = own.case ? pickCase(own.case) : null;
+  const saved = own.mine?.answers;
+  const draft = own.draft_case ? pickCase(own.draft_case) : null;
+  const [c, setC] = useState(draft || savedCase);
+  const [a, setA] = useState(saved || blank(draft || savedCase));
+  const [editing, setEditing] = useState(!savedCase || !!draft);
+  const [err, setErr] = useState("");
+  const draftSig = JSON.stringify(draft);
+  // A new suggestion replaces the case being edited and starts the exercise afresh.
+  useEffect(() => {
+    if (draft) { setC(draft); setA(blank(draft)); setEditing(true); }
+  }, [draftSig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = useSaveOwn(key);
+  const okCase = caseOk(key, c);
+  const complete = okCase && done(a, c);
+  const payload = useMemo(() => (c ? { case: casePayload(key, c), answers: toPayload(key, a, c) } : null), [c, a, key]);
+  const dirty = JSON.stringify(payload) !== JSON.stringify(savedCase && saved ? { case: casePayload(key, savedCase), answers: toPayload(key, saved, savedCase) } : null);
+  const onSave = () => { setErr(""); save.mutate(payload, { onSuccess: () => setEditing(false), onError: (e) => setErr(apiError(e)) }); };
+  const setCase = (v) => {
+    setErr("");
+    // the table follows the sources: one % per source
+    if (key === "concentration-risk") setA((x) => ({ ...x, percents: fitLen(x.percents, (v.sources || []).length) }));
+    setC(v);
+  };
+  return (
+    <>
+      <OwnStart fkey={key} niche={d.niche} hasCase={!!c} onWrite={() => { const b = BLANK_CASE[key](); setC(b); setA(blank(b)); setEditing(true); }} />
+      {c && (
+        <Card data-testid="fw-activity">
+          <Label>Your client: {ownTitle(key, c)}</Label>
+          {editing ? (
+            <CaseEditor fkey={key} c={c} set={setCase} />
+          ) : (
+            <>
+              <p className="text-[15px]" data-testid="fw-own-situation">{c.situation}</p>
+              <Button variant="secondary" className="mt-2" onClick={() => setEditing(true)} data-testid="fw-case-edit">Edit the case</Button>
+            </>
+          )}
+          {okCase ? (
+            <>
+              <p className="text-[14px] font-semibold mt-5">{own.case?.task || own.draft_case?.task || "Now do the exercise on your client."}</p>
+              <div className="mt-4"><El fw={fw} c={c} own a={a} set={(v) => { setA(v); setErr(""); }} /></div>
+            </>
+          ) : (
+            <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-case-incomplete">Fill in the case above and the exercise appears.</p>
+          )}
+          <ErrorLine>{err}</ErrorLine>
+          <SaveRow complete={complete} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
+        </Card>
+      )}
+      {own.mine && <Marking mine={own.mine} />}
+      {own.mine && <Proposal fkey={key} mine={own.mine} own />}
+    </>
+  );
+}
 
 // ============================================================================ the framework itself ====
 function Learn({ fw }) {
@@ -249,34 +444,39 @@ function Learn({ fw }) {
 
 function Marking({ mine, akshat }) {
   const g = mine.grade;
+  const holds = g.mode === "holds";
   return (
     <Card className="rise-in" data-testid="fw-marking">
       <div className="flex items-baseline justify-between gap-3">
-        <Label className="mb-0">Your reading against Akshat's</Label>
+        <Label className="mb-0">{g.title || "Your reading against Akshat's"}</Label>
         <span className="font-display text-[22px] tabular text-bz-gold" data-testid="fw-score">{g.score} of {g.out_of}</span>
       </div>
       <ul className="mt-3 divide-y divide-bz-line">
         {g.marks.map((m) => (
           <li key={m.label} className="py-2.5 flex items-start gap-2.5 text-[14px]">
-            {m.ok ? <Check className="w-4 h-4 mt-0.5 text-bz-gold shrink-0" aria-label="Matches" /> : <X className="w-4 h-4 mt-0.5 text-bz-miss shrink-0" aria-label="Doesn't match" />}
-            <span className="min-w-0"><b>{m.label}.</b> You: {m.yours}{!m.ok && <> · Akshat: <b>{m.right}</b></>}</span>
+            {m.ok ? <Check className="w-4 h-4 mt-0.5 text-bz-gold shrink-0" aria-label={holds ? "Holds" : "Matches"} />
+              : <X className="w-4 h-4 mt-0.5 text-bz-miss shrink-0" aria-label={holds ? "Comes apart" : "Doesn't match"} />}
+            <span className="min-w-0">
+              {holds ? <><b>{m.label}.</b> {m.ok ? "Holds" : "Comes apart"}</>
+                : <><b>{m.label}.</b> You: {m.yours}{!m.ok && m.right && <> · {g.own ? "The rule says" : "Akshat"}: <b>{m.right}</b></>}</>}
+            </span>
           </li>
         ))}
       </ul>
       <div className="mt-3 rounded-bzcard border border-bz-line bg-bz-panel p-3.5">
-        <p className="text-[13px] font-semibold text-bz-gold">How Akshat read this case</p>
-        <p className="text-[14.5px] mt-1">{akshat.read}</p>
+        <p className="text-[13px] font-semibold text-bz-gold">{g.read_title || "How Akshat read this case"}</p>
+        <p className="text-[14.5px] mt-1" data-testid="fw-read">{akshat?.read || g.read}</p>
       </div>
     </Card>
   );
 }
 
-function Proposal({ fkey, mine }) {
+function Proposal({ fkey, mine, own = false }) {
   const { plan, refreshMe } = useAuth();
   const usage = plan?.limits?.fw_proposal;
   const canRun = !usage || usage.limit == null || usage.used < usage.limit;
   const [err, setErr] = useState("");
-  const gen = useFrameworkProposal(fkey, { onDone: () => refreshMe() });
+  const gen = useFrameworkProposal(fkey, { own, onDone: () => refreshMe() });
   const p = mine.proposal;
   const run = () => { setErr(""); gen.mutate(undefined, { onError: (e) => { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } }); };
   if (gen.isPending) return <AiFrame title="Writing your proposal"><Thinking label="Turning your analysis into a client proposal. This takes about half a minute." /></AiFrame>;
@@ -296,7 +496,7 @@ function Proposal({ fkey, mine }) {
       <AiFrame title="Your proposal" className="print-plain rise-in" right={<CopyButton text={p.markdown} />}>
         <div data-testid="fw-proposal"><Markdown text={p.markdown} /></div>
         {p.stale && <Note className="mt-3">Made from your earlier answer. Generate again to use what you saved last.</Note>}
-        <p className="text-[12px] text-bz-muted mt-3">A practice proposal for a workshop case. Check the numbers and fill in anything in [brackets] before you use it with a real client.</p>
+        <p className="text-[12px] text-bz-muted mt-3">{own ? "A draft proposal for your own client." : "A practice proposal for a workshop case."} Check the numbers and fill in anything in [brackets] before you use it with a real client.</p>
       </AiFrame>
       <div className="flex flex-col sm:flex-row gap-2 no-print">
         <Button variant="secondary" onClick={() => window.print()} data-testid="fw-print">Print or save as PDF</Button>
@@ -308,35 +508,53 @@ function Proposal({ fkey, mine }) {
   );
 }
 
+function SaveRow({ complete, dirty, saved, pending, onSave }) {
+  if (complete && (dirty || !saved)) {
+    return <Button className="w-full mt-5 rise-in" onClick={onSave} loading={pending} data-testid="fw-save">{saved ? "Save changes" : "Save my answer"}</Button>;
+  }
+  if (!complete) return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-incomplete">Finish every step above and a Save button appears.</p>;
+  return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-saved-note">Saved. Change anything above to save again.</p>;
+}
+
 function Activity({ d }) {
   const fw = d.framework;
+  const c = fw.case;
   const { El, done, blank } = ACTIVITY[fw.key];
   const saved = d.mine?.answers;
-  const [a, setA] = useState(saved || blank);
+  const [a, setA] = useState(saved || blank(c));
   const [err, setErr] = useState("");
-  useEffect(() => { setA(saved || blank); }, [fw.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setA(saved || blank(c)); }, [fw.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = useSaveFramework(fw.key);
-  const complete = done(a);
-  const dirty = useMemo(() => JSON.stringify(toPayload(fw.key, a)) !== JSON.stringify(saved ? toPayload(fw.key, saved) : null), [a, saved, fw.key]);
-  const onSave = () => { setErr(""); save.mutate(toPayload(fw.key, a), { onError: (e) => setErr(apiError(e)) }); };
+  const complete = done(a, c);
+  const dirty = useMemo(() => JSON.stringify(toPayload(fw.key, a, c)) !== JSON.stringify(saved ? toPayload(fw.key, saved, c) : null), [a, saved, fw.key, c]);
+  const onSave = () => { setErr(""); save.mutate(toPayload(fw.key, a, c), { onError: (e) => setErr(apiError(e)) }); };
   return (
     <>
       <Card data-testid="fw-activity">
-        <Label>Your turn: {fw.case.title}</Label>
-        <p className="text-[15px]">{fw.case.situation}</p>
-        <p className="text-[14px] font-semibold mt-2">{fw.case.task}</p>
-        <div className="mt-5"><El fw={fw} a={a} set={(v) => { setA(v); setErr(""); }} /></div>
+        <Label>Your turn: {c.title}</Label>
+        <p className="text-[15px]">{c.situation}</p>
+        <p className="text-[14px] font-semibold mt-2">{c.task}</p>
+        <div className="mt-5"><El fw={fw} c={c} own={false} a={a} set={(v) => { setA(v); setErr(""); }} /></div>
         <ErrorLine>{err}</ErrorLine>
-        {complete && (dirty || !saved) ? (
-          <Button className="w-full mt-5 rise-in" onClick={onSave} loading={save.isPending} data-testid="fw-save">{saved ? "Save changes" : "Save my answer"}</Button>
-        ) : !complete ? (
-          <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-incomplete">Finish every step above and a Save button appears.</p>
-        ) : (
-          <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-saved-note">Saved. Change anything above to save again.</p>
-        )}
+        <SaveRow complete={complete} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
       </Card>
       {d.mine && d.akshat && <Marking mine={d.mine} akshat={d.akshat} />}
       {d.mine && <Proposal fkey={fw.key} mine={d.mine} />}
+    </>
+  );
+}
+
+function CaseTabs({ d }) {
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get("case") === "own" ? "own" : "akshat";
+  return (
+    <>
+      <div data-testid="fw-tabs">
+        <Segmented label="Which case" value={tab} testid="fw-tab"
+          onChange={(v) => setSp(v === "own" ? { case: "own" } : {}, { replace: true })}
+          options={[{ value: "akshat", label: "Akshat's case" }, { value: "own", label: "My own client" }]} />
+      </div>
+      {tab === "own" ? <OwnCase key={`own-${d.framework.key}`} d={d} /> : <Activity key={`ak-${d.framework.key}`} d={d} />}
     </>
   );
 }
@@ -353,7 +571,7 @@ export function FrameworkView() {
             <PageHeader kicker={`Framework ${d.framework.n} of 3 · from Akshat's live workshop`} title={d.framework.name}
               sub={d.framework.question} />
             <Learn fw={d.framework} />
-            <Activity d={d} />
+            <CaseTabs d={d} />
           </>
         )}
       </Loadable>
@@ -366,7 +584,7 @@ export default function Frameworks() {
   if (id) return <FrameworkView />;
   return (
     <div className="space-y-5">
-      <PageHeader kicker="Cases" title="Work along with Akshat" sub="The three frameworks from the live workshop. Do each one yourself, save it, see how Akshat read it, then turn it into a proposal." />
+      <PageHeader kicker="Cases" title="Work along with Akshat" sub="The three frameworks from the live workshop. Do each one on Akshat's case or on a client from your own niche, save it, then turn it into a proposal." />
       <Card><FrameworkList /></Card>
     </div>
   );

@@ -1,4 +1,5 @@
-// "Work along with Akshat": the three workshop frameworks in the browser, as a free member (phone and desktop).
+// "Work along with Akshat": the three workshop frameworks in the browser, as a free member (phone and desktop):
+// Akshat's case for each, then "My own client" (written by hand, and suggested from the member's niche).
 // Runs against scripts/qa/ai_fault_server.py. Usage: HUB_URL=http://127.0.0.1:8002 node frameworks_ui.js <shots dir>
 const { chromium } = require('playwright');
 const B = process.env.HUB_URL || 'http://127.0.0.1:8002', OUT = process.argv[2] || '.';
@@ -21,6 +22,8 @@ async function run(br, view, vp) {
   await p.goto(B + '/app/cases', { waitUntil: 'networkidle' });
   const items = await p.locator('[data-testid^="fw-"][href]').count();
   check(V('Cases lists the 3 workshop frameworks first'), items === 3 && (await vis(p, 'cases-frameworks')));
+  check(V('Cases: no "Practice cases" card and no weekly-case upsell, the live case stays'),
+    !/Practice cases|A new case every week/.test(await p.locator('main').innerText()) && (await vis(p, 'cases-live')));
 
   // ---- 1. Market-Fit Venn: incomplete → no Save; wrong answer marked; proposal
   await p.getByTestId('fw-market-fit').click();
@@ -100,7 +103,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-proposal-go').click();
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
   check(V('F3: proposal made'), true);
-  check(V('F3: free account after 3 proposals: no "Generate again"'), !(await vis(p, 'fw-proposal-again')));
+  check(V('F3: free account, 3 of 6 proposals used: says so'), /3 of 6 free framework proposals used/.test(await p.locator('body').innerText()));
 
   // ---- reload and list
   await p.reload({ waitUntil: 'networkidle' });
@@ -108,7 +111,96 @@ async function run(br, view, vp) {
   await p.goto(B + '/app/cases', { waitUntil: 'networkidle' });
   const list = await p.getByTestId('cases-frameworks').innerText();
   check(V('Cases shows "Saved" and "Proposal ready" for all three'), (list.match(/Saved/g) || []).length === 3 && (list.match(/Proposal ready/g) || []).length === 3);
-  check(V('No sideways scroll'), (await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) === 0);
+  const noSideways = async () => (await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) === 0;
+  check(V('No sideways scroll'), await noSideways());
+
+  // ---- 4. My own client: no niche yet → Starting Point link; write your own (Market-Fit)
+  await p.goto(B + '/app/frameworks/market-fit', { waitUntil: 'networkidle' });
+  await p.getByTestId('fw-tab-own').click();
+  await p.getByTestId('fw-own-start').waitFor();
+  check(V('Own: the tab is in the address (?case=own)'), /case=own/.test(p.url()));
+  check(V('Own: no niche → link to Starting Point, and "Write my own client"'), (await vis(p, 'fw-own-start-link')) && (await vis(p, 'fw-own-write')));
+  await p.getByTestId('fw-own-write').click();
+  check(V('Own: the exercise waits until the case is filled'), (await vis(p, 'fw-case-incomplete')) && !(await vis(p, 'fw-save')));
+  await p.getByTestId('fw-case-client').fill('a family-run sweet shop chain in Pune');
+  await p.getByTestId('fw-case-product').fill('dry-fruit mithai gift boxes');
+  await p.getByTestId('fw-case-region').fill('Hyderabad');
+  await p.getByTestId('fw-case-situation').fill('Four shops in Pune, 20 years old, loved for Diwali gift boxes. The owner wants to sell the boxes in Hyderabad.');
+  check(V('Own: the Venn talks about the new region'), /Works in Hyderabad/.test(await p.getByTestId('fw-activity').innerText()) && !/Nokia/.test(await p.getByTestId('fw-activity').innerText()));
+  await p.getByTestId('fw-price-works').click();
+  await p.getByTestId('fw-price-why').fill('Priced like the local mithai shops there.');
+  await p.getByTestId('fw-value-works').click();
+  await p.getByTestId('fw-value-why').fill('Dry-fruit boxes are a gifting staple there too.');
+  await p.getByTestId('fw-availability-fails').click();
+  await p.getByTestId('fw-availability-why').fill('No shop or delivery partner in Hyderabad yet.');
+  await p.getByTestId('fw-summary').fill('Price and value hold; availability is the gap to close before launching.');
+  await p.getByTestId('fw-save').click();
+  await p.getByTestId('fw-marking').waitFor();
+  check(V('Own F1: saved and read by the rule (2 of 3 circles hold, availability)'),
+    /2 of 3/.test(await p.getByTestId('fw-score').innerText()) && /availability/i.test(await p.getByTestId('fw-read').innerText()));
+  await p.getByTestId('fw-proposal-go').click();
+  await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
+  check(V('Own F1: proposal made for my client'), /sweet shop/.test(await p.getByTestId('fw-proposal').innerText()));
+  await p.reload({ waitUntil: 'networkidle' });
+  check(V('Own F1: reload keeps the own tab, case, marking and proposal'),
+    (await vis(p, 'fw-own-situation')) && (await vis(p, 'fw-marking')) && (await vis(p, 'fw-proposal')));
+  await p.getByTestId('fw-tab-akshat').click();
+  await p.getByTestId('fw-own-start').waitFor({ state: 'detached' });
+  check(V('Own F1: Akshat\'s case and answer are still there on its tab'),
+    /Nokia/.test(await p.getByTestId('fw-activity').innerText()) && /3 of 3/.test(await p.getByTestId('fw-score').innerText()));
+
+  // ---- 5. With a niche: suggest a client (Concentration), the table follows the sources
+  const snap = await (await p.request.post(B + '/api/start/snapshot', { data: { experiences: ['Retail operations', 'Franchise growth', 'Pricing'], enjoy: [0], industry: 'Retail', years: 18 } })).json();
+  await p.request.post(`${B}/api/start/snapshot/${snap.id}/choose`, { data: { index: 0 } });
+  await p.goto(B + '/app/frameworks/concentration-risk?case=own', { waitUntil: 'networkidle' });
+  check(V('Own F2: my niche is named'), await vis(p, 'fw-own-niche'));
+  await scenario('vendor_error');
+  await p.getByTestId('fw-own-suggest').click();
+  await p.getByText('The AI is busy right now').waitFor({ timeout: 30000 });
+  check(V('Own F2: AI failure on suggest shows the busy message, no case'), !(await vis(p, 'fw-case-editor')));
+  await scenario('ok');
+  await p.getByTestId('fw-own-suggest').click();
+  await p.getByTestId('fw-case-editor').waitFor({ timeout: 30000 });
+  const n0 = await p.locator('[data-testid^="fw-pct-"]').count();
+  check(V('Own F2: suggested client fills the editor, one % box per source'), n0 === 3 && (await p.getByTestId('fw-case-client').inputValue()).length > 3, `rows=${n0}`);
+  await p.getByTestId('fw-pct-0').fill('45'); await p.getByTestId('fw-pct-1').fill('30'); await p.getByTestId('fw-pct-2').fill('25');
+  await p.getByTestId('fw-rec-wait').click();
+  await p.getByTestId('fw-reason').fill('45% comes from one corporate client; losing it would take almost half the revenue.');
+  await p.getByTestId('fw-target').fill('35'); await p.getByTestId('fw-months').fill('12');
+  await p.getByTestId('fw-save').click();
+  await p.getByTestId('fw-marking').waitFor();
+  check(V('Own F2: checked by the rules, 5 of 5'), /5 of 5/.test(await p.getByTestId('fw-score').innerText()));
+  await p.getByTestId('fw-case-edit').click();
+  await p.getByTestId('fw-case-src-add').click();
+  check(V('Own F2: a blank new source pauses the exercise (no Save)'), (await vis(p, 'fw-case-incomplete')) && !(await vis(p, 'fw-save')));
+  await p.getByTestId('fw-case-src-name-3').fill('Festive pop-up stalls');
+  await p.getByTestId('fw-case-src-amt-3').fill('1000000');
+  check(V('Own F2: once named, the table has 4 rows and waits for the new %'),
+    (await p.locator('[data-testid^="fw-pct-"]').count()) === 4 && !(await vis(p, 'fw-save')));
+  await p.getByTestId('fw-pct-0').fill('40.9'); await p.getByTestId('fw-pct-1').fill('27.3'); await p.getByTestId('fw-pct-2').fill('22.7'); await p.getByTestId('fw-pct-3').fill('9.1');
+  check(V('Own F2: filled again → "Save changes"'), /Save changes/.test(await p.getByTestId('fw-save').innerText()));
+  await p.getByTestId('fw-save').click();
+  await p.waitForTimeout(800);
+  check(V('Own F2: re-marked on 4 sources (6 checks)'), /of 6/.test(await p.getByTestId('fw-score').innerText()));
+
+  // ---- 6. Compass on a suggested client
+  await p.goto(B + '/app/frameworks/growth-compass?case=own', { waitUntil: 'networkidle' });
+  await p.getByTestId('fw-own-hint').fill('a yoga studio in Kochi');
+  await p.getByTestId('fw-own-suggest').click();
+  await p.getByTestId('fw-case-editor').waitFor({ timeout: 30000 });
+  check(V('Own F3: the compass shows the client\'s numbers and research'), /Research says/.test(await p.getByTestId('fw-activity').innerText()));
+  await p.getByTestId('fw-zone-2').click();
+  await p.getByTestId('fw-fix-offer').click();
+  await p.getByTestId('fw-action-0').fill('Add a free first class with a follow-up call');
+  await p.getByTestId('fw-action-1').fill('Package a 3-month plan with a clear outcome');
+  await p.getByTestId('fw-action-2').fill('Call every trial guest within a day');
+  await p.getByTestId('fw-save').click();
+  await p.getByTestId('fw-marking').waitFor();
+  check(V('Own F3: high reach + low conversion = Zone 2, fix the offer: 2 of 2'), /2 of 2/.test(await p.getByTestId('fw-score').innerText()));
+  check(V('Own F3: no sideways scroll on the case editor'), await noSideways());
+  await p.screenshot({ path: `${OUT}/fw-own-${view}.png`, fullPage: true });
+  await p.goto(B + '/app/cases', { waitUntil: 'networkidle' });
+  check(V('Cases shows the own client for all three'), ((await p.getByTestId('cases-frameworks').innerText()).match(/Own case:/g) || []).length === 3);
   check(V('No browser errors'), errs.length === 0, errs.join(' | ').slice(0, 200));
   await ctx.close();
 }

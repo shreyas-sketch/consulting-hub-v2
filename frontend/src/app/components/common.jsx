@@ -14,7 +14,8 @@ export function planNeededLabel(p) {
 export function UsageLine({ usage, what = "uses", className = "" }) {
   if (!usage || usage.used == null) return null;
   let text;
-  if (usage.once) text = usage.used >= (usage.limit || 1) ? "You've used your free go. Your result stays in My Consulting File." : "Free account: one go.";
+  if (usage.once && (usage.limit || 1) > 1) text = `${usage.used} of ${usage.limit} free ${what} used`;
+  else if (usage.once) text = usage.used >= (usage.limit || 1) ? "You've used your free go. Your result stays in My Consulting File." : "Free account: one go.";
   else if (usage.limit == null) text = `${usage.used} ${what} this month`;
   else text = `${usage.used} of ${usage.limit} ${what} used this month`;
   return <p className={`text-[13px] text-bz-muted ${className}`} data-testid="usage-line">{text}</p>;

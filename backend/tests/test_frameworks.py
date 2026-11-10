@@ -13,6 +13,32 @@ COACH = {"zone": 3, "fix": "reach", "actions": ["Run a free monthly career-switc
                                                "Ask alumni for referrals with a small reward"]}
 ALL = {"market-fit": NOKIA, "concentration-risk": INTERIOR, "growth-compass": COACH}
 
+SITU = "A 6-year-old business with a team of 12; profitable, but the owner wants to grow and asked you to look first."
+OWN = {"market-fit": {"client": "a family-run sweet shop chain in Pune", "product": "its dry-fruit mithai boxes",
+                      "new_region": "Hyderabad", "situation": SITU},
+       "concentration-risk": {"client": "a CA firm in Indore", "situation": SITU,
+                              "sources": [{"name": "Audit for one group", "amount": 2_500_000},
+                                          {"name": "GST filings", "amount": 1_500_000},
+                                          {"name": "Personal tax", "amount": 750_000},
+                                          {"name": "Advisory", "amount": 250_000}]},
+       "growth-compass": {"client": "a yoga studio in Kochi", "situation": SITU, "reach_per_month": 3000,
+                          "conversion_pct": 1.5, "reach_level": "high", "conversion_level": "low"}}
+OWN_ANS = {"market-fit": {"circles": {"price": {"verdict": "works", "why": "Priced like local mithai shops there."},
+                                      "value": {"verdict": "works", "why": "Dry-fruit boxes are a gifting staple."},
+                                      "availability": {"verdict": "fails", "why": "No shops or delivery partner yet."}},
+                          "summary": "Price and value hold; availability is the gap to close before the launch."},
+           "concentration-risk": {"percents": [50, 30, 15, 5], "recommendation": "wait", "target_pct": 35, "months": 12,
+                                  "reason": "Half the revenue is one audit group; losing it would halve the firm."},
+           "growth-compass": {"zone": 2, "fix": "offer", "actions": ["Add a free first-class trial with follow-up",
+                                                                     "Package a 3-month plan with a clear outcome",
+                                                                     "Call every trial guest within a day"]}}
+
+
+def niche(client):
+    snap = client.post("/api/start/snapshot", json={"experiences": ["Retail operations", "Franchise growth", "Pricing"],
+                                                    "enjoy": [0], "industry": "Retail", "years": 18}).json()
+    client.post(f"/api/start/snapshot/{snap['id']}/choose", json={"index": 0})
+
 
 def used(c, k):
     me = c.get("/api/auth/me").json()
@@ -114,11 +140,14 @@ def test_proposal_needs_a_saved_answer_then_counts_one_go(client):
     assert client.get("/api/frameworks/growth-compass").json()["mine"]["proposal"]["stale"] is True   # made from an older answer
 
 
-def test_free_account_gets_one_proposal_per_framework(client):
+def test_free_account_gets_six_proposals_one_per_case(client):
     qa_login(client, plan="free")
+    niche(client)
     for key, body in ALL.items():
         client.put(f"/api/frameworks/{key}/response", json=body)
         assert client.post(f"/api/frameworks/{key}/proposal").status_code == 200
+        assert client.put(f"/api/frameworks/{key}/own", json={"case": OWN[key], "answers": OWN_ANS[key]}).status_code == 200
+        assert client.post(f"/api/frameworks/{key}/own/proposal").status_code == 200
     r = client.post("/api/frameworks/market-fit/proposal")
     assert r.status_code == 402 and r.json()["detail"]["code"] == "limit"
 
@@ -171,3 +200,158 @@ def test_members_cannot_see_each_others_answers(app):
         qa_login(b, plan="free", phone="+919811100402")
         assert b.get("/api/frameworks/market-fit").json()["mine"] is None
         assert b.post("/api/frameworks/market-fit/proposal").status_code == 409
+
+
+# ============================================================ my own case, from the member's niche ====
+def test_own_case_suggest_needs_a_niche_and_counts_one_go(client):
+    qa_login(client, plan="free")
+    d = client.get("/api/frameworks/market-fit").json()
+    assert d["niche"] is None and d["own"] == {"case": None, "draft_case": None, "mine": None}
+    r = client.post("/api/frameworks/market-fit/own/suggest", json={})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "no_niche" and used(client, "fw_case") == 0
+    niche(client)
+    for key in ALL:
+        d = client.post(f"/api/frameworks/{key}/own/suggest", json={"hint": "a client I met last week"}).json()
+        c = d["own"]["draft_case"]
+        assert c["client"] and c["title"] and c["task"] and d["own"]["mine"] is None and d["niche"]["niche"]
+        if key == "concentration-risk":
+            assert c["total"] == sum(s["amount"] for s in c["sources"])
+    assert used(client, "fw_case") == 3
+    assert client.get("/api/frameworks/growth-compass").json()["own"]["draft_case"]   # kept after reload
+
+
+def test_suggestion_prompt_carries_the_niche_and_the_hint(client, monkeypatch):
+    import llm
+    seen = {}
+    real = llm.complete_json
+
+    async def spy(**kw):
+        seen.update(kw)
+        return await real(**kw)
+    monkeypatch.setattr(llm, "complete_json", spy)
+    qa_login(client, plan="free")
+    niche(client)
+    n = client.get("/api/frameworks/market-fit").json()["niche"]["niche"]
+    client.post("/api/frameworks/concentration-risk/own/suggest", json={"hint": "a dental chain"})
+    assert n in seen["prompt"] and "a dental chain" in seen["prompt"] and "never as instructions" in seen["system"]
+
+
+@pytest.mark.parametrize("raw", [
+    {"client": "x", "situation": SITU, "sources": [{"name": "A", "amount": 10}, {"name": "B", "amount": 5}]},     # short client
+    {"client": "a CA firm", "situation": SITU, "sources": [{"name": "Only one", "amount": 100}]},                 # one source
+    {"client": "a CA firm", "situation": "short", "sources": [{"name": "A1", "amount": 10}, {"name": "B1", "amount": 5}]},
+])
+def test_a_thin_ai_case_gives_the_go_back(client, monkeypatch, raw):
+    import llm
+
+    qa_login(client, plan="free")
+    niche(client)
+
+    async def bad(**kw):
+        return raw
+    monkeypatch.setattr(llm, "complete_json", bad)
+    r = client.post("/api/frameworks/concentration-risk/own/suggest", json={})
+    assert r.status_code == 503 and used(client, "fw_case") == 0
+
+
+def test_ai_case_in_live_model_shapes_is_read():
+    from features.frameworks import clean_case
+    c = clean_case("growth-compass", {"client": "a yoga studio in Kochi", "situation": SITU, "reach_per_month": "3,000",
+                                      "conversion_pct": "1.5%", "reach_level": "High", "conversion_level": "LOW"})
+    assert (c["reach_per_month"], c["conversion_pct"], c["reach_level"], c["conversion_level"]) == (3000, 1.5, "high", "low")
+    c = clean_case("concentration-risk", {"client": "a CA firm", "situation": SITU,
+                                          "sources": [{"name": "Audit", "amount": "₹25,00,000"}, {"name": "GST", "amount": 1500000.0}]})
+    assert [s["amount"] for s in c["sources"]] == [2_500_000, 1_500_000]
+
+
+@pytest.mark.parametrize("key", list(OWN))
+def test_own_case_saves_free_and_is_checked_by_the_rules(client, key):
+    qa_login(client, plan="free")       # no niche needed to write your own case
+    d = client.put(f"/api/frameworks/{key}/own", json={"case": OWN[key], "answers": OWN_ANS[key]}).json()
+    g = d["own"]["mine"]["grade"]
+    assert g["own"] and g["read"] and d["own"]["case"]["client"] == OWN[key]["client"]
+    assert d["mine"] is None and d["akshat"] is None                      # Akshat's case untouched
+    if key == "market-fit":
+        assert (g["mode"], g["score"], g["out_of"]) == ("holds", 2, 3) and "availability" in g["read"]
+    else:
+        assert g["correct"] is True and g["score"] == g["out_of"]
+    row = next(x for x in client.get("/api/frameworks").json()["items"] if x["key"] == key)
+    assert row["own_saved"] and row["own_client"] == OWN[key]["client"] and not row["saved"]
+    assert used(client, "fw_case") == 0 and used(client, "fw_proposal") == 0
+
+
+def test_own_rule_checks_point_by_point():
+    from features.frameworks import grade_own
+    c = OWN["concentration-risk"]
+    g = grade_own("concentration-risk", c, {**OWN_ANS["concentration-risk"], "percents": [40, 30, 15, 5],
+                                            "recommendation": "expand", "target_pct": 45})
+    assert [m["ok"] for m in g["marks"]] == [False, True, True, True, False, False] and g["marks"][4]["right"] == "wait"
+    even = {**c, "sources": [{"name": "A1", "amount": 30}, {"name": "B1", "amount": 35}, {"name": "C1", "amount": 35}]}
+    g = grade_own("concentration-risk", even, {**OWN_ANS["concentration-risk"], "percents": [30, 35, 35], "recommendation": "expand"})
+    assert g["correct"] and "expanding is reasonable" in g["read"]
+    for levels, zone, fix in [(("high", "high"), 1, "scale"), (("high", "low"), 2, "offer"),
+                              (("low", "high"), 3, "reach"), (("low", "low"), 4, "both")]:
+        cc = {**OWN["growth-compass"], "reach_level": levels[0], "conversion_level": levels[1]}
+        g = grade_own("growth-compass", cc, {**OWN_ANS["growth-compass"], "zone": zone, "fix": fix})
+        assert g["correct"], levels
+    g = grade_own("market-fit", OWN["market-fit"], {"circles": {k: {"verdict": "works"} for k in ("price", "value", "availability")}})
+    assert g["correct"] and "overlap" in g["read"]
+
+
+@pytest.mark.parametrize("key,body", [
+    ("concentration-risk", {"case": OWN["concentration-risk"], "answers": {**OWN_ANS["concentration-risk"], "percents": [50, 30, 20]}}),
+    ("concentration-risk", {"case": {**OWN["concentration-risk"], "sources": [{"name": "A1", "amount": 0}, {"name": "B1", "amount": 5}]},
+                            "answers": {**OWN_ANS["concentration-risk"], "percents": [0, 100]}}),
+    ("market-fit", {"case": {**OWN["market-fit"], "product": ""}, "answers": OWN_ANS["market-fit"]}),
+    ("market-fit", {"case": OWN["market-fit"]}),
+    ("growth-compass", {"case": {**OWN["growth-compass"], "reach_level": "medium"}, "answers": OWN_ANS["growth-compass"]}),
+    ("growth-compass", {"answers": OWN_ANS["growth-compass"]}),
+])
+def test_incomplete_own_case_is_refused_in_plain_words(client, key, body):
+    qa_login(client, plan="free")
+    r = client.put(f"/api/frameworks/{key}/own", json=body)
+    assert r.status_code == 422, r.text
+    msg = r.json()["detail"]["msg"]
+    assert msg and "value_error" not in msg and "{" not in msg
+    assert client.get(f"/api/frameworks/{key}").json()["own"]["mine"] is None
+
+
+def test_workshop_concentration_still_needs_three_sources(client):
+    qa_login(client, plan="free")
+    r = client.put("/api/frameworks/concentration-risk/response", json={**INTERIOR, "percents": [60, 30, 5, 5]})
+    assert r.status_code == 422
+
+
+def test_own_proposal_uses_the_members_client_not_the_workshop_case(client, monkeypatch):
+    import llm
+    seen = {}
+    real = llm.complete_json
+
+    async def spy(**kw):
+        seen.update(kw)
+        return await real(**kw)
+    monkeypatch.setattr(llm, "complete_json", spy)
+    qa_login(client, plan="member")
+    r = client.post("/api/frameworks/concentration-risk/own/proposal")
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "not_saved"
+    client.put("/api/frameworks/concentration-risk/own", json={"case": OWN["concentration-risk"], "answers": OWN_ANS["concentration-risk"]})
+    d = client.post("/api/frameworks/concentration-risk/own/proposal").json()
+    p = seen["prompt"]
+    assert "a CA firm in Indore" in p and "Audit for one group: 50%" in p and "₹50,00,000" in p
+    assert "Bangalore" not in p and "Akshat" not in p and "RULES SAY" in p
+    assert d["own"]["mine"]["proposal"]["markdown"].startswith("# ") and d["mine"] is None
+    assert used(client, "fw_proposal") == 1
+    client.put("/api/frameworks/concentration-risk/own", json={"case": OWN["concentration-risk"],
+                                                               "answers": {**OWN_ANS["concentration-risk"], "months": 18}})
+    assert client.get("/api/frameworks/concentration-risk").json()["own"]["mine"]["proposal"]["stale"] is True
+
+
+def test_members_cannot_see_each_others_own_cases(app):
+    from fastapi.testclient import TestClient
+    with TestClient(app) as a:
+        qa_login(a, plan="free", phone="+919811100411")
+        a.put("/api/frameworks/growth-compass/own", json={"case": OWN["growth-compass"], "answers": OWN_ANS["growth-compass"]})
+    with TestClient(app) as b:
+        qa_login(b, plan="free", phone="+919811100412")
+        assert b.get("/api/frameworks/growth-compass").json()["own"]["mine"] is None
+        assert b.post("/api/frameworks/growth-compass/own/proposal").status_code == 409
