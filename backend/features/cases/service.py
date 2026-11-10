@@ -6,6 +6,7 @@ an answer to that case.
 """
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any, Optional
 
@@ -17,7 +18,7 @@ from growth import events
 from growth.clock import utcnow
 
 from ..case_bank import CASES, CRITERIA
-from ..common import as_dict, clamp_int, run_metered, strip_providers, text, text_list
+from ..common import as_dict, run_metered, strip_providers, text, text_list
 from . import prompts, schemas
 from .repository import CaseRepository
 
@@ -85,10 +86,9 @@ class CaseService:
                 task="case_score", system=prompts.SYSTEM, prompt=prompts.score_prompt(c, answer_text),
                 fake=lambda: prompts.fake_score(c, answer_text), model="fast", max_tokens=700,
                 queue_wait=WEBINAR_QUEUE_WAIT))
-            sc = raw.get("scores") or {}
-            if not isinstance(sc, dict) or not all(k in sc for k, _ in CRITERIA):
-                raise llm.LLMError("case_score: missing scores")          # refunded by run_metered
-            scores = {k: clamp_int(sc.get(k), 0, 10, 0) for k, _ in CRITERIA}
+            scores = read_scores(raw.get("scores"))
+            if scores is None:
+                raise llm.LLMError(f"case_score: missing scores ({str(raw.get('scores'))[:120]})")   # refunded
             doc = {"_id": uuid.uuid4().hex, "user_id": uid, "case_id": case_id, "answer": answer_text.strip(),
                    "scores": scores, "overall": round(sum(scores.values()) / len(scores), 1),
                    "good": strip_providers(text_list(raw.get("good"), 3, 200)),
@@ -103,6 +103,37 @@ class CaseService:
 
 
 # ------------------------------------------------------------------------------- module-level API for other modules ----
+def _out_of_ten(v: Any) -> Optional[int]:
+    """7, "7", "7/10", "7 out of 10", "70/100", {"score": 7} → 7 (0-10). Anything without a number → None."""
+    if isinstance(v, dict):
+        v = v.get("score", v.get("value", v.get("points")))
+    if isinstance(v, bool) or v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return max(0, min(10, round(v)))
+    m = re.search(r"(-?\d+(?:\.\d+)?)\s*(?:/|out of)\s*(\d+(?:\.\d+)?)", str(v), re.I)
+    if m and float(m.group(2)) > 0:
+        return max(0, min(10, round(float(m.group(1)) * 10 / float(m.group(2)))))
+    m = re.search(r"-?\d+(?:\.\d+)?", str(v))
+    return max(0, min(10, round(float(m.group())))) if m else None
+
+
+def read_scores(sc: Any) -> Optional[dict[str, int]]:
+    """The four criteria from the shapes a live model writes: a dict (any case), a list of {criterion, score}, scores
+    as numbers or "6/10". None when a criterion is missing (the caller treats it as an incomplete answer)."""
+    rows: dict[str, Any] = {}
+    if isinstance(sc, dict):
+        rows = {str(k).strip().lower(): v for k, v in sc.items()}
+    elif isinstance(sc, list):
+        for x in sc:
+            if isinstance(x, dict):
+                name = x.get("criterion") or x.get("key") or x.get("name")
+                if name:
+                    rows[str(name).strip().lower()] = x
+    out = {k: _out_of_ten(rows.get(k)) for k, _ in CRITERIA}
+    return None if any(v is None for v in out.values()) else out
+
+
 async def ensure_seed(d) -> int:
     """Practice cases live in code (case_bank.py): refreshed on every start. Returns how many were new."""
     repo = CaseRepository(d)

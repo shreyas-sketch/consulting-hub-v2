@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from core.deps import user_dep
 from growth import events
@@ -34,7 +34,7 @@ SKILLS = [
     {"key": "delivery", "name": "Delivery & frameworks", "ask": "Running a client project step by step with a framework",
      "next": "Solve one case a week with a framework, then compare with the model answer."},
     {"key": "visibility", "name": "Visibility & authority", "ask": "Being known for your niche on LinkedIn and elsewhere",
-     "next": "Run the LinkedIn Score and fix the top problem first."},
+     "next": "Run LinkedIn Review and make its first quick win."},
 ]
 KEYS = [s["key"] for s in SKILLS]
 BANDS = [(50, "Launch-ready", "You have the base. Now it's about getting in front of clients."),
@@ -46,6 +46,19 @@ BANDS = [(50, "Launch-ready", "You have the base. Now it's about getting in fron
 class ReadinessIn(BaseModel):
     scores: dict[str, int] = Field(...)
     potential: int = Field(..., ge=0, le=10)
+
+    @field_validator("scores")
+    @classmethod
+    def _six_skills_one_to_ten(cls, v: dict[str, int]) -> dict[str, int]:
+        """All six skills, each 1-10. A missing skill used to count as 1 and an 11 as 10, silently."""
+        if set(v) != set(KEYS):
+            missing, extra = sorted(set(KEYS) - set(v)), sorted(set(v) - set(KEYS))
+            raise ValueError("Rate all six skills." + (f" Missing: {', '.join(missing)}." if missing else "")
+                             + (f" Not a skill here: {', '.join(extra)}." if extra else ""))
+        bad = [k for k, n in v.items() if not 1 <= n <= 10]
+        if bad:
+            raise ValueError(f"Each skill is rated 1 to 10 ({', '.join(bad)}).")
+        return v
 
 
 def score(scores: dict[str, int], potential: int) -> dict:

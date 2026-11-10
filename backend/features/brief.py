@@ -8,7 +8,6 @@ that wasn't really found. With search off, the brief says it was made without li
 """
 from __future__ import annotations
 
-import re
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -97,7 +96,9 @@ async def make(body: BriefIn, user: dict = Depends(user_dep())):
                                               fake=lambda: _fake(body, results), model="fast", max_tokens=1400,
                                               queue_wait=WEBINAR_QUEUE_WAIT))
         news = []
-        for n in as_list(raw.get("news"))[:3]:
+        for n in as_list(raw.get("news"))[:12]:
+            if len(news) >= 3:
+                break                        # three good picks; repeats and bad numbers no longer use up a slot
             try:
                 i = int(n.get("i"))
                 if i < 1:                    # 0 or negative would wrap to the end of the list: not a real pick
@@ -144,8 +145,11 @@ NEWS_TRIES = 3          # "Look for news again" on one brief: free, at most this
 
 
 def _query(inp: dict) -> str:
-    host = re.sub(r"^(https?://)?(www\.)?", "", (inp.get("website") or "").strip(), flags=re.I).split("/")[0]
-    return f"{inp['company']} India" + (f" {host}" if host else "")
+    """'<company> India news <Month YYYY>': asks for this month's stories. The company's web address is left out:
+    it pulled in the company's own pages and news hubs instead of reports about it."""
+    from growth.clock import IST
+    month = utcnow().astimezone(IST).strftime("%B %Y")
+    return f"{inp['company']} India news {month}"
 
 
 @router.post("/{brief_id}/news")

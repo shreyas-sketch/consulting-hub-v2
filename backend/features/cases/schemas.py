@@ -2,7 +2,7 @@
 (never raw Mongo documents: ids renamed, datetimes as ISO strings, the model answer only when earned)."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from util import iso
 
@@ -11,6 +11,14 @@ from ..case_bank import CRITERIA
 
 class AnswerIn(BaseModel):
     answer: str = Field(..., min_length=40, max_length=4000)
+
+    @field_validator("answer")
+    @classmethod
+    def _real_text(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 40:
+            raise ValueError("Write at least 40 characters: what the problem is, the goal and your first step.")
+        return v
 
 
 def criteria() -> list[dict]:

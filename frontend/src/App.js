@@ -35,6 +35,7 @@ const TOOL_ROUTES = [
   ["portfolio", "Portfolio"], ["pitch", "Pitch"], ["research", "Research"],
   ["network", "Network"], ["outreach", "Outreach"], ["radar", "Radar"], ["call-prep", "CallPrep"],
   ["proposals", "Proposals"], ["diagnostic", "Diagnostic"], ["social", "Social"], ["bootcamps", "Bootcamps"],
+  ["frameworks", "Frameworks"],
 ].map(([path, name]) => [path, P(name)]);
 const Gpts = P("Gpts");
 const DiagnosticPublic = P("DiagnosticPublic");

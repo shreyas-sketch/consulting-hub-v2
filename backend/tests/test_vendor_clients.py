@@ -444,3 +444,29 @@ async def test_news_falls_back_if_forcing_is_refused(live_search, caplog):
     assert [r["url"] for r in out] == [TOOL_URLS[0]]
     assert "tool_choice" in rec.requests[0] and "tool_choice" not in rec.requests[1]
     assert "forcing the search tool was refused" in caplog.text
+
+
+@pytest.mark.parametrize("url,title,index", [
+    ("https://www.zeebiz.com/topics/tata-motors", "Tata Motors Latest News- Top News on Tata Motors", True),
+    ("https://www.businesstoday.in/infopage/companies/tata-motors", "Tata Motors, Latest News", True),
+    ("https://www.business-standard.com/topic/tata-motors", "Tata Motors : Latest News Headlines", True),
+    ("https://www.livemint.com/companies/tata-motors", "Tata Motors", True),
+    ("https://www.tatamotors.com/", "Tata Motors", True),
+    ("https://economictimes.indiatimes.com/industry/auto/tata-motors-q2/articleshow/124567890.cms", "Tata Motors Q2", False),
+    ("https://www.reuters.com/business/autos-transportation/tata-motors-quarterly-profit-falls-2026-11-05/", "Profit falls", False),
+    ("https://www.thehindubusinessline.com/companies/tata-motors-opens-new-plant/article68812345.ece", "New plant", False),
+])
+def test_index_pages_are_not_news(url, title, index):
+    """Live run 9 Nov: a Tata Motors brief listed three topic pages ('Latest News – Top News on Tata Motors') as news."""
+    assert search.is_index_page(url, title) is index
+
+
+async def test_topic_pages_never_reach_the_brief(live_search):
+    topic = {"type": "web_search_result", "url": "https://www.zeebiz.com/topics/acme", "title": "Acme Latest News - Top News",
+             "page_age": "200 days ago", "encrypted_content": "x"}
+    blocks = _search_blocks(json.dumps({"items": [{"url": topic["url"], "summary": "A hub page about Acme news."},
+                                                  {"url": TOOL_URLS[0], "summary": "Acme will double its Pune plant."}]}))
+    blocks[2]["content"].insert(0, topic)
+    live_search(_msg(blocks))
+    out = await search.news("Acme topic India", max_results=5)
+    assert "zeebiz" not in json.dumps(out) and out[0]["url"] == TOOL_URLS[0]

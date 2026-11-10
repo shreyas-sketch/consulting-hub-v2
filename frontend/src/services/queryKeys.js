@@ -11,4 +11,8 @@ export const qk = {
     all: ["cases"],
     detail: (id) => ["case", id],
   },
+  frameworks: {
+    all: ["frameworks"],
+    detail: (key) => ["framework", key],
+  },
 };

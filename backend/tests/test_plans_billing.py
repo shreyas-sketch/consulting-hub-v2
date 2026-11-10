@@ -51,7 +51,8 @@ def test_webinar_tools_switch_off_locks_free(client):
     client.post("/api/admin/flags", json={"key": "WEBINAR_TOOLS", "on": False})
     client.post("/api/auth/logout")
     qa_login(client, plan="free")
-    r = client.post("/api/readiness", json={"scores": {}, "potential": 5})
+    full = {k: 5 for k in ("diagnosis", "offer", "acquisition", "pricing", "delivery", "visibility")}
+    r = client.post("/api/readiness", json={"scores": full, "potential": 5})
     assert r.status_code == 403 and r.json()["detail"]["code"] == "locked"
 
 
