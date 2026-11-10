@@ -1,10 +1,9 @@
-// /app/cases — the live case (from the webinar) first, then the practice cases. Free accounts: the live case, plus
-// any case they answered before (read-only).
+// /app/cases — "Work along with Akshat" (the three workshop frameworks, on Akshat's case or the member's own client),
+// then the live case from the webinar.
 import { Link } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { useCases } from "@/services/cases";
-import { useAuth } from "@/context/AuthContext";
-import { Card, Chip, Label, LinkButton, Loadable, PageHeader } from "../components/ui";
+import { Card, Chip, Label, Loadable, PageHeader } from "../components/ui";
 import { FrameworkList } from "./Frameworks";
 
 function CaseRow({ c }) {
@@ -31,7 +30,6 @@ function CaseRow({ c }) {
 }
 
 export default function Cases() {
-  const { plan } = useAuth();
   const q = useCases();
   return (
     <div className="space-y-5">
@@ -42,29 +40,13 @@ export default function Cases() {
           <Label className="mb-0">Work along with Akshat</Label>
           <span className="text-[12.5px] text-bz-muted">The 3 frameworks from the live workshop</span>
         </div>
-        <p className="text-[14px] text-bz-muted mt-1">Do each exercise with Akshat, save your answer, then turn it into a client proposal.</p>
+        <p className="text-[14px] text-bz-muted mt-1">Do each exercise on Akshat's case or on a client from your own niche, save it, then turn it into a client proposal.</p>
         <div className="mt-2"><FrameworkList /></div>
       </Card>
-      <Loadable q={q} what="the cases" lines={6}>
+      <Loadable q={q} what="the cases" lines={3}>
         {(d) => {
           const live = (d.items || []).filter((c) => c.live);
-          const rest = (d.items || []).filter((c) => !c.live);
-          return (
-            <>
-              <Card>{live.map((c) => <CaseRow key={c.id} c={c} />)}</Card>
-              <Card>
-                <Label>Practice cases</Label>
-                {rest.map((c) => <CaseRow key={c.id} c={c} />)}
-              </Card>
-              {plan?.plan === "free" && (
-                <Card inset>
-                  <p className="text-[15px] font-bold">A new case every week on the ₹1,999 plan.</p>
-                  <p className="text-[14px] text-bz-muted mt-1">Every Monday, a real company from the news, with a score and a model answer.</p>
-                  <LinkButton to="/app/plans?from=cases" variant="secondary" className="mt-3">See the plans</LinkButton>
-                </Card>
-              )}
-            </>
-          );
+          return live.length ? <Card data-testid="cases-live">{live.map((c) => <CaseRow key={c.id} c={c} />)}</Card> : null;
         }}
       </Loadable>
     </div>

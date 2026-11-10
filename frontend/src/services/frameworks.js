@@ -1,5 +1,6 @@
 // Frameworks domain: "Work along with Akshat", the three frameworks from the live workshop as hands-on cases.
-// Mirrors backend/features/frameworks.py. Saving is free; a proposal counts one `fw_proposal`.
+// Mirrors backend/features/frameworks.py. Saving is free; a proposal counts one `fw_proposal`, a suggested client
+// case from the member's niche one `fw_case`.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { qk } from "./queryKeys";
@@ -9,6 +10,10 @@ export const frameworksApi = {
   get: async (key) => (await api.get(`/frameworks/${key}`)).data,
   save: async (key, answers) => (await api.put(`/frameworks/${key}/response`, answers)).data,
   proposal: async (key) => (await api.post(`/frameworks/${key}/proposal`, {})).data,
+  // my own case: a client from the member's niche
+  suggest: async (key, hint) => (await api.post(`/frameworks/${key}/own/suggest`, { hint: hint || "" })).data,
+  saveOwn: async (key, body) => (await api.put(`/frameworks/${key}/own`, body)).data,
+  ownProposal: async (key) => (await api.post(`/frameworks/${key}/own/proposal`, {})).data,
 };
 
 export const useFrameworks = () => useQuery({ queryKey: qk.frameworks.all, queryFn: frameworksApi.list });
@@ -27,4 +32,7 @@ function useFrameworkWrite(key, fn, { onDone } = {}) {
   });
 }
 export const useSaveFramework = (key, opts) => useFrameworkWrite(key, (answers) => frameworksApi.save(key, answers), opts);
-export const useFrameworkProposal = (key, opts) => useFrameworkWrite(key, () => frameworksApi.proposal(key), opts);
+export const useFrameworkProposal = (key, { own = false, ...opts } = {}) =>
+  useFrameworkWrite(key, () => (own ? frameworksApi.ownProposal(key) : frameworksApi.proposal(key)), opts);
+export const useSuggestCase = (key, opts) => useFrameworkWrite(key, (hint) => frameworksApi.suggest(key, hint), opts);
+export const useSaveOwn = (key, opts) => useFrameworkWrite(key, (body) => frameworksApi.saveOwn(key, body), opts);
