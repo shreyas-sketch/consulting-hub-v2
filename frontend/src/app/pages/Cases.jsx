@@ -5,6 +5,7 @@ import { Lock } from "lucide-react";
 import { useCases } from "@/services/cases";
 import { useAuth } from "@/context/AuthContext";
 import { Card, Chip, Label, LinkButton, Loadable, PageHeader } from "../components/ui";
+import { FrameworkList } from "./Frameworks";
 
 function CaseRow({ c }) {
   const body = (
@@ -36,6 +37,14 @@ export default function Cases() {
     <div className="space-y-5">
       <PageHeader kicker="Cases" title="Think like a consultant," accent="one case at a time."
         sub="Read the situation, write what you'd do, and get a score out of 10 on four things clients care about. Then see the model answer." />
+      <Card data-testid="cases-frameworks">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <Label className="mb-0">Work along with Akshat</Label>
+          <span className="text-[12.5px] text-bz-muted">The 3 frameworks from the live workshop</span>
+        </div>
+        <p className="text-[14px] text-bz-muted mt-1">Do each exercise with Akshat, save your answer, then turn it into a client proposal.</p>
+        <div className="mt-2"><FrameworkList /></div>
+      </Card>
       <Loadable q={q} what="the cases" lines={6}>
         {(d) => {
           const live = (d.items || []).filter((c) => c.live);

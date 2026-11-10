@@ -58,6 +58,7 @@ FEATURES: dict[str, dict] = {
     "readiness": {"min": "free", "name": "Readiness Score"},
     "start": {"min": "free", "name": "Starting Point"},
     "case": {"min": "free", "name": "Weekly Case"},
+    "frameworks": {"min": "free", "name": "Frameworks with Akshat"},
     "brief": {"min": "free", "name": "Meeting Brief"},
     "linkedin": {"min": "free", "name": "LinkedIn Score"},
     "file": {"min": "free", "name": "My Consulting File"},
@@ -114,6 +115,7 @@ LIMITS: dict[str, dict[str, Optional[int]]] = {
     "linkedin": _lim(2, 4, 4, free=1),
     "li_review": _lim(3, 6, 6, free=1),   # LinkedIn screenshot reviews (vision)
     "li_plan": _lim(1, 2, 2, free=1),     # 30-day LinkedIn post plans
+    "fw_proposal": _lim(10, 20, 30, free=3),   # proposals from the three framework activities (free: one each)
     # ₹1,999 plan
     "presentation": _lim(2, 6, 6),
     "visuals": _lim(10, 30, 30),
@@ -139,7 +141,7 @@ LIMITS: dict[str, dict[str, Optional[int]]] = {
     "posts": _lim(0, 0, 30),
 }
 LIMIT_UNITS = {"readiness": "Readiness Scores", "start": "Niche Snapshots", "goal": "Goal Map changes",
-               "case": "case answers", "brief": "Meeting Briefs", "linkedin": "LinkedIn checks", "li_review": "LinkedIn profile reviews", "li_plan": "30-day post plans",
+               "case": "case answers", "brief": "Meeting Briefs", "linkedin": "LinkedIn checks", "li_review": "LinkedIn profile reviews", "li_plan": "30-day post plans", "fw_proposal": "framework proposals",
                "presentation": "decks", "visuals": "visuals", "audio": "audio versions", "doc_q": "document questions",
                "progress": "Progress Reports", "site_ai": "website AI edits", "gpt": "messages to the tools",
                "akshat_ai": "questions to Akshat AI", "pitch": "pitch practices", "offer_card": "Offer Cards",

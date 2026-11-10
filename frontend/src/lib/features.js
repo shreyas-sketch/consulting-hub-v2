@@ -60,7 +60,7 @@ export const MENU_GROUPS = [
 // Plain names for the usage counters the server reports (PlanInfo.limits keys, backend plans.LIMITS).
 export const USAGE_NAME = {
   readiness: "Readiness Scores", start: "Niche Snapshots", goal: "Goal Map saves", case: "Case answers", brief: "Meeting Briefs",
-  linkedin: "LinkedIn checks", li_review: "LinkedIn profile reviews", li_plan: "30-day post plans", presentation: "Decks", visuals: "Visuals", audio: "Audio versions", doc_q: "Document questions",
+  linkedin: "LinkedIn checks", li_review: "LinkedIn profile reviews", li_plan: "30-day post plans", fw_proposal: "Framework proposals", presentation: "Decks", visuals: "Visuals", audio: "Audio versions", doc_q: "Document questions",
   progress: "Progress Reports", site_ai: "Website AI edits", gpt: "Action Hub and Mentorship messages", akshat_ai: "Akshat AI questions",
   pitch: "Pitch videos analysed", offer_card: "Offer Cards", story: "Career stories", insight: "Industry Insight Packs",
   portfolio: "Portfolio Projects", contacts: "Contacts scored", outreach: "Outreach messages", radar: "Companies found by Radar",
