@@ -29,6 +29,22 @@ outputs, a decision gate for the ₹9 crore press, and a ₹2.5–3.5 lakh fee.
 
 | # | What | Fix |
 |---|---|---|
-| 1 | A suggested Growth Compass client was named "Bharat Forge Works (a made-up name for practice)", close to a real listed company | The AI is told never to name the business or anyone in it ("the unit", "the owner"); a "(made-up name)" note is removed |
+| 1 | A suggested Growth Compass client was named "Bharat Forge Works (a made-up name for practice)", close to a real listed company | Superseded by the decision below: suggestions are now real companies |
 | 2 | Market-Fit "product" was the consultant's own service, cut mid-word at 160 characters, so the title read "Will A vendor cost-reduction service … tool life tracking, succeed in …" | The product must be what the client sells, 3–8 words. Long text is cut on a word. The title reads "Will a …" |
 | 3 | After "Suggest another client", the new client sat in the editor while the old client's marking and proposal showed below, unlabelled; "Generate again" would have written for the old client | A label now says these belong to the saved client and to save the new one to replace them. "Generate" is hidden until it is saved |
+
+## Decision after the QA: a suggested client is always a real company
+
+"Suggest a real company from my niche" now runs a live web search, using the same tool Meeting Brief uses. The AI
+picks a real Indian company that fits the member's niche, or the one the member names, and builds the case on what is
+public about it.
+
+- **Sources:** each case carries 1 to 4 source links. Links are only kept if the search tool itself returned them.
+- **Estimates:** numbers a company doesn't publish (revenue by customer, monthly reach, conversion) are labelled
+  "Estimated for practice".
+- **No source, no case:** a suggestion without a real company and at least one source is refused, and the go is given
+  back. The same happens when web search is off.
+- **Repeats:** "Suggest another company" avoids the companies already suggested.
+- **Proposals:** a proposal on a real company keeps to those facts, never invents private details, and lists the
+  estimates as assumptions.
+- **Test mode:** a clearly marked "Sample Company Ltd (test mode)" is used.

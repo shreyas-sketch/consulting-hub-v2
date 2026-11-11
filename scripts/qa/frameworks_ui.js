@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const B = process.env.HUB_URL || 'http://127.0.0.1:8002', OUT = process.argv[2] || '.';
 const rows = [];
 const check = (name, ok, detail = '') => { rows.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? '  [' + detail + ']' : ''}`); };
-const scenario = (name) => fetch(`${B}/api/_qa/scenario`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+const scenario = (name, env) => fetch(`${B}/api/_qa/scenario`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, env }) });
 const vis = async (p, id) => (await p.getByTestId(id).count()) > 0 && p.getByTestId(id).first().isVisible();
 
 async function run(br, view, vp) {
@@ -154,15 +154,17 @@ async function run(br, view, vp) {
   await p.request.post(`${B}/api/start/snapshot/${snap.id}/choose`, { data: { index: 0 } });
   await p.goto(B + '/app/frameworks/concentration-risk?case=own', { waitUntil: 'networkidle' });
   check(V('Own F2: my niche is named'), await vis(p, 'fw-own-niche'));
-  await scenario('vendor_error');
+  await scenario('ok', { SEARCH_MODE: 'off' });          // the web search can't run → no real company → busy, go kept
   await p.getByTestId('fw-own-suggest').click();
   await p.getByText('The AI is busy right now').waitFor({ timeout: 30000 });
-  check(V('Own F2: AI failure on suggest shows the busy message, no case'), !(await vis(p, 'fw-case-editor')));
-  await scenario('ok');
+  check(V('Own F2: search failure on suggest shows the busy message, no case'), !(await vis(p, 'fw-case-editor')));
+  await scenario('ok', { SEARCH_MODE: 'fake' });
   await p.getByTestId('fw-own-suggest').click();
   await p.getByTestId('fw-case-editor').waitFor({ timeout: 30000 });
   const n0 = await p.locator('[data-testid^="fw-pct-"]').count();
   check(V('Own F2: suggested client fills the editor, one % box per source'), n0 === 3 && (await p.getByTestId('fw-case-client').inputValue()).length > 3, `rows=${n0}`);
+  check(V('Own F2: the suggestion is shown as a real company, with its sources and estimates'),
+    (await vis(p, 'fw-real')) && (await p.locator('[data-testid="fw-refs"] a[href^="http"]').count()) >= 1 && (await vis(p, 'fw-estimates')));
   await p.getByTestId('fw-pct-0').fill('45'); await p.getByTestId('fw-pct-1').fill('30'); await p.getByTestId('fw-pct-2').fill('25');
   await p.getByTestId('fw-rec-wait').click();
   await p.getByTestId('fw-reason').fill('45% comes from one corporate client; losing it would take almost half the revenue.');

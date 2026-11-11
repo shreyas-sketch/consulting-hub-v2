@@ -48,6 +48,8 @@ for key, hint in [("market-fit", ""), ("concentration-risk", ""), ("growth-compa
     check(f"{key}: AI suggests a client case", bool(cs), str(d.get("detail") if isinstance(d, dict) and s != 200 else "")[:160])
     if cs:
         txt = json.dumps(cs, ensure_ascii=False).lower()
+        check(f"{key}: a real company with public sources", bool(cs.get("company")) and len(cs.get("refs") or []) >= 1,
+              f"{cs.get('company')} · {', '.join(r['source'] for r in cs.get('refs') or [])}")
         check(f"{key}: the client fits the niche (auto / forging / machining / vendor)",
               any(w in txt for w in ("auto", "forg", "machin", "stamp", "vendor", "component", "oem")), cs["client"])
         (OUT / f"case-{key}.json").write_text(json.dumps(cs, ensure_ascii=False, indent=2))
@@ -80,7 +82,7 @@ for key, cs in cases.items():
     if not cs:
         continue
     case = {k: cs[k] for k in ("client", "situation", "product", "new_region", "sources", "reach_per_month", "conversion_pct",
-                               "reach_level", "conversion_level") if k in cs}
+                               "reach_level", "conversion_level", "company", "refs", "estimates") if k in cs}
     d, s = call(c, f"save own {key}", "PUT", f"/api/frameworks/{key}/own", json={"case": case, "answers": right_answers(key, cs)})
     g = (((d or {}).get("own") or {}).get("mine") or {}).get("grade") or {}
     check(f"{key}: own case saved and checked by the rules", s == 200 and g.get("own") and bool(g.get("read")),
