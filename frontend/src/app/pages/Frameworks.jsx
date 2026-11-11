@@ -374,6 +374,8 @@ function OwnCase({ d }) {
   const payload = useMemo(() => (c ? { case: casePayload(key, c), answers: toPayload(key, a, c) } : null), [c, a, key]);
   const dirty = JSON.stringify(payload) !== JSON.stringify(savedCase && saved ? { case: casePayload(key, savedCase), answers: toPayload(key, saved, savedCase) } : null);
   const onSave = () => { setErr(""); save.mutate(payload, { onSuccess: () => setEditing(false), onError: (e) => setErr(apiError(e)) }); };
+  // the case on screen is not the saved one (a new suggestion, or edits): what's below belongs to the saved client
+  const caseChanged = !!(savedCase && c && JSON.stringify(casePayload(key, c)) !== JSON.stringify(casePayload(key, savedCase)));
   const setCase = (v) => {
     setErr("");
     // the table follows the sources: one % per source
@@ -406,8 +408,14 @@ function OwnCase({ d }) {
           <SaveRow complete={complete} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
         </Card>
       )}
+      {own.mine && caseChanged && (
+        <div className="rounded-bzcard border border-bz-line-strong bg-bz-raised p-3.5 text-[14px]" data-testid="fw-own-old">
+          <b>Below: your saved client, {savedCase.client}.</b> The marking and proposal are for that client. Save the
+          new client above to replace them.
+        </div>
+      )}
       {own.mine && <Marking mine={own.mine} />}
-      {own.mine && <Proposal fkey={key} mine={own.mine} own />}
+      {own.mine && <Proposal fkey={key} mine={own.mine} own noAgain={caseChanged} />}
     </>
   );
 }
@@ -471,7 +479,7 @@ function Marking({ mine, akshat }) {
   );
 }
 
-function Proposal({ fkey, mine, own = false }) {
+function Proposal({ fkey, mine, own = false, noAgain = false }) {
   const { plan, refreshMe } = useAuth();
   const usage = plan?.limits?.fw_proposal;
   const canRun = !usage || usage.limit == null || usage.used < usage.limit;
@@ -486,7 +494,8 @@ function Proposal({ fkey, mine, own = false }) {
         <Label>Your proposal</Label>
         <p className="text-[15px]">Turn your analysis into a proposal this client could say yes to: the situation, what the framework shows, the objective, a phased plan, deliverables, fee and next steps.</p>
         <ErrorLine>{err}</ErrorLine>
-        <Button variant="ai" className="w-full mt-4" onClick={run} disabled={!canRun} data-testid="fw-proposal-go">Generate a Proposal</Button>
+        {noAgain ? <Note className="mt-3">Save the new client first, then generate its proposal.</Note>
+          : <Button variant="ai" className="w-full mt-4" onClick={run} disabled={!canRun} data-testid="fw-proposal-go">Generate a Proposal</Button>}
         <UsageLine usage={usage} what="framework proposals" className="mt-2 text-center" />
       </Card>
     );
@@ -500,7 +509,7 @@ function Proposal({ fkey, mine, own = false }) {
       </AiFrame>
       <div className="flex flex-col sm:flex-row gap-2 no-print">
         <Button variant="secondary" onClick={() => window.print()} data-testid="fw-print">Print or save as PDF</Button>
-        {canRun && <Button variant="secondary" onClick={run} data-testid="fw-proposal-again">Generate again</Button>}
+        {canRun && !noAgain && <Button variant="secondary" onClick={run} data-testid="fw-proposal-again">Generate again</Button>}
         <UsageLine usage={usage} what="framework proposals" className="sm:ml-auto self-center" />
       </div>
       <ErrorLine>{err}</ErrorLine>

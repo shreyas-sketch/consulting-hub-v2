@@ -355,3 +355,19 @@ def test_members_cannot_see_each_others_own_cases(app):
         qa_login(b, plan="free", phone="+919811100412")
         assert b.get("/api/frameworks/growth-compass").json()["own"]["mine"] is None
         assert b.post("/api/frameworks/growth-compass/own/proposal").status_code == 409
+
+
+def test_ai_case_text_is_cut_on_words_and_made_up_names_are_dropped():
+    from features.frameworks import clean_case, own_case_public
+    long = "A vendor cost-reduction service for Tier-2 machining units: a bundled programme of raw material bulk-buying " \
+           "through a pooled purchase group, tool life tracking, and scrap reduction with monthly reviews"
+    c = clean_case("market-fit", {"client": "a machining unit in Coimbatore", "product": long, "new_region": "Pune",
+                                  "situation": "Forge Works (a made-up name for practice) sells well at home. " + SITU})
+    assert len(c["product"]) <= 160 and not c["product"].endswith((",", " ")) and long.startswith(c["product"])
+    assert "made-up" not in c["situation"] and own_case_public("market-fit", c)["title"].startswith("Will a vendor")
+
+
+def test_case_prompt_forbids_names_and_the_consultants_own_service():
+    from features.frameworks import CASE_SYSTEM, case_prompt
+    assert "Never give the business or anyone in it a name" in CASE_SYSTEM
+    assert "never the consultant's service" in case_prompt("market-fit", {"niche": "Vendor cost reduction"}, "")

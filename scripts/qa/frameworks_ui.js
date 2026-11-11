@@ -173,6 +173,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-case-edit').click();
   await p.getByTestId('fw-case-src-add').click();
   check(V('Own F2: a blank new source pauses the exercise (no Save)'), (await vis(p, 'fw-case-incomplete')) && !(await vis(p, 'fw-save')));
+  check(V('Own F2: while the case differs from the saved one, the marking is labelled as the saved client\'s'), await vis(p, 'fw-own-old'));
   await p.getByTestId('fw-case-src-name-3').fill('Festive pop-up stalls');
   await p.getByTestId('fw-case-src-amt-3').fill('1000000');
   check(V('Own F2: once named, the table has 4 rows and waits for the new %'),
@@ -182,6 +183,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-save').click();
   await p.waitForTimeout(800);
   check(V('Own F2: re-marked on 4 sources (6 checks)'), /of 6/.test(await p.getByTestId('fw-score').innerText()));
+  check(V('Own F2: after saving, the "saved client" label is gone'), !(await vis(p, 'fw-own-old')));
 
   // ---- 6. Compass on a suggested client
   await p.goto(B + '/app/frameworks/growth-compass?case=own', { waitUntil: 'networkidle' });
