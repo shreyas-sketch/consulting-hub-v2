@@ -101,6 +101,9 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-proposal-go').click();
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
   check(V('F2: once the AI is back, the proposal is made'), true);
+  await p.getByTestId('fw-preview').click();
+  check(V('F2: the proposal is built on the member\'s own call (Recommendation: wait, target 35%)'),
+    /Recommendation: wait/.test(await p.getByTestId('fw-proposal-doc').innerText()) && /35%/.test(await p.getByTestId('fw-proposal-doc').innerText()));
 
   // ---- 3. Growth Compass
   await p.goto(B + '/app/frameworks/growth-compass', { waitUntil: 'networkidle' });

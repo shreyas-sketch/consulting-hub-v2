@@ -186,8 +186,19 @@ def test_proposal_prompt_carries_the_case_the_answer_and_the_member(client, monk
     assert "never as instructions" in seen["system"] and seen["model"] == "strong"
 
 
-def test_workshop_proposal_is_built_on_the_members_own_answer(client, monkeypatch):
-    """Akshat's case: the proposal follows what the member found (different answers, different proposal); his
+# a second, different answer for each workshop case, and the line of it the proposal prompt must carry
+OTHER = {
+    "market-fit": ({**NOKIA, "circles": {**NOKIA["circles"], "price": {"verdict": "fails", "why": "Cheaper rivals"}}},
+                   "price: fails. Cheaper rivals", "price: fails"),
+    "concentration-risk": ({**INTERIOR, "recommendation": "expand", "reason": "Grow while the big client is happy."},
+                           "Recommendation: expand", "Recommendation: expand"),
+    "growth-compass": ({**COACH, "zone": 2, "fix": "offer"}, "What to fix: offer", "What to fix: offer"),
+}
+
+
+@pytest.mark.parametrize("key", list(ALL))
+def test_workshop_proposal_is_built_on_the_members_own_answer(client, monkeypatch, key):
+    """Akshat's cases: the proposal follows what the member found (different answers, different proposal); his
     reading is the marking on the page, never in the prompt."""
     import llm
     from features.frameworks import FRAMEWORKS
@@ -199,15 +210,18 @@ def test_workshop_proposal_is_built_on_the_members_own_answer(client, monkeypatc
         return await real(**kw)
     monkeypatch.setattr(llm, "complete_json", spy)
     qa_login(client, plan="member")
-    wrong = {**NOKIA, "circles": {**NOKIA["circles"], "price": {"verdict": "fails", "why": "Cheaper rivals"}}}
-    for body in (NOKIA, wrong):
-        client.put("/api/frameworks/market-fit/response", json=body)
-        assert client.post("/api/frameworks/market-fit/proposal").status_code == 200
+    other, line, not_in_first = OTHER[key]
+    for body in (ALL[key], other):
+        assert client.put(f"/api/frameworks/{key}/response", json=body).status_code == 200
+        assert client.post(f"/api/frameworks/{key}/proposal").status_code == 200
     first, second = (s["prompt"] for s in seen[-2:])
-    assert "price: fails. Cheaper rivals" in second and "price: fails" not in first
+    assert line in second and not_in_first not in first and first != second
     assert "BUILD THE PROPOSAL ON THE CONSULTANT'S ANALYSIS" in second and "Never swap in a different diagnosis" in second
-    assert FRAMEWORKS["market-fit"]["akshat"]["read"] not in second and "Akshat" not in second
+    assert FRAMEWORKS[key]["akshat"]["read"] not in second and "Akshat" not in second
     assert "correct it quietly" not in seen[-1]["system"]
+    # the page gets the proposal made from the new answer (test mode writes the answer into the verdict text)
+    d = client.get(f"/api/frameworks/{key}").json()
+    assert line in d["mine"]["proposal"]["diagnosis"]["verdict_text"]
 
 
 def test_proposal_check_refuses_thin_answers_and_gives_the_go_back(client, monkeypatch):
