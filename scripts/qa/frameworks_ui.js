@@ -118,6 +118,22 @@ async function run(br, view, vp) {
     head === '%PDF-' && /^Proposal - .*\.pdf$/.test(dl.suggestedFilename()) && pagesIn === (await p.locator('.pd-page').count()), `${pagesIn} pages · ${dl.suggestedFilename()}`);
   check(V('F3: the proposal pages fit the screen (no sideways scroll)'), (await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) === 0);
   check(V('F3: free account, 3 of 6 proposals used: says so'), /3 of 6 free framework proposals used/.test(await p.locator('body').innerText()));
+  // change the answer WITHOUT saving, then Generate again: it must save the change and write from the new answer
+  await p.getByTestId('fw-zone-2').click();
+  await p.getByTestId('fw-fix-offer').click();
+  check(V('F3: unsaved changes: the proposal says it uses the saved answer, the button offers to save first'),
+    (await vis(p, 'fw-proposal-unsaved')) && /Save changes and generate again/.test(await p.getByTestId('fw-proposal-again').innerText()));
+  await p.getByTestId('fw-action-2').fill('');
+  await p.getByTestId('fw-proposal-again').click();
+  check(V('F3: incomplete changes: it says what is missing and makes nothing'),
+    /Finish your changes above first: Action 3/.test(await p.locator('body').innerText()) && /3 of 6 free/.test(await p.locator('body').innerText()));
+  await p.getByTestId('fw-action-2').fill('Referrals');
+  await p.getByTestId('fw-proposal-again').click();
+  await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
+  await p.getByText('4 of 6 free framework proposals used').first().waitFor({ timeout: 30000 });
+  check(V('F3: "Save changes and generate again" saved the new answer and made a fresh proposal from it'),
+    /0 of 2/.test(await p.getByTestId('fw-score').innerText()) && !(await vis(p, 'fw-proposal-unsaved'))
+      && !/earlier answer/.test(await p.getByTestId('fw-proposal').locator('xpath=..').innerText()) && (await vis(p, 'fw-saved-note')));
 
   // ---- reload and list
   await p.reload({ waitUntil: 'networkidle' });

@@ -483,11 +483,12 @@ function OwnCase({ d }) {
       {own.mine && caseChanged && (
         <div className="rounded-bzcard border border-bz-line-strong bg-bz-raised p-3.5 text-[14px]" data-testid="fw-own-old">
           <b>Below: your saved client, {savedCase.client}.</b> The marking and proposal are for that client. Save the
-          new client above to replace them.
+          new client above, or use "Save changes and generate again" below.
         </div>
       )}
       {own.mine && <Marking mine={own.mine} />}
-      {own.mine && <Proposal fkey={key} fw={fw} c={own.case} mine={own.mine} own noAgain={caseChanged} />}
+      {own.mine && <Proposal fkey={key} fw={fw} c={own.case} mine={own.mine} own
+        unsaved={{ dirty, todo: [...caseTodo, ...todo], saveFirst: async () => { await save.mutateAsync(payload); setEditing(false); } }} />}
     </>
   );
 }
@@ -551,7 +552,10 @@ function Marking({ mine, akshat }) {
   );
 }
 
-function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
+// `unsaved`: the activity above has changes that are not saved yet. The proposal is always written from the saved
+// answer, so Generate saves them first (one click); if they are incomplete it says what is missing instead of
+// quietly writing the proposal from the old answer.
+function Proposal({ fkey, fw, c, mine, own = false, unsaved }) {
   const { plan, refreshMe } = useAuth();
   const usage = plan?.limits?.fw_proposal;
   const canRun = !usage || usage.limit == null || usage.used < usage.limit;
@@ -559,16 +563,35 @@ function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
   const [saving, setSaving] = useState(false);
   const gen = useFrameworkProposal(fkey, { own, onDone: () => refreshMe() });
   const p = mine.proposal;
-  const run = () => { setErr(""); gen.mutate(undefined, { onError: (e) => { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } }); };
-  if (gen.isPending) return <AiFrame title="Writing your proposal"><Thinking label="Turning your analysis into a client proposal. This takes up to a minute." /></AiFrame>;
+  const [prepping, setPrepping] = useState(false);
+  const pending = !!unsaved?.dirty;
+  const run = async () => {
+    setErr("");
+    if (pending) {
+      if (unsaved.todo.length) {
+        setErr(`Finish your changes above first: ${unsaved.todo.slice(0, 3).join(", ")}${unsaved.todo.length > 3 ? "…" : ""}.`);
+        return;
+      }
+      setPrepping(true);
+      try {
+        await unsaved.saveFirst();
+      } catch (e) {
+        setErr(apiError(e));
+        return;
+      } finally {
+        setPrepping(false);
+      }
+    }
+    gen.mutate(undefined, { onError: (e) => { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } });
+  };
+  if (gen.isPending || prepping) return <AiFrame title="Writing your proposal"><Thinking label="Turning your analysis into a client proposal. This takes up to a minute." /></AiFrame>;
   if (!p) {
     return (
       <Card className="rise-in" data-testid="fw-proposal-cta">
         <Label>Your proposal</Label>
         <p className="text-[15px]">Turn your analysis into a proposal this client could say yes to, in Akshat's structure: where they started, the real problem, your diagnosis with their numbers, where to focus, a 90-day plan, what it's worth and next steps.</p>
         <ErrorLine>{err}</ErrorLine>
-        {noAgain ? <Note className="mt-3">Save the new client first, then generate its proposal.</Note>
-          : <Button variant="ai" className="w-full mt-4" onClick={run} disabled={!canRun} data-testid="fw-proposal-go">Generate a Proposal</Button>}
+        <Button variant="ai" className="w-full mt-4" onClick={run} disabled={!canRun} data-testid="fw-proposal-go">{pending ? "Save changes and generate a proposal" : "Generate a Proposal"}</Button>
         <UsageLine usage={usage} what="framework proposals" className="mt-2 text-center" />
       </Card>
     );
@@ -593,7 +616,8 @@ function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
             <Label className="mb-0">Your proposal</Label>
             <CopyButton text={p.markdown} />
           </div>
-          {p.stale && <Note className="no-print">Made from your earlier answer. Generate again to use what you saved last.</Note>}
+          {pending ? <p className="no-print text-[13.5px] font-semibold text-bz-gold" data-testid="fw-proposal-unsaved">You've changed your answers above. This proposal still uses the saved ones: "Save changes and generate again" uses the new ones.</p>
+            : p.stale && <Note className="no-print">Made from your earlier answer. Generate again to use what you saved last.</Note>}
           <div data-testid="fw-proposal"><ProposalDoc p={p} fw={fw} fkey={fkey} c={c} answers={mine.answers} grade={mine.grade} /></div>
           <p className="text-[12px] text-bz-muted no-print">{note}</p>
         </div>
@@ -606,7 +630,7 @@ function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
       )}
       <div className="flex flex-col sm:flex-row gap-2 no-print">
         <Button onClick={download} loading={saving} data-testid="fw-download">{!saving && <Download className="w-4 h-4" aria-hidden />}{saving ? "Preparing the PDF…" : "Download proposal (PDF)"}</Button>
-        {canRun && !noAgain && <Button variant="secondary" onClick={run} data-testid="fw-proposal-again">Generate again</Button>}
+        {canRun && <Button variant={pending ? "ai" : "secondary"} onClick={run} data-testid="fw-proposal-again">{pending ? "Save changes and generate again" : "Generate again"}</Button>}
         <UsageLine usage={usage} what="framework proposals" className="sm:ml-auto self-center" />
       </div>
       <ErrorLine>{err}</ErrorLine>
@@ -656,7 +680,8 @@ function Activity({ d }) {
         <SaveRow todo={todo} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
       </Card>
       {d.mine && d.akshat && <Marking mine={d.mine} akshat={d.akshat} />}
-      {d.mine && <Proposal fkey={fw.key} fw={fw} c={c} mine={d.mine} />}
+      {d.mine && <Proposal fkey={fw.key} fw={fw} c={c} mine={d.mine}
+        unsaved={{ dirty, todo, saveFirst: () => save.mutateAsync(toPayload(fw.key, a, c)) }} />}
     </>
   );
 }
