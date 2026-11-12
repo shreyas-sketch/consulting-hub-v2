@@ -188,93 +188,188 @@ function Copyable({ label, text: t, children }) {
   );
 }
 
+// The order a member works through the changes: the text they can paste first, then the rest.
+const ORDER = ["headline", "about", "banner", "experience", "featured", "skills", "photo", "contact", "activity"];
+// the one-line "what to do" when the AI wrote the text for a section but no note on it
+const DEFAULT_FIX = { headline: "Replace your headline with one of the options.", about: "Replace your About section with the new one.", banner: "Put this line on your banner.", experience: "Rewrite your roles as results, not duties.", featured: "Pin these near the top of your profile.", skills: "Put these skills at the top, in this order." };
+const LABELS = { headline: "Headline", about: "About", banner: "Banner", experience: "Experience", featured: "Featured", skills: "Skills", photo: "Profile photo", contact: "How to contact you", activity: "Posts and activity" };
+
+// The ready-to-paste text for a section, shown inside that change (so nothing appears twice on the page).
+function ReadyText({ k, rv }) {
+  if (k === "headline" && rv.headlines?.length) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[12.5px] font-semibold text-bz-teal">Pick one and paste it as your headline</p>
+        {rv.headlines.map((h, i) => (
+          <Copyable key={h.text} label={`Option ${i + 1}${h.angle ? ` · ${h.angle}` : ""}`} text={h.text}>
+            <p className="text-[15px] font-bold">{h.text}</p>
+            {h.why && <p className="text-[13px] text-bz-muted mt-0.5">{h.why}</p>}
+          </Copyable>
+        ))}
+      </div>
+    );
+  }
+  if (k === "about" && rv.about) return <AboutText text={rv.about} />;
+  if (k === "banner" && rv.banner) {
+    return <div><p className="text-[12.5px] font-semibold text-bz-teal mb-2">Text for your banner</p><Copyable text={rv.banner}><p className="font-bold">{rv.banner}</p></Copyable></div>;
+  }
+  if (k === "experience" && rv.experience?.length) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[12.5px] font-semibold text-bz-teal">Replace each role's description with these results</p>
+        {rv.experience.map((e) => (
+          <Copyable key={e.role} label={e.role} text={e.bullets.map((b) => `• ${b}`).join("\n")}>
+            <ul className="mt-1 space-y-1 text-[14.5px] list-disc pl-5">{e.bullets.map((b) => <li key={b}>{b}</li>)}</ul>
+          </Copyable>
+        ))}
+      </div>
+    );
+  }
+  if (k === "featured" && rv.featured?.length) {
+    return (
+      <div><p className="text-[12.5px] font-semibold text-bz-teal mb-2">Pin these, in this order</p>
+        <ol className="space-y-1.5 text-[14.5px] list-decimal pl-5">{rv.featured.map((x) => <li key={x}>{x}</li>)}</ol></div>
+    );
+  }
+  if (k === "skills" && rv.skills?.length) {
+    return (
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2"><p className="text-[12.5px] font-semibold text-bz-teal">Your top skills, in this order</p><CopyBtn text={rv.skills.join(", ")} /></div>
+        <div className="flex flex-wrap gap-1.5">{rv.skills.map((x) => <Chip key={x}>{x}</Chip>)}</div>
+      </div>
+    );
+  }
+  return null;
+}
+
+function AboutText({ text: t }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-2"><p className="text-[12.5px] font-semibold text-bz-teal">Your new About section</p><CopyBtn text={t} /></div>
+      <div className={`relative rounded-bzcard border border-bz-line bg-bz-panel p-3.5 ${open ? "" : "max-h-[168px] overflow-hidden"}`}>
+        <Para text={t} className="text-[14.5px]" />
+        {!open && <span aria-hidden className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-bz-panel to-transparent" />}
+      </div>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="text-[13px] font-bold text-bz-gold min-h-[36px]" data-testid="li-about-more">{open ? "Show less" : "Read the whole About section"}</button>
+      <p className="text-[12px] text-bz-muted">Put your own figures where you see [number] or [result]. We never invent your results.</p>
+    </div>
+  );
+}
+
+const doneKey = (r) => `li-done:${r.id || r.at}`;
+function useDone(r) {
+  const [done, setDone] = useState(() => { try { return JSON.parse(localStorage.getItem(doneKey(r)) || "[]"); } catch { return []; } });
+  const toggle = (k) => setDone((d) => {
+    const next = d.includes(k) ? d.filter((x) => x !== k) : [...d, k];
+    try { localStorage.setItem(doneKey(r), JSON.stringify(next)); } catch { /* private window: ticks last for this visit */ }
+    return next;
+  });
+  return [done, toggle];
+}
+
+function ChangeItem({ n, s, rv, done, onToggle, open, onOpen }) {
+  const [word, tone] = STATUS[s.status] || STATUS.improve;
+  const why = s.why || (s.key === "headline" ? rv.headline_problem : "");
+  const now = s.now || (s.key === "headline" ? rv.read?.headline : "");
+  return (
+    <li className={`rounded-bzcard border ${open ? "border-bz-line-strong bg-bz-card" : "border-bz-line bg-bz-card"}`} data-testid={`li-sec-${s.key}`}>
+      <div className="flex items-start gap-3 p-3.5 sm:p-4">
+        <input type="checkbox" checked={done} onChange={onToggle} aria-label={`${s.label}: done`} className="mt-1 w-5 h-5 shrink-0 accent-[rgb(29_78_216)]" data-testid={`li-done-${s.key}`} />
+        <button type="button" onClick={onOpen} aria-expanded={open} className="min-w-0 flex-1 text-left">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[12.5px] font-semibold text-bz-muted tabular">{n}.</span>
+            <span className={`font-bold text-[15.5px] ${done ? "line-through text-bz-muted decoration-1" : ""}`}>{s.label}</span>
+            <Chip tone={done ? "gold" : tone}>{done ? "Done" : word}</Chip>
+          </span>
+          {(s.fix || DEFAULT_FIX[s.key]) && <span className={`block mt-1 text-[14.5px] ${done ? "text-bz-muted" : ""}`}>{s.fix || DEFAULT_FIX[s.key]}</span>}
+          <span className="block mt-1 text-[13px] font-bold text-bz-gold">{open ? "Hide details" : "Show what to change"}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="px-3.5 sm:px-4 pb-4 sm:pl-12 space-y-3" data-testid={`li-sec-${s.key}-detail`}>
+          {(now || why) && (
+            <div className="rounded-bzcard bg-bz-panel border border-bz-line p-3 text-[14px] space-y-1">
+              {now && <p><span className="font-semibold">Now: </span><span className="text-bz-muted">“{now}”</span></p>}
+              {why && <p><span className="font-semibold">Why it costs you: </span>{why}</p>}
+            </div>
+          )}
+          <ReadyText k={s.key} rv={rv} />
+        </div>
+      )}
+    </li>
+  );
+}
+
 function ReviewResult({ r, canAgain, onAgain }) {
   const rv = r;
+  const byKey = Object.fromEntries((rv.sections || []).map((s) => [s.key, s]));
+  const hasText = { headline: rv.headlines?.length, about: rv.about, banner: rv.banner, experience: rv.experience?.length, featured: rv.featured?.length, skills: rv.skills?.length };
+  // a change: a section that needs work, or one not in the screenshots that still comes with ready text to use
+  const changes = ORDER.map((k) => byKey[k] || (hasText[k] ? { key: k, label: LABELS[k], status: "improve", now: "", why: "", fix: DEFAULT_FIX[k] } : null))
+    .filter((s) => s && (s.status === "improve" || s.status === "missing" || (s.status === "not_shown" && hasText[s.key])));
+  const working = (rv.sections || []).filter((s) => s.status === "strong");
+  const unseen = (rv.sections || []).filter((s) => s.status === "not_shown" && !hasText[s.key]);
+  const [done, toggle] = useDone(r);
+  const doneN = changes.filter((s) => done.includes(s.key)).length;
+  const [open, setOpen] = useState(() => changes.find((s) => !done.includes(s.key))?.key || null);
   return (
     <div className="space-y-4" data-testid="li-review">
       <AiFrame title="Through your client's eyes" className="rise-in">
         <div className="flex flex-col sm:flex-row gap-5 sm:items-center">
-          <ScoreRing value={rv.score} max={100} size={128} label="Client fit" sub="client fit, out of 100" ai />
+          <ScoreRing value={rv.score} max={100} size={112} label="Client fit" sub="client fit, out of 100" ai />
           <div className="min-w-0 flex-1">
             <p className="text-[12.5px] text-bz-muted mb-1">How {rv.target} would see you</p>
-            <blockquote className="font-display text-[20px] sm:text-[22px] leading-snug text-bz-ink">
+            <blockquote className="font-display text-[18px] sm:text-[20px] leading-snug text-bz-ink">
               <Quote className="inline w-4 h-4 text-bz-teal -mt-2 mr-1" aria-hidden />{rv.client_view}
             </blockquote>
             {rv.verdict && <p className="mt-3 text-[15px] font-semibold">{rv.verdict}</p>}
           </div>
         </div>
         {rv.read?.open_to_work && <p className="mt-4 text-[14px] text-bz-miss font-semibold">Your profile shows “Open to work”. To a client that reads as job hunting, not consulting. Turn it off or set it to recruiters only.</p>}
+        {rv.quick_wins?.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-bz-line" data-testid="li-quick-wins">
+            <p className="text-[13px] font-semibold mb-2">If you only have ten minutes, do these</p>
+            <ol className="space-y-1.5 text-[14.5px] list-decimal pl-5">{rv.quick_wins.map((w) => <li key={w}>{w}</li>)}</ol>
+          </div>
+        )}
       </AiFrame>
 
-      {rv.quick_wins?.length > 0 && (
-        <Card>
-          <Label>Do these three today</Label>
-          <div className="space-y-3">{rv.quick_wins.map((w, i) => <Step key={w} n={i + 1} title={w} />)}</div>
-        </Card>
-      )}
-
-      <Card>
-        <Label>Section by section</Label>
-        <ul className="divide-y divide-bz-line">
-          {rv.sections.map((s) => {
-            const [word, tone] = STATUS[s.status] || STATUS.improve;
-            return (
-              <li key={s.key} className="py-3.5 first:pt-0 last:pb-0" data-testid={`li-sec-${s.key}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-bold text-[15px]">{s.label}</p><Chip tone={tone}>{word}</Chip>
-                </div>
-                {s.now && <p className="mt-1 text-[13.5px] text-bz-muted">Now: “{s.now}”</p>}
-                {s.why && <p className="mt-1 text-[14.5px]">{s.why}</p>}
-                {s.fix && s.status !== "strong" && <p className="mt-1 text-[14.5px]"><span className="font-semibold text-bz-teal">Change: </span>{s.fix}</p>}
-              </li>
-            );
-          })}
-        </ul>
+      <Card data-testid="li-changes">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <Label className="mb-0">Your changes, one by one</Label>
+          {changes.length > 0 && <span className="text-[13px] text-bz-muted tabular" data-testid="li-changes-progress">{doneN} of {changes.length} done</span>}
+        </div>
+        {changes.length > 0 ? (
+          <>
+            <p className="text-[13.5px] text-bz-muted mt-1">Open a change to see what your profile says now and the text to paste. Tick it when it's done on LinkedIn.</p>
+            <Meter value={(doneN / changes.length) * 100} className="mt-3" label="Changes done" />
+            <ol className="mt-4 space-y-2.5">
+              {changes.map((s, i) => (
+                <ChangeItem key={s.key} n={i + 1} s={s} rv={rv} done={done.includes(s.key)} onToggle={() => toggle(s.key)}
+                  open={open === s.key} onOpen={() => setOpen(open === s.key ? null : s.key)} />
+              ))}
+            </ol>
+          </>
+        ) : <p className="text-[14.5px] mt-2">Nothing to change. Your profile already speaks to this client.</p>}
+        {(working.length > 0 || unseen.length > 0) && (
+          <div className="mt-5 pt-4 border-t border-bz-line grid sm:grid-cols-2 gap-4 text-[14px]">
+            {working.length > 0 && (
+              <div data-testid="li-working">
+                <p className="font-semibold mb-1.5">Already working: leave these</p>
+                <ul className="space-y-1">{working.map((s) => <li key={s.key} className="flex gap-1.5"><Check className="w-4 h-4 text-bz-gold shrink-0 mt-0.5" aria-hidden /><span><b className="font-semibold">{s.label}</b>{s.why ? <span className="text-bz-muted">: {s.why}</span> : null}</span></li>)}</ul>
+              </div>
+            )}
+            {unseen.length > 0 && (
+              <div data-testid="li-unseen">
+                <p className="font-semibold mb-1.5">Not in your screenshots: check these yourself</p>
+                <ul className="space-y-1">{unseen.map((s) => <li key={s.key}><b className="font-semibold">{s.label}</b>{s.fix ? <span className="text-bz-muted">: {s.fix}</span> : null}</li>)}</ul>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
-      <AiFrame title="Your new headline">
-        {rv.read?.headline && <p className="text-[13.5px] text-bz-muted">Now: “{rv.read.headline}”</p>}
-        {rv.headline_problem && <p className="mt-1 text-[14.5px]">{rv.headline_problem}</p>}
-        <div className="space-y-2 mt-3">
-          {rv.headlines.map((h) => (
-            <Copyable key={h.text} label={h.angle ? `${h.angle} angle` : null} text={h.text}>
-              <p className="text-[15px] font-bold">{h.text}</p>
-              {h.why && <p className="text-[13px] text-bz-muted mt-0.5">{h.why}</p>}
-            </Copyable>
-          ))}
-        </div>
-      </AiFrame>
-
-      <AiFrame title="About section, rewritten for your client" right={<CopyBtn text={rv.about} />}>
-        <Para text={rv.about} className="text-[14.5px]" />
-        <p className="text-[12px] text-bz-muted mt-3">Put your own figures where you see [number] or [result]. We never invent your results.</p>
-      </AiFrame>
-
-      {rv.experience?.length > 0 && (
-        <AiFrame title="Experience: results, not duties">
-          <div className="space-y-3">
-            {rv.experience.map((e) => (
-              <Copyable key={e.role} label={e.role} text={e.bullets.map((b) => `• ${b}`).join("\n")}>
-                <ul className="mt-1 space-y-1 text-[14.5px] list-disc pl-5">{e.bullets.map((b) => <li key={b}>{b}</li>)}</ul>
-              </Copyable>
-            ))}
-          </div>
-        </AiFrame>
-      )}
-
-      {(rv.featured?.length > 0 || rv.banner || rv.skills?.length > 0) && (
-        <Card>
-          <div className="grid sm:grid-cols-2 gap-5">
-            {rv.featured?.length > 0 && (
-              <div><Label>Pin these in Featured</Label><ul className="space-y-1.5 text-[14.5px] list-disc pl-5">{rv.featured.map((f) => <li key={f}>{f}</li>)}</ul></div>
-            )}
-            <div className="space-y-4">
-              {rv.banner && <div><Label>Banner text</Label><Copyable text={rv.banner}><p className="font-bold">{rv.banner}</p></Copyable></div>}
-              {rv.skills?.length > 0 && <div><Label>Top skills, in this order</Label><div className="flex flex-wrap gap-1.5">{rv.skills.map((s) => <Chip key={s}>{s}</Chip>)}</div></div>}
-            </div>
-          </div>
-        </Card>
-      )}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         {canAgain && <Button variant="secondary" onClick={onAgain} data-testid="li-review-again">Review again with new screenshots</Button>}
         <span className="text-[12.5px] text-bz-muted">Reviewed {hdate(r.at)} from {r.images} screenshot{r.images === 1 ? "" : "s"}</span>

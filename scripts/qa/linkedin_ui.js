@@ -77,8 +77,25 @@ const err = (p) => p.locator('[role="alert"]').first().innerText().catch(() => '
     check('C1 the review shows', true);
     const secs = await p.locator('[data-testid^="li-sec-"]').count();
     check('C2 section by section is listed', secs >= 3, `sections=${secs}`);
+    // one clear list of changes: each section once, the first open with its text to paste, the rest closed
+    const order = await p.locator('[data-testid^="li-sec-"]:not([data-testid$="-detail"])').evaluateAll((els) => els.map((e) => e.dataset.testid.slice(7)));
+    check('C2a the changes are one list, headline first, each section once, the working photo not in it',
+      order[0] === 'headline' && new Set(order).size === order.length && !order.includes('photo') && order.includes('skills'), order.join(','));
+    check('C2b only the first change is open, with its headline options to paste',
+      (await p.locator('[data-testid$="-detail"]').count()) === 1 && (await p.getByTestId('li-sec-headline-detail').getByRole('button', { name: 'Copy' }).count()) >= 2);
+    check('C2c "Already working" lists the photo, apart from the changes', /Profile photo/.test(await p.getByTestId('li-working').innerText()));
+    check('C2d no section is repeated in separate cards (no "Section by section", no second headline card)',
+      !/Section by section|Your new headline|About section, rewritten/.test(await p.getByTestId('li-review').innerText()));
+    await p.getByTestId('li-sec-about').getByRole('button', { name: /Show what to change/ }).click();
+    check('C2e opening About closes the headline and shows the new About, shortened with "Read the whole"',
+      (await p.getByTestId('li-sec-about-detail').count()) === 1 && (await p.getByTestId('li-sec-headline-detail').count()) === 0 && (await p.getByTestId('li-about-more').isVisible()));
+    await p.getByTestId('li-done-banner').check();
+    check('C2f ticking a change marks it done and counts it', /1 of \d+ done/.test(await p.getByTestId('li-changes-progress').innerText())
+      && /Done/.test(await p.getByTestId('li-sec-banner').innerText()));
     await p.reload({ waitUntil: 'networkidle' });
     check('C3 the review is still there after a reload', (await p.getByTestId('li-review').count()) === 1);
+    check('C3a the ticks stay after a reload, and the first change not yet done opens', (await p.getByTestId('li-done-banner').isChecked())
+      && /1 of \d+ done/.test(await p.getByTestId('li-changes-progress').innerText()) && (await p.getByTestId('li-sec-headline-detail').count()) === 1);
     const head = (await (await p.request.get(B + '/api/linkedin-review')).json()).review.headlines[0].text;
     await p.locator('[data-testid="li-review"]').getByRole('button', { name: 'Copy' }).nth(0).click();
     const clip = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
