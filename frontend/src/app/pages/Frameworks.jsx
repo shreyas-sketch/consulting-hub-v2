@@ -5,13 +5,14 @@
 // written by the member, editable, checked against the framework's rules, then a proposal.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Check, ChevronRight, ExternalLink, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Download, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiError } from "@/lib/api";
 import { inr } from "@/lib/format";
 import { useFramework, useFrameworkProposal, useFrameworks, useSaveFramework, useSaveOwn, useSuggestCase } from "@/services/frameworks";
 import Markdown, { CopyButton } from "../components/Markdown";
 import ProposalDoc from "../components/ProposalDoc";
+import { downloadProposalPdf, downloadTextPdf } from "@/lib/proposalPdf";
 import { BackLink, UsageLine } from "../components/common";
 import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, LinkButton, Loadable, Note, PageHeader, Segmented, Textarea, Thinking } from "../components/ui";
 
@@ -550,38 +551,12 @@ function Marking({ mine, akshat }) {
   );
 }
 
-// Print only the proposal: the document goes into a hidden frame of its own with the app's styles, so nothing else
-// on the page takes space, and prints one designed page per A4 sheet (index.css: .pd-* print rules).
-export function proposalPrintHtml(el) {
-  return `<!doctype html><html><head><base href="${window.location.origin}/">${document.head.innerHTML}<title>Proposal</title></head>`
-    + `<body class="pd-printing">${el.outerHTML}</body></html>`;
-}
-
-function printProposal() {
-  const el = document.querySelector("[data-testid='pd-doc']");
-  if (!el) { window.print(); return; }
-  const f = document.createElement("iframe");
-  f.setAttribute("aria-hidden", "true");
-  f.style.cssText = "position:fixed;right:0;bottom:0;width:794px;height:10px;border:0;opacity:0;pointer-events:none";
-  document.body.appendChild(f);
-  const w = f.contentWindow;
-  w.document.open();
-  w.document.write(proposalPrintHtml(el));
-  w.document.close();
-  const go = () => {
-    w.focus();
-    w.print();
-    setTimeout(() => f.remove(), 2000);
-  };
-  // wait for the styles and fonts in the frame, then print
-  (w.document.fonts?.ready || Promise.resolve()).then(() => setTimeout(go, 300));
-}
-
 function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
   const { plan, refreshMe } = useAuth();
   const usage = plan?.limits?.fw_proposal;
   const canRun = !usage || usage.limit == null || usage.used < usage.limit;
   const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
   const gen = useFrameworkProposal(fkey, { own, onDone: () => refreshMe() });
   const p = mine.proposal;
   const run = () => { setErr(""); gen.mutate(undefined, { onError: (e) => { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } }); };
@@ -598,6 +573,17 @@ function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
       </Card>
     );
   }
+  const download = async () => {
+    setErr(""); setSaving(true);
+    try {
+      const el = p.v === 2 ? document.querySelector(`[data-testid='fw-proposal'] [data-testid='pd-doc']`) : null;
+      if (el) await downloadProposalPdf(el, p); else await downloadTextPdf(p.markdown, p);
+    } catch {
+      setErr("We couldn't make the PDF just now. Try again, or use Copy and paste it into a document.");
+    } finally {
+      setSaving(false);
+    }
+  };
   const note = `${own ? "A draft proposal for your own client, built on public information." : "A practice proposal for a workshop case."} Check the numbers before you use it with a real client.`;
   return (
     <div className="space-y-3">
@@ -619,7 +605,7 @@ function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
         </AiFrame>
       )}
       <div className="flex flex-col sm:flex-row gap-2 no-print">
-        <Button variant="secondary" onClick={p.v === 2 ? printProposal : () => window.print()} data-testid="fw-print">Print or save as PDF</Button>
+        <Button onClick={download} loading={saving} data-testid="fw-download">{!saving && <Download className="w-4 h-4" aria-hidden />}{saving ? "Preparing the PDF…" : "Download proposal (PDF)"}</Button>
         {canRun && !noAgain && <Button variant="secondary" onClick={run} data-testid="fw-proposal-again">Generate again</Button>}
         <UsageLine usage={usage} what="framework proposals" className="sm:ml-auto self-center" />
       </div>

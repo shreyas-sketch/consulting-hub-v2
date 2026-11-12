@@ -10,7 +10,7 @@ const vis = async (p, id) => (await p.getByTestId(id).count()) > 0 && p.getByTes
 
 async function run(br, view, vp) {
   await scenario('ok');
-  const ctx = await br.newContext({ viewport: vp, permissions: ['clipboard-read', 'clipboard-write'] });
+  const ctx = await br.newContext({ viewport: vp, permissions: ['clipboard-read', 'clipboard-write'], acceptDownloads: true });
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', (e) => errs.push(e.message));
@@ -110,6 +110,12 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
   check(V('F3: the verdict page marks "You are here" on Zone 3'), /Zone 3/.test(await p.getByTestId('pd-page-verdict').locator('[data-testid="pd-here"]').locator('xpath=..').innerText()));
   check(V('F3: the 90-day plan has 3 phases and the impact chart is drawn'), (await p.locator('[data-testid^="pd-phase-"]').count()) === 3 && (await vis(p, 'pd-impact')));
+  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 90000 }), p.getByTestId('fw-download').click()]);
+  const pdfPath = `${OUT}/proposal-${view}.pdf`; await dl.saveAs(pdfPath);
+  const head = require('fs').readFileSync(pdfPath).subarray(0, 5).toString();
+  const pagesIn = (require('fs').readFileSync(pdfPath).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+  check(V('F3: "Download proposal (PDF)" saves a PDF of the proposal only, one page per designed page'),
+    head === '%PDF-' && /^Proposal - .*\.pdf$/.test(dl.suggestedFilename()) && pagesIn === (await p.locator('.pd-page').count()), `${pagesIn} pages · ${dl.suggestedFilename()}`);
   check(V('F3: the proposal pages fit the screen (no sideways scroll)'), (await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) === 0);
   check(V('F3: free account, 3 of 6 proposals used: says so'), /3 of 6 free framework proposals used/.test(await p.locator('body').innerText()));
 

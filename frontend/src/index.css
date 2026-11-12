@@ -261,7 +261,7 @@ input[type="range"] {
               radial-gradient(40% 30% at 100% 0%, rgb(127 224 212 / .25), transparent 70%),
               radial-gradient(55% 40% at 50% 60%, rgb(47 63 217 / .28), transparent 75%); }
 .pd-cobalt { background: linear-gradient(160deg, #10166a 0%, #1d27b8 45%, #0b0e2c 100%); color: #eef0ff; }
-.pd-light { background: var(--pd-paper); color: var(--pd-text); border: 1px solid #e3e6ef; }
+.pd-light { background: #ffffff; color: #2a2c38; border: 1px solid #e3e6ef; }
 .pd-grid::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .35;
   background-image: linear-gradient(rgb(255 255 255 / .06) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / .06) 1px, transparent 1px);
   background-size: 48px 48px; }
@@ -294,3 +294,10 @@ input[type="range"] {
   .pd-doc .pd-dark, .pd-doc .pd-cobalt { color: #e8eaf4 !important; }
   .pd-doc h1, .pd-doc h2 { color: inherit !important; }
 }
+/* Download as PDF (lib/proposalPdf.js): the document is laid out in a hidden A4-wide frame (794 × 1123 px) and each
+   page captured as an image, so the file looks the same from a phone or a desktop. Same sizing as print. */
+body.pd-capture { margin: 0; background: #fff; }
+body.pd-capture .pd-doc .pd-page { width: 794px; height: 1123px; margin: 0 !important; border-radius: 0; border: 0;
+  overflow: hidden; display: flex; flex-direction: column; }
+body.pd-capture .pd-doc .pd-fill { min-height: 0 !important; height: 1013px; }
+body.pd-capture .pd-doc .pd-bottom { margin-top: auto !important; flex: 1 0 auto; }
