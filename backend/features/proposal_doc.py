@@ -44,19 +44,19 @@ SHAPE = (
     "reach. Healthy conversion.'); verdict_text: 2 sentences; points: exactly 3 short findings, each title (e.g. 'Not "
     "the product', 'It's reach') and text.\n"
     "lever: headline and accent (e.g. 'Reach is' / 'the lever.'), text (2 sentences), chain: 3 or 4 steps that walk "
-    "the client's own numbers to the result, each value, label and op (the operation to the next step, e.g. '× 2%'; "
-    "'' on the last), insight (one line, e.g. 'Every 50 new people who see your offer is worth about ₹30,000.') and "
+    "the client's own numbers to the result, each value (short), label and op (the operation to the next step, at most 12 characters, "
+    "e.g. '× 2%'; '' on the last), insight (one line, e.g. 'Every 50 new people who see your offer is worth about ₹30,000.') and "
     "insight_basis (how that number was worked out).\n"
     "4. WHY NOTHING MOVED. why.intro (1-2 sentences); items: one per thing tried (or, if nothing was tried, the 2-3 "
     "moves an owner would usually make), each title, aimed_at (a few words), what_it_did, why_not (why the number "
     "did not move); bridge: one line, e.g. 'The fix isn't more effort. It's effort pointed at reach.'\n"
     "5. WHERE TO FOCUS. focus.headline and accent (one sentence split in two); text (one line); leave: 3-4 things to "
-    "leave as they are; invest: the one thing to put money and time into (1-2 words); invest_text (one line); "
+    "leave as they are (2-5 words each); invest: the one thing to put money and time into (1-2 words); invest_text (one line); "
     "channels: exactly 3, each name and text.\n"
-    "6. YOUR 90-DAY PLAN. plan.intro (one line); metric (what the plan moves, e.g. 'Target monthly reach'); baseline "
+    "6. YOUR 90-DAY PLAN. plan.intro (one line); metric (what the plan moves, 2-4 words, e.g. 'Target monthly reach'); baseline "
     "(today's level, e.g. 'Today: ~250 people a month see your offer'); phases: exactly 3 (Days 1-30, Days 31-60, "
     "Days 61-90), each days, name (1-2 words), headline (one line), detail (1-2 sentences), why (why it works, one "
-    "sentence) and target (short, e.g. '~400').\n"
+    "sentence) and target (at most 8 characters, e.g. '~400', '₹1.8Cr').\n"
     "7. WHAT IT'S WORTH. impact.headline and accent (e.g. 'What reach' / 'is worth.'); text (1-2 sentences); "
     "main_label and cautious_label (the two cases, e.g. 'If conversion holds at 2%' / 'If it dips to 1.5%'); "
     "scenarios: 3 (today first), each label, sub (a few words) and value and cautious (whole rupees a year; cautious "
@@ -87,6 +87,15 @@ SHAPE = (
 )
 
 
+def _t(v: Any, n: int) -> str:
+    """One line of text cut at a word near n, never mid-word."""
+    v = text(v, 100_000)
+    if len(v) <= n:
+        return v
+    cut = v[:n].rsplit(" ", 1)[0].rstrip(" ,;:-(")
+    return cut if len(cut) >= n // 2 else v[:n]
+
+
 def _num(v: Any) -> Optional[int]:
     try:
         n = int(round(float(str(v).replace(",", "").replace("₹", "").strip())))
@@ -101,7 +110,7 @@ def _rows(v: Any, fields: dict[str, int], n: int, need: str) -> list[dict]:
     for x in as_list(v):
         if not isinstance(x, dict):
             continue
-        row = {f: text(x.get(f), m) for f, m in fields.items()}
+        row = {f: _t(x.get(f), m) for f, m in fields.items()}
         if row.get(need):
             out.append(row)
         if len(out) >= n:
@@ -111,7 +120,7 @@ def _rows(v: Any, fields: dict[str, int], n: int, need: str) -> list[dict]:
 
 def _split(v: Any, fields: dict[str, int]) -> dict:
     d = as_dict(v)
-    return {f: text(d.get(f), m) for f, m in fields.items()}
+    return {f: _t(d.get(f), m) for f, m in fields.items()}
 
 
 def clean(raw: Any) -> dict:
@@ -120,33 +129,33 @@ def clean(raw: Any) -> dict:
     dg, lv, wy, fc, pl, im = (as_dict(r.get(k)) for k in ("diagnosis", "lever", "why", "focus", "plan", "impact"))
     scen = []
     for s in as_list(im.get("scenarios"))[:4]:
-        if isinstance(s, dict) and text(s.get("label"), 40) and _num(s.get("value")):
-            scen.append({"label": text(s.get("label"), 40), "sub": text(s.get("sub"), 80),
+        if isinstance(s, dict) and _t(s.get("label"), 40) and _num(s.get("value")):
+            scen.append({"label": _t(s.get("label"), 40), "sub": _t(s.get("sub"), 80),
                          "value": _num(s.get("value")), "cautious": _num(s.get("cautious"))})
     p = {
         "v": VERSION,
-        "tagline": text(r.get("tagline"), 140),
-        "client_descriptor": text(r.get("client_descriptor"), 80),
+        "tagline": _t(r.get("tagline"), 140),
+        "client_descriptor": _t(r.get("client_descriptor"), 80),
         "hook": _split(r.get("hook"), {"quote_start": 120, "quote_end": 120}),
-        "situation": text(r.get("situation"), 700),
+        "situation": _t(r.get("situation"), 700),
         "key_facts": _rows(r.get("key_facts"), {"value": 16, "label": 80}, 3, "value"),
         "tried": _rows(r.get("tried"), {"title": 40, "detail": 140, "result": 60}, 3, "title"),
         "reframe": _split(r.get("reframe"), {"muted": 120, "headline": 120, "accent": 120}),
-        "problem": text(r.get("problem"), 500),
+        "problem": _t(r.get("problem"), 500),
         "possibilities": _rows(r.get("possibilities"), {"tag": 24, "statement": 120}, 3, "statement"),
         "diagnosis": {**_split(dg, {"headline": 60, "accent": 60, "note": 240, "verdict": 30, "verdict_line": 120,
                                     "verdict_text": 400}),
                       "questions": _rows(dg.get("questions"), {"question": 140, "value": 16, "unit": 40}, 3, "value"),
                       "points": _rows(dg.get("points"), {"title": 40, "text": 160}, 3, "title")},
         "lever": {**_split(lv, {"headline": 60, "accent": 60, "text": 400, "insight": 200, "insight_basis": 200}),
-                  "chain": _rows(lv.get("chain"), {"value": 16, "label": 80, "op": 16}, 4, "value")},
+                  "chain": _rows(lv.get("chain"), {"value": 16, "label": 80, "op": 24}, 4, "value")},
         "why": {**_split(wy, {"intro": 300, "bridge": 160}),
-                "items": _rows(wy.get("items"), {"title": 40, "aimed_at": 50, "what_it_did": 200, "why_not": 240}, 3,
+                "items": _rows(wy.get("items"), {"title": 40, "aimed_at": 60, "what_it_did": 200, "why_not": 240}, 3,
                                "title")},
         "focus": {**_split(fc, {"headline": 80, "accent": 80, "text": 240, "invest": 30, "invest_text": 200}),
-                  "leave": text_list(fc.get("leave"), 4, 40),
+                  "leave": [_t(x, 60) for x in text_list(fc.get("leave"), 4, 400)],
                   "channels": _rows(fc.get("channels"), {"name": 40, "text": 140}, 3, "name")},
-        "plan": {**_split(pl, {"intro": 200, "metric": 50, "baseline": 100}),
+        "plan": {**_split(pl, {"intro": 200, "metric": 70, "baseline": 120}),
                  "phases": _rows(pl.get("phases"), {"days": 20, "name": 30, "headline": 100, "detail": 260,
                                                     "why": 220, "target": 16}, 3, "name")},
         "impact": {**_split(im, {"headline": 60, "accent": 60, "text": 300, "main_label": 60, "cautious_label": 60,

@@ -499,3 +499,17 @@ def test_ai_case_text_is_cut_on_words():
                                   "situation": SITU})
     assert len(c["product"]) <= 160 and not c["product"].endswith((",", " ")) and long.startswith(c["product"])
     assert own_case_public("market-fit", c)["title"].startswith("Will a vendor")
+
+
+def test_proposal_text_is_cut_on_words_never_mid_word():
+    """Live run, 12 Nov: 'Your biggest customer's orders and relat', '(cumula'. Cuts now fall between words."""
+    from features import proposal_doc
+    raw = proposal_doc.fake("The Concentration Risk Rule", "Thaai Casting Limited", "read")
+    raw["focus"]["leave"] = ["Your biggest customer's orders and relationship, which stay as they are for now",
+                             "Your IATF 16949 certification and quality systems"]
+    raw["plan"]["metric"] = "Yearly value of new business quoted or won (cumulative across all three phases of the plan)"
+    p = proposal_doc.clean(raw)
+    for t in p["focus"]["leave"] + [p["plan"]["metric"]]:
+        assert t.split()[-1] in raw["focus"]["leave"][0] + raw["focus"]["leave"][1] + raw["plan"]["metric"]
+        assert not t.endswith(("relat", "qualit", "(cumula", "(", ","))
+    assert p["focus"]["leave"][1] == "Your IATF 16949 certification and quality systems"
