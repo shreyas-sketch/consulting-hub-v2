@@ -57,8 +57,13 @@ async function run(br, view, vp) {
   await p.getByTestId('niche-0').waitFor({ timeout: 30000 });
   const n = await p.locator('[data-testid^="niche-"]').count();
   check(V('Starting Point: three niche options'), n === 3, `options=${n}`);
+  const btn = await p.getByTestId('choose-1').evaluate((b) => ({ bg: getComputedStyle(b).backgroundColor, h: b.getBoundingClientRect().height }));
+  check(V('Starting Point: the top niche starts as chosen; the other two have a solid, full-size "Choose this niche" button'),
+    !/rgba\(0, 0, 0, 0\)|255, 255, 255/.test(btn.bg) && btn.h >= 48 && (await p.locator('[data-testid^="choose-"]').count()) === 2 && (await p.getByTestId('chosen-0').count()) === 1, `${btn.bg} ${btn.h}px`);
   await p.getByTestId('choose-1').click();
-  await p.waitForTimeout(500);
+  await p.getByTestId('chosen-1').waitFor();
+  check(V('Starting Point: after choosing, the card says so and the others offer "Choose this niche instead"'),
+    /Your chosen niche/.test(await p.getByTestId('chosen-1').innerText()) && /instead/.test(await p.getByTestId('choose-0').innerText()));
   await p.reload({ waitUntil: 'networkidle' });
   const chosen = await p.getByTestId('niche-1').innerText();
   check(V('Starting Point: the chosen option is kept after reload'), /chosen|your niche|selected/i.test(chosen), chosen.slice(0, 50).replace(/\n/g, ' '));
