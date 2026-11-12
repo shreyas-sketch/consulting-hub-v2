@@ -421,9 +421,13 @@ CASE_SHAPES = {
                    '{"company": "", "client": "", "product": "", "new_region": "", "situation": "", '
                    '"refs": [""], "estimates": ""}'),
     "concentration-risk": ("The company is considering an expansion (a plant, a city, a product line; use a real "
-                           "announced plan if there is one). Give 3 to 5 revenue sources (customers, segments or "
-                           "markets) with yearly amounts in rupees as whole numbers that add up to its real or "
-                           "estimated revenue; use any customer or segment split it publishes, otherwise estimate.",
+                           "announced plan if there is one). Pick a company the size this consultant could really "
+                           "win as a client: an owner-run business with about ₹2 crore to ₹30 crore of revenue a year "
+                           "in total, never a listed company, a national chain or a well-known brand. "
+                           "Give 3 to 5 revenue sources (customers, segments or markets) with yearly amounts in "
+                           "rupees as whole numbers (₹12 crore = 120000000; ₹45 lakh = 4500000) that add up to the "
+                           "revenue it publishes or that the search results show; never inflate it. Use any customer "
+                           "or segment split it publishes, otherwise estimate the split and say so in estimates.",
                            '{"company": "", "client": "", "situation": "", "sources": [{"name": "", "amount": 0}], '
                            '"refs": [""], "estimates": ""}'),
     "growth-compass": ("The company's growth has been flat or slow (use its published results if they show it). "
@@ -433,6 +437,16 @@ CASE_SHAPES = {
                        '{"company": "", "client": "", "situation": "", "reach_per_month": 0, "conversion_pct": 0, '
                        '"reach_level": "high|low", "conversion_level": "high|low", "refs": [""], "estimates": ""}'),
 }
+# A suggested client's total yearly revenue. The consultants here win owner-run firms, so a suggestion above ₹50 crore
+# is too big (one more try asks for a smaller one); a company the member names themselves may be up to ₹1,000 crore.
+CASE_MIN, CASE_MAX, CASE_MAX_NAMED = 10_00_000, 50_00_00_000, 1_000_00_00_000
+
+
+class CaseTooBig(llm.LLMError):
+    """A suggested company's revenue is above what this consultant could win: ask once more for a smaller one."""
+    def __init__(self, company: str, total: int):
+        super().__init__(f"framework case: {company} is too big ({total})")
+        self.company, self.total = company, total
 CASE_SEARCHES = 4                # find a company that fits, then read about it
 CASE_TIMEOUT_S = 120             # a search turn on the strong model: find, read, write
 
@@ -466,7 +480,7 @@ def _lead_lower(v: str) -> str:
     return v[0].lower() + v[1:] if first in ("A", "An", "The", "Its", "Their", "Our") else v
 
 
-def clean_case(key: str, raw: Any, found: Optional[dict] = None) -> dict:
+def clean_case(key: str, raw: Any, found: Optional[dict] = None, max_total: int = CASE_MAX) -> dict:
     """The AI's case → a valid case. `found` = the search tool's own results: only links it returned are kept, and a
     real-company case needs at least one."""
     r = as_dict(raw)
@@ -486,6 +500,11 @@ def clean_case(key: str, raw: Any, found: Optional[dict] = None) -> dict:
     if key == "concentration-risk":
         r["sources"] = [{"name": text(s.get("name"), 100), "amount": _num(s.get("amount")) or 0}
                         for s in as_list(r.get("sources"))[:6] if isinstance(s, dict)]
+        total = sum(s["amount"] for s in r["sources"])
+        if found is not None and total > max_total:
+            raise CaseTooBig(r.get("company") or "the company", total)
+        if found is not None and total < CASE_MIN:                         # a slip in units
+            raise llm.LLMError(f"framework case: revenue total too small ({total})")
     if key == "growth-compass":
         r["reach_per_month"] = _num(r.get("reach_per_month"))
         try:
@@ -559,7 +578,18 @@ async def suggest_real_case(key: str, k: dict, hint: str, avoid: list[str], queu
         prompt = "You must call the web_search tool before answering.\n\n" + prompt
     if not found or not raw:
         raise llm.LLMError(f"framework case: {'no search results' if not found else 'no JSON after searching'}")
-    return clean_case(key, raw, found)
+    return clean_case(key, raw, found, CASE_MAX_NAMED if hint else CASE_MAX)
+
+
+async def suggest_sized_case(key: str, k: dict, hint: str, avoid: list[str], queue_wait: float = 45) -> dict:
+    """suggest_real_case, with one more try when the company it found is bigger than this consultant could win."""
+    try:
+        return await suggest_real_case(key, k, hint, avoid, queue_wait)
+    except CaseTooBig as e:
+        log.info("framework case: %s too big (%s); asking for a smaller one", e.company, e.total)
+        crore = round(e.total / 1e7)
+        return await suggest_real_case(key, k, "", [*avoid, f"{e.company} (too big: ₹{crore} crore a year; pick a "
+                                                            "business under ₹30 crore)"], queue_wait)
 
 
 # ------------------------------------------------------------------ marking (server side, against Akshat's read) ----
@@ -830,7 +860,7 @@ async def own_suggest(key: str, body: Optional[SuggestIn] = None, user: dict = D
     avoid = list((prev or {}).get("suggested") or [])[-8:]      # "Suggest another" gives a different company
 
     async def work(plan: str):
-        c = await suggest_real_case(key, k, hint, avoid)
+        c = await suggest_sized_case(key, k, hint, avoid)
         await db().fw_responses.update_one(
             {"_id": f"{uid}:{key}:own"},
             {"$set": {"user_id": uid, "key": key, "own": True, "draft_case": c, "draft_at": utcnow()},

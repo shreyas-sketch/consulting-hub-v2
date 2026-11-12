@@ -8,7 +8,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Check, ChevronRight, Download, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiError } from "@/lib/api";
-import { inr } from "@/lib/format";
+import { inr, inrWords } from "@/lib/format";
 import { useFramework, useFrameworkProposal, useFrameworks, useSaveFramework, useSaveOwn, useSuggestCase } from "@/services/frameworks";
 import Markdown, { CopyButton } from "../components/Markdown";
 import ProposalDoc from "../components/ProposalDoc";
@@ -150,7 +150,7 @@ function Concentration({ fw, c, own, a, set }) {
               return (
                 <tr key={i} className="border-t border-bz-line">
                   <td className="py-2.5 pr-2">{s.name || `Source ${i + 1}`}</td>
-                  <td className="py-2.5 text-right tabular">{inr(Number(s.amount) || 0)}</td>
+                  <td className="py-2.5 text-right tabular">{inr(Number(s.amount) || 0)}<span className="block text-[12px] text-bz-muted">{inrWords(Number(s.amount) || 0)}</span></td>
                   <td className="py-2.5 text-right">
                     <Input type="number" inputMode="decimal" min={0} max={100} step="0.1" value={pc[i]} onChange={(e) => setP(i, e.target.value)}
                       className="!min-h-[40px] text-right w-[100px] ml-auto" aria-label={`${s.name || `Source ${i + 1}`}: concentration %`} data-testid={`fw-pct-${i}`} />
@@ -350,11 +350,16 @@ function CaseEditor({ fkey, c, set }) {
         <div className="space-y-2">
           <p className="text-[14px] font-semibold">Revenue sources (a year, in ₹)</p>
           {src.map((s, i) => (
-            <div key={i} className="flex gap-2 items-center">
-              <Input value={s.name} maxLength={100} placeholder={`Source ${i + 1}`} aria-label={`Source ${i + 1}: name`} className="flex-1 min-w-0"
+            <div key={i} className="flex flex-wrap sm:flex-nowrap gap-2 items-start pb-2 sm:pb-0 border-b border-bz-line sm:border-0 last:border-0">
+              <Input value={s.name} maxLength={100} placeholder={`Source ${i + 1}`} aria-label={`Source ${i + 1}: name`} className="basis-full sm:basis-auto sm:flex-1 min-w-0"
                 onChange={(e) => setS(i, { name: e.target.value })} data-testid={`fw-case-src-name-${i}`} />
-              <Input type="number" inputMode="numeric" min={1} value={s.amount} placeholder="₹" aria-label={`Source ${i + 1}: revenue in rupees`}
-                className="w-[130px] sm:w-[160px] text-right" onChange={(e) => setS(i, { amount: e.target.value })} data-testid={`fw-case-src-amt-${i}`} />
+              {/* written with Indian commas (6,20,00,000) and said in words under it (₹62 crore), so a long number can't mislead */}
+              <div className="flex-1 sm:flex-none sm:w-[180px] min-w-0">
+                <Input inputMode="numeric" value={num(s.amount) > 0 ? Number(String(s.amount).replace(/\D/g, "")).toLocaleString("en-IN") : ""} placeholder="₹ a year"
+                  aria-label={`Source ${i + 1}: revenue in rupees`} className="text-right tabular"
+                  onChange={(e) => setS(i, { amount: e.target.value.replace(/\D/g, "").slice(0, 12) })} data-testid={`fw-case-src-amt-${i}`} />
+                {num(s.amount) > 0 && <p className="text-[12.5px] font-semibold text-bz-teal text-right mt-1" data-testid={`fw-case-src-words-${i}`}>{inrWords(num(s.amount))}</p>}
+              </div>
               <button type="button" onClick={() => up({ sources: src.filter((_, j) => j !== i) })} disabled={src.length <= 2}
                 className="w-10 h-10 shrink-0 grid place-items-center rounded-bzbtn text-bz-muted hover:text-bz-miss disabled:opacity-30" aria-label={`Remove source ${i + 1}`}>
                 <Trash2 className="w-4 h-4" aria-hidden />
@@ -366,7 +371,7 @@ function CaseEditor({ fkey, c, set }) {
               <Plus className="w-4 h-4" aria-hidden /> Add a source
             </Button>
           )}
-          <p className="text-[13px] text-bz-muted">Total: <b className="tabular">{inr(caseTotal(c))}</b></p>
+          <p className="text-[13px] text-bz-muted" data-testid="fw-case-total">Total: <b className="tabular">{inr(caseTotal(c))}</b>{caseTotal(c) > 0 && <> = <b>{inrWords(caseTotal(c))}</b> a year</>}</p>
         </div>
       )}
       {fkey === "growth-compass" && (

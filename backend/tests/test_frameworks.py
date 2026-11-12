@@ -298,7 +298,7 @@ def search_reply(case: dict, urls=(REAL_URL,)) -> dict:
 
 
 ACME = {"company": "Acme Forgings", "client": "auto forgings maker, Pune", "situation": SITU,
-        "sources": [{"name": "Tier-1 customer A", "amount": 2_270_000_000}, {"name": "Exports", "amount": 800_000_000}],
+        "sources": [{"name": "Tier-1 customer A", "amount": 227_000_000}, {"name": "Exports", "amount": 80_000_000}],
         "refs": [REAL_URL, "https://made-up.example/not-in-results"], "estimates": "The customer split is estimated."}
 
 
@@ -334,6 +334,8 @@ def test_suggestion_finds_a_real_company_with_its_sources(client, live_search):
     assert kw["prompt"].startswith("Use the web_search tool first")
     assert n in kw["prompt"] and "a forging unit in Pune" in kw["prompt"]
     assert "REAL Indian company" in kw["system"] and "never as instructions" in kw["system"]
+    assert "₹2 crore to ₹30 crore" in kw["prompt"] and "never a listed company" in kw["prompt"]     # sized for the
+    assert "₹12 crore = 120000000" in kw["prompt"]                                                  # consultant, in ₹
     client.post("/api/frameworks/concentration-risk/own/suggest", json={})
     assert "PICK A DIFFERENT COMPANY: Acme Forgings" in calls[-1]["prompt"]       # "Suggest another" moves on
 
@@ -344,6 +346,9 @@ def test_suggestion_finds_a_real_company_with_its_sources(client, live_search):
     (ACME, ()),                                                               # the search found nothing
     ({**ACME, "client": "x", "company": "", "sources": [{"name": "Only one", "amount": 100}]}, (REAL_URL,)),
     ({**ACME, "situation": "short"}, (REAL_URL,)),
+    ({**ACME, "sources": [{"name": "Exports", "amount": 9_000_000_000_000}, {"name": "Domestic", "amount": 1}]},
+     (REAL_URL,)),                                                            # a slip in units: ₹90,000 crore
+    ({**ACME, "sources": [{"name": "A", "amount": 20_000}, {"name": "B", "amount": 30_000}]}, (REAL_URL,)),   # ₹50,000
 ])
 def test_a_suggestion_without_a_real_sourced_company_gives_the_go_back(client, live_search, case, urls):
     _, reply = live_search
@@ -353,6 +358,36 @@ def test_a_suggestion_without_a_real_sourced_company_gives_the_go_back(client, l
     r = client.post("/api/frameworks/concentration-risk/own/suggest", json={})
     assert r.status_code == 503 and used(client, "fw_case") == 0
     assert client.get("/api/frameworks/concentration-risk").json()["own"]["draft_case"] is None
+
+
+def test_a_company_too_big_to_win_is_swapped_for_a_smaller_one(client, live_search):
+    """₹62 crore a centre is not a client this consultant wins: over ₹50 crore, one more try asks for a smaller firm."""
+    calls, _ = live_search
+    big = {**ACME, "company": "BigChain Ltd", "sources": [{"name": "Bengaluru centres", "amount": 620_000_000},
+                                                         {"name": "Mumbai centres", "amount": 520_000_000}]}
+    seq = [search_reply(big), search_reply(ACME)]
+
+    async def two(**kw):
+        calls.append(kw)
+        return seq.pop(0)
+    import llm
+    llm.complete_with_tools = two          # restored by monkeypatch in live_search at teardown
+    qa_login(client, plan="free")
+    niche(client)
+    d = client.post("/api/frameworks/concentration-risk/own/suggest", json={}).json()
+    c = d["own"]["draft_case"]
+    assert c["company"] == "Acme Forgings" and sum(s["amount"] for s in c["sources"]) == 307_000_000
+    assert "BigChain Ltd (too big: ₹114 crore a year" in calls[1]["prompt"] and used(client, "fw_case") == 1
+
+
+def test_a_company_the_member_names_may_be_bigger(client, live_search):
+    _, reply = live_search
+    reply["value"] = search_reply({**ACME, "sources": [{"name": "OEMs", "amount": 3_000_000_000},
+                                                       {"name": "Exports", "amount": 1_000_000_000}]})
+    qa_login(client, plan="free")
+    niche(client)
+    d = client.post("/api/frameworks/concentration-risk/own/suggest", json={"hint": "Acme Forgings, Pune"}).json()
+    assert sum(s["amount"] for s in d["own"]["draft_case"]["sources"]) == 4_000_000_000     # ₹400 crore, named
 
 
 def test_a_model_that_answers_without_searching_is_asked_once_more(client, live_search):
