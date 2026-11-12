@@ -67,16 +67,16 @@ def test_three_frameworks_in_workshop_order_for_every_plan(client):
 
 @pytest.mark.parametrize("key,body", [
     ("market-fit", {"circles": {"price": NOKIA["circles"]["price"]}, "summary": NOKIA["summary"]}),     # one circle
-    ("market-fit", {**NOKIA, "summary": "short"}),
-    ("market-fit", {**NOKIA, "circles": {**NOKIA["circles"], "value": {"verdict": "fails", "why": "no"}}}),
+    ("market-fit", {**NOKIA, "summary": "  "}),
+    ("market-fit", {**NOKIA, "circles": {**NOKIA["circles"], "value": {"verdict": "fails", "why": " "}}}),
     ("market-fit", {**NOKIA, "circles": {**NOKIA["circles"], "value": {"verdict": "maybe", "why": "it is unclear really"}}}),
     ("concentration-risk", {**INTERIOR, "percents": [60, 40]}),
     ("concentration-risk", {**INTERIOR, "percents": [160, 30, 10]}),
     ("concentration-risk", {**INTERIOR, "recommendation": "think"}),
-    ("concentration-risk", {**INTERIOR, "reason": "wait"}),
+    ("concentration-risk", {**INTERIOR, "reason": ""}),
     ("concentration-risk", {**INTERIOR, "months": 0}),
     ("growth-compass", {**COACH, "zone": 5}),
-    ("growth-compass", {**COACH, "actions": ["one", "two long enough", "three long enough"]}),
+    ("growth-compass", {**COACH, "actions": ["", "two", "three"]}),
     ("growth-compass", {**COACH, "actions": ["Run a webinar every month"]}),
     ("growth-compass", {**COACH, "fix": "everything"}),
 ])
@@ -97,6 +97,19 @@ def test_right_answers_score_full_marks_and_show_akshats_read(client, key):
     assert g["correct"] is True and g["score"] == g["out_of"] and d["akshat"]["read"]
     row = next(x for x in client.get("/api/frameworks").json()["items"] if x["key"] == key)
     assert row["saved"] and row["score"] == row["out_of"] and not row["proposal"]
+
+
+@pytest.mark.parametrize("key,body", [
+    ("market-fit", {"circles": {"price": {"verdict": "works", "why": "Cheap"}, "value": {"verdict": "fails", "why": "No smartphones"},
+                                "availability": {"verdict": "works", "why": "Everywhere"}}, "summary": "Value failed"}),
+    ("concentration-risk", {**INTERIOR, "reason": "Too risky", "target_pct": 35.5}),
+    ("growth-compass", {**COACH, "actions": ["Webinars", "Ads", "SEO"]}),
+])
+def test_short_real_answers_are_saved(client, key, body):
+    """The page shows Save as soon as every step has an answer; the server must accept what it accepts."""
+    qa_login(client, plan="free")
+    r = client.put(f"/api/frameworks/{key}/response", json=body)
+    assert r.status_code == 200, r.text
 
 
 def test_wrong_answers_are_marked_point_by_point():

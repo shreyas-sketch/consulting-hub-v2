@@ -176,6 +176,11 @@ def _zone_for(pct: float) -> str:
 
 
 # ------------------------------------------------------------------ what the member submits ----
+# An answer counts as filled once it has any real text: the page shows Save as soon as every step has an answer, and
+# lists what is still empty. These must match `filled` in frontend/src/app/pages/Frameworks.jsx.
+FILLED = 2
+
+
 class Circle(BaseModel):
     verdict: Literal["works", "fails"]
     why: str = Field(..., max_length=400)
@@ -184,8 +189,8 @@ class Circle(BaseModel):
     @classmethod
     def _why(cls, v: str) -> str:
         v = " ".join(v.split())
-        if len(v) < 10:
-            raise ValueError("Say why in a sentence (at least 10 characters).")
+        if len(v) < FILLED:
+            raise ValueError("Say why for each circle.")
         return v
 
 
@@ -204,8 +209,8 @@ class MarketFitIn(BaseModel):
     @classmethod
     def _summary(cls, v: str) -> str:
         v = " ".join(v.split())
-        if len(v) < 20:
-            raise ValueError("Write your diagnosis in a sentence or two (at least 20 characters).")
+        if len(v) < FILLED:
+            raise ValueError("Write your diagnosis.")
         return v
 
 
@@ -213,8 +218,8 @@ class ConcentrationIn(BaseModel):
     percents: list[float] = Field(..., min_length=2, max_length=8)   # one per revenue source of the case
     recommendation: Literal["expand", "wait"]
     reason: str = Field(..., max_length=800)
-    target_pct: int = Field(..., ge=5, le=60)
-    months: int = Field(..., ge=1, le=36)
+    target_pct: float = Field(..., ge=1, le=100)
+    months: int = Field(..., ge=1, le=60)
 
     @field_validator("percents")
     @classmethod
@@ -227,8 +232,8 @@ class ConcentrationIn(BaseModel):
     @classmethod
     def _reason(cls, v: str) -> str:
         v = " ".join(v.split())
-        if len(v) < 20:
-            raise ValueError("Explain your recommendation in a sentence or two (at least 20 characters).")
+        if len(v) < FILLED:
+            raise ValueError("Say why you recommend it.")
         return v
 
 
@@ -241,8 +246,8 @@ class CompassIn(BaseModel):
     @classmethod
     def _acts(cls, v):
         v = [" ".join(a.split()) for a in v]
-        if any(len(a) < 8 for a in v):
-            raise ValueError("Write three actions, each a short sentence (at least 8 characters).")
+        if any(len(a) < FILLED for a in v):
+            raise ValueError("Write all three actions.")
         return [a[:240] for a in v]
 
 
@@ -253,7 +258,7 @@ SCHEMAS = {"market-fit": MarketFitIn, "concentration-risk": ConcentrationIn, "gr
 def _clean(v: str, lo: int, what: str) -> str:
     v = " ".join(str(v or "").split())
     if len(v) < lo:
-        raise ValueError(f"{what} (at least {lo} characters).")
+        raise ValueError(f"{what}.")
     return v
 
 
@@ -273,12 +278,12 @@ class _CaseBase(BaseModel):
     @field_validator("client")
     @classmethod
     def _client(cls, v):
-        return _clean(v, 3, "Name or describe the client")
+        return _clean(v, 2, "Name or describe the client")
 
     @field_validator("situation")
     @classmethod
     def _situation(cls, v):
-        return _clean(v, 40, "Describe the client's situation in two or three sentences")
+        return _clean(v, 10, "Describe the client's situation")
 
 
 class MarketFitCase(_CaseBase):
@@ -288,7 +293,7 @@ class MarketFitCase(_CaseBase):
     @field_validator("product")
     @classmethod
     def _product(cls, v):
-        return _clean(v, 3, "Say what the product or service is")
+        return _clean(v, 2, "Say what the product or service is")
 
     @field_validator("new_region")
     @classmethod
@@ -368,7 +373,7 @@ def grade_own(key: str, case: dict, a: dict) -> dict:
         top = max(rights)
         rec = "wait" if top > 40 else "expand"
         marks.append({"label": "Recommendation", "yours": a["recommendation"], "right": rec, "ok": a["recommendation"] == rec})
-        marks.append({"label": "Target for the biggest source", "yours": f"{a['target_pct']}%", "right": "40% or less",
+        marks.append({"label": "Target for the biggest source", "yours": f"{a['target_pct']:g}%", "right": "40% or less",
                       "ok": a["target_pct"] <= 40})
         biggest = case["sources"][rights.index(top)]["name"]
         read = (f"The biggest source, {biggest}, is {top:g}% of revenue: the {_zone_for(top)} zone. " +
@@ -551,7 +556,7 @@ def grade(key: str, a: dict) -> dict:
                           "right": f"{right:g}% ({_zone_for(right)})", "ok": abs(yours - right) <= 0.5})
         marks.append({"label": "Recommendation", "yours": a["recommendation"], "right": ak["recommendation"],
                       "ok": a["recommendation"] == ak["recommendation"]})
-        marks.append({"label": "Target for the biggest source", "yours": f"{a['target_pct']}%", "right": "40% or less (about 35%)",
+        marks.append({"label": "Target for the biggest source", "yours": f"{a['target_pct']:g}%", "right": "40% or less (about 35%)",
                       "ok": a["target_pct"] <= 40})
     else:
         z = next(z for z in fw["zones"] if z["zone"] == a["zone"])
@@ -584,7 +589,7 @@ def _answer_text(key: str, a: dict, case: Optional[dict] = None) -> str:
         names = [s["name"] for s in (case or FRAMEWORKS[key]["case"])["sources"]]
         rows = "\n".join(f"- {n}: {p:g}%" for n, p in zip(names, a["percents"]))
         return (f"{rows}\nRecommendation: {a['recommendation']}\nWhy: {a['reason']}\n"
-                f"Target: bring the biggest source to {a['target_pct']}% in {a['months']} months")
+                f"Target: bring the biggest source to {a['target_pct']:g}% in {a['months']} months")
     return (f"Zone: {a['zone']}\nWhat to fix: {a['fix']}\nActions for the next 90 days:\n"
             + "\n".join(f"- {x}" for x in a["actions"]))
 

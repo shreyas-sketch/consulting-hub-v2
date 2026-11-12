@@ -17,6 +17,11 @@ import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, LinkButton
 const ZONE_TONE = { green: "text-[#0f7a3d] bg-[#e7f6ec]", orange: "text-[#a35200] bg-[#fdf0e1]", red: "text-bz-miss bg-bz-miss-tint" };
 const zoneFor = (p) => (p <= 20 ? "green" : p <= 40 ? "orange" : "red");
 const words = (s) => (s || "").trim().length;
+// An answer counts once it has any real text (FILLED in backend/features/frameworks.py). Save shows as soon as every step
+// is answered; until then the page lists exactly what is still empty.
+const filled = (s) => words(s) >= 2;
+const num = (x) => (x === "" || x == null ? NaN : Number(x));
+const inRange = (x, lo, hi) => Number.isFinite(num(x)) && num(x) >= lo && num(x) <= hi;
 
 // ============================================================================ the list (also shown on Cases) ====
 export function FrameworkList({ compact = false }) {
@@ -108,8 +113,16 @@ function MarketFit({ fw, c, own, a, set }) {
     </div>
   );
 }
-const marketFitDone = (a) => ["price", "value", "availability"].every((k) => a.circles?.[k]?.verdict && words(a.circles[k].why) >= 10)
-  && words(a.summary) >= 20;
+const CIRCLE_NAMES = { price: "Price", value: "Value", availability: "Availability" };
+const marketFitMissing = (a) => {
+  const out = [];
+  for (const [k, n] of Object.entries(CIRCLE_NAMES)) {
+    if (!a.circles?.[k]?.verdict) out.push(`${n}: works or fails`);
+    if (!filled(a.circles?.[k]?.why)) out.push(`${n}: why`);
+  }
+  if (!filled(a.summary)) out.push("Your diagnosis");
+  return out;
+};
 
 // ============================================================================ framework 2: concentration ====
 const fitLen = (arr, n) => Array.from({ length: n }, (_, i) => (arr || [])[i] ?? "");
@@ -166,10 +179,16 @@ function Concentration({ fw, c, own, a, set }) {
     </div>
   );
 }
-const concentrationDone = (a, c) => {
-  const pc = fitLen(a.percents, (c.sources || []).length);
-  return pc.length >= 2 && pc.every((x) => x !== "" && Number.isFinite(parseFloat(x)))
-    && a.recommendation && words(a.reason) >= 20 && Number(a.target_pct) >= 5 && Number(a.months) >= 1;
+const concentrationMissing = (a, c) => {
+  const out = [];
+  fitLen(a.percents, (c.sources || []).length).forEach((x, i) => {
+    if (!inRange(x, 0, 100)) out.push(`Your % for ${c.sources[i]?.name || `source ${i + 1}`} (0 to 100)`);
+  });
+  if (!a.recommendation) out.push("Your recommendation: expand or wait");
+  if (!filled(a.reason)) out.push("Why you recommend it");
+  if (!inRange(a.target_pct, 1, 100)) out.push("The target % for the biggest source (1 to 100)");
+  if (!inRange(a.months, 1, 60) || !Number.isInteger(num(a.months))) out.push("Within how many months (1 to 60)");
+  return out;
 };
 
 // ============================================================================ framework 3: the compass ====
@@ -218,13 +237,19 @@ function Compass({ fw, c, own, a, set }) {
     </div>
   );
 }
-const compassDone = (a) => Number(a.zone) >= 1 && a.fix && [0, 1, 2].every((i) => words((a.actions || [])[i]) >= 8);
+const compassMissing = (a) => {
+  const out = [];
+  if (!(Number(a.zone) >= 1)) out.push("A zone on the compass");
+  if (!a.fix) out.push("What to work on");
+  [0, 1, 2].forEach((i) => { if (!filled((a.actions || [])[i])) out.push(`Action ${i + 1}`); });
+  return out;
+};
 
 const ACTIVITY = {
-  "market-fit": { El: MarketFit, done: marketFitDone, blank: () => ({ circles: {}, summary: "" }) },
-  "concentration-risk": { El: Concentration, done: concentrationDone,
+  "market-fit": { El: MarketFit, missing: marketFitMissing, blank: () => ({ circles: {}, summary: "" }) },
+  "concentration-risk": { El: Concentration, missing: concentrationMissing,
     blank: (c) => ({ percents: fitLen([], (c?.sources || []).length || 3), recommendation: "", reason: "", target_pct: "", months: "" }) },
-  "growth-compass": { El: Compass, done: compassDone, blank: () => ({ zone: 0, fix: "", actions: ["", "", ""] }) },
+  "growth-compass": { El: Compass, missing: compassMissing, blank: () => ({ zone: 0, fix: "", actions: ["", "", ""] }) },
 };
 const toPayload = (key, a, c) => (key === "concentration-risk"
   ? { ...a, percents: fitLen(a.percents, (c?.sources || []).length).map((x) => parseFloat(x)), target_pct: Number(a.target_pct), months: Number(a.months) }
@@ -239,12 +264,30 @@ const BLANK_CASE = {
 const CASE_FIELDS = ["client", "situation", "product", "new_region", "sources", "reach_per_month", "conversion_pct", "reach_level", "conversion_level",
   "company", "refs", "estimates"];
 const pickCase = (c) => Object.fromEntries(CASE_FIELDS.filter((f) => c && f in c).map((f) => [f, c[f]]));
-const caseOk = (key, c) => {
-  if (!c || words(c.client) < 3 || words(c.situation) < 40) return false;
-  if (key === "market-fit") return words(c.product) >= 3 && words(c.new_region) >= 2;
-  if (key === "concentration-risk") return (c.sources || []).length >= 2 && c.sources.every((s) => words(s.name) >= 2 && Number(s.amount) > 0);
-  const conv = parseFloat(c.conversion_pct);
-  return Number(c.reach_per_month) >= 1 && Number.isFinite(conv) && conv >= 0 && conv <= 100 && c.reach_level && c.conversion_level;
+// The same rules as the case schemas in backend/features/frameworks.py.
+const caseMissing = (key, c) => {
+  if (!c) return [];
+  const out = [];
+  if (!filled(c.client)) out.push("The client");
+  if (key === "market-fit") {
+    if (!filled(c.product)) out.push("The product or service");
+    if (!filled(c.new_region)) out.push("Where it wants to launch");
+  }
+  if (words(c.situation) < 10) out.push("The situation (a sentence or more)");
+  if (key === "concentration-risk") {
+    (c.sources || []).forEach((x, i) => {
+      if (!filled(x.name)) out.push(`Source ${i + 1}: name`);
+      if (!(num(x.amount) > 0)) out.push(`Source ${i + 1}: revenue in ₹`);
+    });
+    if ((c.sources || []).length < 2) out.push("At least two revenue sources");
+  }
+  if (key === "growth-compass") {
+    if (!(num(c.reach_per_month) >= 1)) out.push("Reach (people a month)");
+    if (!inRange(c.conversion_pct, 0, 100)) out.push("Conversion (0 to 100%)");
+    if (!c.reach_level) out.push("Research says reach is high or low");
+    if (!c.conversion_level) out.push("Research says conversion is high or low");
+  }
+  return out;
 };
 const casePayload = (key, c) => {
   const p = { company: "", refs: [], estimates: "", ...pickCase(c) };     // the same shape the server keeps
@@ -379,7 +422,7 @@ function OwnStart({ fkey, niche, onWrite, hasCase }) {
 function OwnCase({ d }) {
   const fw = d.framework;
   const key = fw.key;
-  const { El, done, blank } = ACTIVITY[key];
+  const { El, missing, blank } = ACTIVITY[key];
   const own = d.own || {};
   const savedCase = own.case ? pickCase(own.case) : null;
   const saved = own.mine?.answers;
@@ -394,8 +437,9 @@ function OwnCase({ d }) {
     if (draft) { setC(draft); setA(blank(draft)); setEditing(true); }
   }, [draftSig]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = useSaveOwn(key);
-  const okCase = caseOk(key, c);
-  const complete = okCase && done(a, c);
+  const caseTodo = caseMissing(key, c);
+  const okCase = !!c && caseTodo.length === 0;
+  const todo = okCase ? missing(a, c) : [];
   const payload = useMemo(() => (c ? { case: casePayload(key, c), answers: toPayload(key, a, c) } : null), [c, a, key]);
   const dirty = JSON.stringify(payload) !== JSON.stringify(savedCase && saved ? { case: casePayload(key, savedCase), answers: toPayload(key, saved, savedCase) } : null);
   const onSave = () => { setErr(""); save.mutate(payload, { onSuccess: () => setEditing(false), onError: (e) => setErr(apiError(e)) }); };
@@ -428,10 +472,10 @@ function OwnCase({ d }) {
               <div className="mt-4"><El fw={fw} c={c} own a={a} set={(v) => { setA(v); setErr(""); }} /></div>
             </>
           ) : (
-            <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-case-incomplete">Fill in the case above and the exercise appears.</p>
+            <ToDo items={caseTodo} title="Fill in the case and the exercise appears. Still empty:" testid="fw-case-incomplete" />
           )}
           <ErrorLine>{err}</ErrorLine>
-          <SaveRow complete={complete} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
+          {okCase && <SaveRow todo={todo} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />}
         </Card>
       )}
       {own.mine && caseChanged && (
@@ -543,24 +587,35 @@ function Proposal({ fkey, mine, own = false, noAgain = false }) {
   );
 }
 
-function SaveRow({ complete, dirty, saved, pending, onSave }) {
-  if (complete && (dirty || !saved)) {
+function ToDo({ items, title, testid }) {
+  return (
+    <div className="mt-5 rounded-bzcard border border-dashed border-bz-line-strong p-3.5" data-testid={testid}>
+      <p className="text-[13.5px] font-semibold">{title}</p>
+      <ul className="mt-1.5 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-[13.5px] text-bz-muted list-disc pl-5">
+        {items.map((m) => <li key={m}>{m}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function SaveRow({ todo, dirty, saved, pending, onSave }) {
+  if (todo.length) return <ToDo items={todo} title="Answer these and the Save button appears:" testid="fw-incomplete" />;
+  if (dirty || !saved) {
     return <Button className="w-full mt-5 rise-in" onClick={onSave} loading={pending} data-testid="fw-save">{saved ? "Save changes" : "Save my answer"}</Button>;
   }
-  if (!complete) return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-incomplete">Finish every step above and a Save button appears.</p>;
-  return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-saved-note">Saved. Change anything above to save again.</p>;
+  return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-saved-note"><Check className="inline w-4 h-4 -mt-0.5 text-bz-gold" aria-hidden /> Saved. Your marking and the proposal are below. Change anything above to save again.</p>;
 }
 
 function Activity({ d }) {
   const fw = d.framework;
   const c = fw.case;
-  const { El, done, blank } = ACTIVITY[fw.key];
+  const { El, missing, blank } = ACTIVITY[fw.key];
   const saved = d.mine?.answers;
   const [a, setA] = useState(saved || blank(c));
   const [err, setErr] = useState("");
   useEffect(() => { setA(saved || blank(c)); }, [fw.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = useSaveFramework(fw.key);
-  const complete = done(a, c);
+  const todo = missing(a, c);
   const dirty = useMemo(() => JSON.stringify(toPayload(fw.key, a, c)) !== JSON.stringify(saved ? toPayload(fw.key, saved, c) : null), [a, saved, fw.key, c]);
   const onSave = () => { setErr(""); save.mutate(toPayload(fw.key, a, c), { onError: (e) => setErr(apiError(e)) }); };
   return (
@@ -571,7 +626,7 @@ function Activity({ d }) {
         <p className="text-[14px] font-semibold mt-2">{c.task}</p>
         <div className="mt-5"><El fw={fw} c={c} own={false} a={a} set={(v) => { setA(v); setErr(""); }} /></div>
         <ErrorLine>{err}</ErrorLine>
-        <SaveRow complete={complete} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
+        <SaveRow todo={todo} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
       </Card>
       {d.mine && d.akshat && <Marking mine={d.mine} akshat={d.akshat} />}
       {d.mine && <Proposal fkey={fw.key} mine={d.mine} />}

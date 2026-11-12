@@ -30,14 +30,17 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-activity').waitFor();
   check(V('F1: Akshat\'s Amul example is shown'), /Amul/.test(await p.locator('body').innerText()));
   check(V('F1: no Save before the activity is done'), !(await vis(p, 'fw-save')) && (await vis(p, 'fw-incomplete')));
+  // short, ordinary answers, as members type them (a hidden minimum length once kept Save from ever appearing)
   await p.getByTestId('fw-price-fails').click();                         // a wrong call on purpose
-  await p.getByTestId('fw-price-why').fill('Smartphones from others were cheaper later.');
+  await p.getByTestId('fw-price-why').fill('Cheaper rivals');
   await p.getByTestId('fw-value-fails').click();
-  await p.getByTestId('fw-value-why').fill('Stayed on Symbian and was late to touchscreens.');
-  check(V('F1: still no Save with one circle left'), !(await vis(p, 'fw-save')));
+  await p.getByTestId('fw-value-why').fill('Symbian');
+  check(V('F1: still no Save with one circle left, and the list says what is missing'), !(await vis(p, 'fw-save'))
+    && /Availability: works or fails/.test(await p.getByTestId('fw-incomplete').innerText()) && /Your diagnosis/.test(await p.getByTestId('fw-incomplete').innerText())
+    && !/Price/.test(await p.getByTestId('fw-incomplete').innerText()));
   await p.getByTestId('fw-availability-works').click();
-  await p.getByTestId('fw-availability-why').fill('Sold everywhere, Tier 2 and Tier 3 towns too.');
-  await p.getByTestId('fw-summary').fill('The value circle came apart when smartphones arrived; Nokia did not move in time.');
+  await p.getByTestId('fw-availability-why').fill('Everywhere');
+  await p.getByTestId('fw-summary').fill('Value failed');
   check(V('F1: Save appears once every step is done'), await vis(p, 'fw-save'));
   await p.getByTestId('fw-save').click();
   await p.getByTestId('fw-marking').waitFor();
@@ -65,7 +68,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-pct-1').fill('30');
   await p.getByTestId('fw-pct-2').fill('10');
   await p.getByTestId('fw-rec-wait').click();
-  await p.getByTestId('fw-reason').fill('60% of revenue is one developer; if they leave, the firm loses most of its income overnight.');
+  await p.getByTestId('fw-reason').fill('Too risky');
   await p.getByTestId('fw-target').fill('35');
   check(V('F2: no Save until months are filled'), !(await vis(p, 'fw-save')));
   await p.getByTestId('fw-months').fill('12');
@@ -93,10 +96,10 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-zone-3').click();
   check(V('F3: tapping a zone selects it'), (await p.getByTestId('fw-zone-3').getAttribute('aria-pressed')) === 'true');
   await p.getByTestId('fw-fix-reach').click();
-  await p.getByTestId('fw-action-0').fill('Run a free monthly career-switch webinar');
-  await p.getByTestId('fw-action-1').fill('Partner with three HR communities');
-  check(V('F3: no Save with two actions'), !(await vis(p, 'fw-save')));
-  await p.getByTestId('fw-action-2').fill('Ask alumni for referrals with a small reward');
+  await p.getByTestId('fw-action-0').fill('Webinars');
+  await p.getByTestId('fw-action-1').fill('HR groups');
+  check(V('F3: no Save with two actions, the list asks for Action 3'), !(await vis(p, 'fw-save')) && /Action 3/.test(await p.getByTestId('fw-incomplete').innerText()));
+  await p.getByTestId('fw-action-2').fill('Referrals');
   await p.getByTestId('fw-save').click();
   await p.getByTestId('fw-marking').waitFor();
   check(V('F3: Zone 3 + fix the reach = 2 of 2'), /2 of 2/.test(await p.getByTestId('fw-score').innerText()));
