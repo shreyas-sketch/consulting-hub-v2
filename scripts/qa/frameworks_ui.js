@@ -31,12 +31,14 @@ async function run(br, view, vp) {
   check(V('F1: Akshat\'s Amul example is shown'), /Amul/.test(await p.locator('body').innerText()));
   check(V('F1: no Save before the activity is done'), !(await vis(p, 'fw-save')) && (await vis(p, 'fw-incomplete')));
   // short, ordinary answers, as members type them (a hidden minimum length once kept Save from ever appearing)
+  check(V('F1: each circle\'s question is answered Yes or No'),
+    (await p.getByTestId('fw-price-works').innerText()) === 'Yes' && (await p.getByTestId('fw-price-fails').innerText()) === 'No');
   await p.getByTestId('fw-price-fails').click();                         // a wrong call on purpose
   await p.getByTestId('fw-price-why').fill('Cheaper rivals');
   await p.getByTestId('fw-value-fails').click();
   await p.getByTestId('fw-value-why').fill('Symbian');
   check(V('F1: still no Save with one circle left, and the list says what is missing'), !(await vis(p, 'fw-save'))
-    && /Availability: works or fails/.test(await p.getByTestId('fw-incomplete').innerText()) && /Your diagnosis/.test(await p.getByTestId('fw-incomplete').innerText())
+    && /Availability: yes or no/.test(await p.getByTestId('fw-incomplete').innerText()) && /Your diagnosis/.test(await p.getByTestId('fw-incomplete').innerText())
     && !/Price/.test(await p.getByTestId('fw-incomplete').innerText()));
   await p.getByTestId('fw-availability-works').click();
   await p.getByTestId('fw-availability-why').fill('Everywhere');
@@ -46,6 +48,8 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-marking').waitFor();
   const s1 = await p.getByTestId('fw-score').innerText();
   check(V('F1: marked 2 of 3 with Akshat\'s read shown'), /2 of 3/.test(s1) && /Symbian/.test(await p.getByTestId('fw-marking').innerText()), s1);
+  check(V('F1: the marking says "Your answer: No · Correct answer (Akshat): Yes" for Price'),
+    /Price\. Your answer: No · Correct answer \(Akshat\): Yes/.test(await p.getByTestId('fw-marking').innerText()));
   check(V('F1: Generate a Proposal appears after saving'), await vis(p, 'fw-proposal-go'));
   check(V('F1: Save is replaced by "saved"'), !(await vis(p, 'fw-save')) && (await vis(p, 'fw-saved-note')));
   await p.getByTestId('fw-proposal-go').click();
@@ -77,7 +81,11 @@ async function run(br, view, vp) {
   const z0 = await p.getByTestId('fw-table').locator('tr').nth(1).innerText();
   check(V('F2: typing 60% shows the red zone live'), /red/i.test(z0));
   await p.getByTestId('fw-pct-1').fill('30');
+  await p.getByTestId('fw-pct-2').fill('80');
+  check(V('F2: percentages that add up to 170% are flagged in red, and Save waits'),
+    /170%/.test(await p.getByTestId('fw-total-off').innerText()) && /should make 100%/.test(await p.getByTestId('fw-incomplete').innerText()));
   await p.getByTestId('fw-pct-2').fill('10');
+  check(V('F2: at 100% the warning goes'), (await p.getByTestId('fw-total-off').count()) === 0);
   await p.getByTestId('fw-rec-wait').click();
   await p.getByTestId('fw-reason').fill('Too risky');
   await p.getByTestId('fw-target').fill('35');
@@ -174,7 +182,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-case-product').fill('dry-fruit mithai gift boxes');
   await p.getByTestId('fw-case-region').fill('Hyderabad');
   await p.getByTestId('fw-case-situation').fill('Four shops in Pune, 20 years old, loved for Diwali gift boxes. The owner wants to sell the boxes in Hyderabad.');
-  check(V('Own: the Venn talks about the new region'), /Works in Hyderabad/.test(await p.getByTestId('fw-activity').innerText()) && !/Nokia/.test(await p.getByTestId('fw-activity').innerText()));
+  check(V('Own: the Venn talks about the new region'), /in Hyderabad/.test(await p.getByTestId('fw-activity').innerText()) && !/Nokia/.test(await p.getByTestId('fw-activity').innerText()));
   await p.getByTestId('fw-price-works').click();
   await p.getByTestId('fw-price-why').fill('Priced like the local mithai shops there.');
   await p.getByTestId('fw-value-works').click();

@@ -229,6 +229,8 @@ class ConcentrationIn(BaseModel):
     def _pcts(cls, v):
         if any(not 0 <= p <= 100 for p in v):
             raise ValueError("Each percentage is between 0 and 100.")
+        if abs(sum(v) - 100) > 1.5:                   # the shares are the whole business (a little slack for rounding)
+            raise ValueError(f"Your percentages add up to {round(sum(v), 1):g}%: together they should make 100%.")
         return [round(p, 1) for p in v]
 
     @field_validator("reason")

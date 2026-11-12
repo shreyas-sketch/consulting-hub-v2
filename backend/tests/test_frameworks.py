@@ -72,6 +72,8 @@ def test_three_frameworks_in_workshop_order_for_every_plan(client):
     ("market-fit", {**NOKIA, "circles": {**NOKIA["circles"], "value": {"verdict": "maybe", "why": "it is unclear really"}}}),
     ("concentration-risk", {**INTERIOR, "percents": [60, 40]}),
     ("concentration-risk", {**INTERIOR, "percents": [160, 30, 10]}),
+    ("concentration-risk", {**INTERIOR, "percents": [20, 90, 80]}),          # 190%: the shares can't make more than 100%
+    ("concentration-risk", {**INTERIOR, "percents": [20, 30, 10]}),          # 60%
     ("concentration-risk", {**INTERIOR, "recommendation": "think"}),
     ("concentration-risk", {**INTERIOR, "reason": ""}),
     ("concentration-risk", {**INTERIOR, "months": 0}),
