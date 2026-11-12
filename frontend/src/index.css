@@ -38,8 +38,8 @@
   --bz-scrim: rgba(15, 39, 71, 0.45);
   --bz-paper: #f3f6fb;           /* the page itself; NOT re-mapped by .chrome, so a nav tab can join the page */
   --bz-paper-ink: #0f2747;
-  --bz-grid: #e4eaf3;            /* 24 px squares */
-  --bz-grid-major: #d5dfec;      /* every fifth line, 120 px */
+  --bz-grid: rgba(228, 234, 243, 0.5);      /* 24 px squares (#e4eaf3 at 50%: the paper stays quiet behind the work) */
+  --bz-grid-major: rgba(213, 223, 236, 0.5); /* every fifth line, 120 px (#d5dfec at 50%) */
   --card-shadow: 0 1px 2px rgba(15, 39, 71, 0.05), 0 10px 28px -18px rgba(15, 39, 71, 0.22);
   --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px rgba(29, 78, 216, 0.75);
   /* RGB channels of the solid colours, so Tailwind opacity modifiers (bg-bz-raised/60) work everywhere */
