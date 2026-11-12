@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, X } from "lucide-react";
+import { Check, CheckCircle2, Plus, X } from "lucide-react";
 import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { inr } from "@/lib/format";
@@ -11,10 +11,10 @@ import {
   AiFrame, Button, Card, ErrorLine, Field, Input, Label, Loadable, Meter, MoneyInput, Note, PageHeader, Segmented, Stat, Thinking,
 } from "../components/ui";
 
-function NicheOption({ o, i, chosen, onChoose, busy }) {
+function NicheOption({ o, i, chosen, anyChosen, onChoose, busy }) {
   const bars = [["Experience", o.experience], ["Demand", o.demand], ["Enjoyment", o.enjoyment]];
   return (
-    <div className={`rounded-bzcard border p-4 ${chosen ? "border-bz-teal bg-bz-teal-tint" : "border-bz-line bg-bz-panel"}`} data-testid={`niche-${i}`}>
+    <div className={`rounded-bzcard border p-4 ${chosen ? "border-2 border-bz-teal bg-bz-teal-tint" : "border-bz-line bg-bz-panel"}`} data-testid={`niche-${i}`}>
       <div className="flex items-start justify-between gap-3">
         <p className="text-[17px] font-extrabold leading-snug">{o.niche}</p>
         <span className="text-[22px] font-display font-[500] text-bz-teal tabular shrink-0">{o.total}<span className="text-[13px] text-bz-muted">/30</span></span>
@@ -39,8 +39,18 @@ function NicheOption({ o, i, chosen, onChoose, busy }) {
         <p className="text-[13px] mt-2"><span className="text-bz-muted">Typical fee: </span><b className="tabular">{inr(o.fee_low)} – {inr(o.fee_high)}</b> per client
           <span className="text-bz-muted"> · 4 clients a month ≈ {inr(o.yearly_low)} – {inr(o.yearly_high)} a year</span></p>
       ) : null}
-      {chosen ? <p className="mt-3 text-[13px] font-bold text-bz-teal">Your chosen niche</p>
-        : <Button variant="small" className="mt-3" onClick={onChoose} loading={busy} data-testid={`choose-${i}`}>Choose this niche</Button>}
+      {/* the one action on the card: a solid button, set apart by a rule (the top option starts as chosen; the others offer a switch) */}
+      <div className="mt-4 pt-4 border-t border-bz-line flex flex-col sm:flex-row sm:items-center gap-2">
+        {chosen ? (
+          <p className="inline-flex items-center gap-2 text-[15px] font-bold text-bz-teal" data-testid={`chosen-${i}`}>
+            <CheckCircle2 className="w-5 h-5" aria-hidden /> Your chosen niche
+          </p>
+        ) : (
+          <Button variant="primary" className="w-full sm:w-auto" onClick={onChoose} loading={busy} data-testid={`choose-${i}`}>
+            {!busy && <Check className="w-4 h-4" aria-hidden />}{anyChosen ? "Choose this niche instead" : "Choose this niche"}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
@@ -85,7 +95,7 @@ function Snapshot({ data }) {
       <div className="space-y-3">
         <AiFrame title="Your Niche Snapshot" right={<span className="text-[12px] text-bz-muted">Scored on EDE</span>}>
           <div className="space-y-3">
-            {last.options.map((o, i) => <NicheOption key={i} o={o} i={i} chosen={last.chosen === i} onChoose={() => choose(i)} busy={choosing === i} />)}
+            {last.options.map((o, i) => <NicheOption key={i} o={o} i={i} chosen={last.chosen === i} anyChosen={last.chosen != null && last.chosen >= 0} onChoose={() => choose(i)} busy={choosing === i} />)}
           </div>
           {last.note && <p className="text-[14px] text-bz-muted mt-4">{last.note}</p>}
           {last.income_note && <p className="text-[12px] text-bz-faint mt-2">Estimates only. {last.income_note}</p>}
