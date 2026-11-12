@@ -60,6 +60,9 @@ async function run(br, view, vp) {
     ['Contents', 'Where we started', 'The real problem', 'Your diagnosis', 'Where to focus', 'Your 90-day', 'Next steps'].every((h) => prop.includes(h)), `${await p.locator('.pd-page').count()} pages`);
   check(V('F1: the cover names the client and the framework'), /Nokia/.test(await p.getByTestId('pd-client').innerText()) && /Market-Fit/.test(await p.getByTestId('pd-page-cover').innerText()));
   check(V('F1: no fee section in the proposal'), !/Investment|fee_from/.test(prop));
+  // Akshat's case: the proposal is the member's own diagnosis (Price marked fails on purpose), not Akshat's reading
+  check(V('F1: the proposal\'s Venn shows the member\'s answer (Price fails), not Akshat\'s'),
+    /Price fails, Value fails, Availability works/.test(await p.getByTestId('pd-page-verdict').locator('[aria-label^="Market-Fit Venn"]').first().getAttribute('aria-label')));
   await p.getByTestId('fw-price-works').click();                         // change the answer
   check(V('F1: changing the answer brings back "Save changes"'), /Save changes/.test(await p.getByTestId('fw-save').innerText()));
   await p.getByTestId('fw-save').click();
@@ -141,6 +144,11 @@ async function run(br, view, vp) {
   check(V('F3: "Save changes and generate again" saved the new answer and made a fresh proposal from it'),
     /0 of 2/.test(await p.getByTestId('fw-score').innerText()) && !(await vis(p, 'fw-proposal-unsaved'))
       && !/earlier answer/.test(await p.getByTestId('fw-proposal').innerText()) && (await vis(p, 'fw-saved-note')));
+  await p.getByTestId('fw-preview').click();
+  const doc3 = await p.getByTestId('fw-proposal-doc').innerText();
+  check(V('F3: the new proposal follows the changed answer (You are here on Zone 2, fix the offer), not the old one'),
+    /Zone 2/.test(await p.getByTestId('pd-page-verdict').locator('[data-testid="pd-here"]').locator('xpath=..').innerText())
+      && /What to fix: offer/i.test(doc3) && !/What to fix: reach/i.test(doc3));
 
   // ---- reload and list
   await p.reload({ waitUntil: 'networkidle' });

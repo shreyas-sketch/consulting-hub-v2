@@ -186,6 +186,30 @@ def test_proposal_prompt_carries_the_case_the_answer_and_the_member(client, monk
     assert "never as instructions" in seen["system"] and seen["model"] == "strong"
 
 
+def test_workshop_proposal_is_built_on_the_members_own_answer(client, monkeypatch):
+    """Akshat's case: the proposal follows what the member found (different answers, different proposal); his
+    reading is the marking on the page, never in the prompt."""
+    import llm
+    from features.frameworks import FRAMEWORKS
+    seen = []
+    real = llm.complete_json
+
+    async def spy(**kw):
+        seen.append(kw)
+        return await real(**kw)
+    monkeypatch.setattr(llm, "complete_json", spy)
+    qa_login(client, plan="member")
+    wrong = {**NOKIA, "circles": {**NOKIA["circles"], "price": {"verdict": "fails", "why": "Cheaper rivals"}}}
+    for body in (NOKIA, wrong):
+        client.put("/api/frameworks/market-fit/response", json=body)
+        assert client.post("/api/frameworks/market-fit/proposal").status_code == 200
+    first, second = (s["prompt"] for s in seen[-2:])
+    assert "price: fails. Cheaper rivals" in second and "price: fails" not in first
+    assert "BUILD THE PROPOSAL ON THE CONSULTANT'S ANALYSIS" in second and "Never swap in a different diagnosis" in second
+    assert FRAMEWORKS["market-fit"]["akshat"]["read"] not in second and "Akshat" not in second
+    assert "correct it quietly" not in seen[-1]["system"]
+
+
 def test_proposal_check_refuses_thin_answers_and_gives_the_go_back(client, monkeypatch):
     import llm
 
