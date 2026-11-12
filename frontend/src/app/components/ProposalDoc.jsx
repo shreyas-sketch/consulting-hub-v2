@@ -183,15 +183,16 @@ function Dots({ total, lit }) {
 export default function ProposalDoc({ p, fw, fkey, c, answers, grade }) {
   const by = (p.prepared_by || "").split(",")[0] || "Your consultant";
   const [nameA, nameB] = splitName(p.framework || fw.name);
+  // the pictures show the member's own answer (the proposal is their diagnosis); the marking is only a fallback
   const marks = grade?.marks || [];
   const zoneHere = (() => {
+    if (Number(answers?.zone)) return Number(answers.zone);
     const m = String(marks.find((x) => x.label === "Zone")?.right || "").match(/Zone (\d)/);
-    return m ? Number(m[1]) : Number(answers?.zone) || null;
+    return m ? Number(m[1]) : null;
   })();
   const circles = Object.fromEntries(["price", "value", "availability"].map((k) => {
     const m = marks.find((x) => x.label.toLowerCase() === k);
-    const v = grade?.own ? answers?.circles?.[k]?.verdict : m?.right || answers?.circles?.[k]?.verdict;
-    return [k, v];
+    return [k, answers?.circles?.[k]?.verdict || m?.right];
   }));
   const d = p.diagnosis || {};
   const lv = p.lever || {};
