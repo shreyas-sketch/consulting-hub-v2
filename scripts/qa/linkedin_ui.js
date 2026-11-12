@@ -83,6 +83,8 @@ const err = (p) => p.locator('[role="alert"]').first().innerText().catch(() => '
       order[0] === 'headline' && new Set(order).size === order.length && !order.includes('photo') && order.includes('skills'), order.join(','));
     check('C2b only the first change is open, with its headline options to paste',
       (await p.locator('[data-testid$="-detail"]').count()) === 1 && (await p.getByTestId('li-sec-headline-detail').getByRole('button', { name: 'Copy' }).count()) >= 2);
+    check('C2b2 what the profile says now is its own marked block ("On your profile now"), apart from why and the new text',
+      /On your profile now/i.test(await p.getByTestId('li-sec-headline-now').innerText()) && /General Manager/.test(await p.getByTestId('li-sec-headline-now').innerText()));
     check('C2c "Already working" lists the photo, apart from the changes', /Profile photo/.test(await p.getByTestId('li-working').innerText()));
     check('C2d no section is repeated in separate cards (no "Section by section", no second headline card)',
       !/Section by section|Your new headline|About section, rewritten/.test(await p.getByTestId('li-review').innerText()));
