@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, FileText, Globe, NotebookPen, Printer, Trash2, Type } from "lucide-react";
+import { BookOpen, ChevronRight, FileText, Globe, NotebookPen, Plus, Printer, Sparkles, Trash2, Type } from "lucide-react";
 import { API_BASE, api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { ago, hdate } from "@/lib/format";
@@ -20,10 +20,10 @@ import { CitedAnswer, Dropzone, fileProblem, num } from "./Docs";
 const SOURCE_KIND = { file: { label: "File", icon: FileText }, text: { label: "Pasted text", icon: Type }, url: { label: "Web page", icon: Globe }, doc: { label: "From Doc Reader", icon: BookOpen } };
 const NOTE_KIND = { note: "Your note", answer: "Saved answer", briefing: "Briefing", faq: "FAQ", study: "Study guide", timeline: "Timeline" };
 const GENERATE = [
-  { kind: "briefing", label: "Briefing", busy: "Writing your briefing" },
-  { kind: "faq", label: "FAQ", busy: "Writing your FAQ" },
-  { kind: "study", label: "Study guide", busy: "Writing your study guide" },
-  { kind: "timeline", label: "Timeline", busy: "Putting the dates in order" },
+  { kind: "briefing", label: "Briefing", what: "One page on what matters most", busy: "Writing your briefing" },
+  { kind: "faq", label: "FAQ", what: "The questions a client would ask, answered", busy: "Writing your FAQ" },
+  { kind: "study", label: "Study guide", what: "Key ideas and terms to learn", busy: "Writing your study guide" },
+  { kind: "timeline", label: "Timeline", what: "The dates in your sources, in order", busy: "Putting the dates in order" },
 ];
 const AI_KINDS = new Set(["briefing", "faq", "study", "timeline", "answer"]);
 const blobSrc = (u) => (u ? `${API_BASE}${String(u).replace(/^\/api/, "")}` : "");
@@ -104,7 +104,8 @@ function Projects() {
 }
 
 // ---- sources ----------------------------------------------------------------------------------------
-function AddSource({ id, refresh }) {
+function AddSource({ id, refresh, startOpen }) {
+  const [open, setOpen] = useState(startOpen);
   const [kind, setKind] = useState("file");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -146,11 +147,22 @@ function AddSource({ id, refresh }) {
     send(() => api.post(`/notebook/${id}/sources/doc`, { doc_id: docId }), () => setDocId(""));
   };
 
+  if (!open) {
+    return (
+      <div className="mt-3">
+        <Button variant="secondary" className="w-full" onClick={() => setOpen(true)} data-testid="nb-source-new"><Plus className="w-4 h-4" aria-hidden />Add a source</Button>
+        <OkLine>{ok}</OkLine>
+      </div>
+    );
+  }
   return (
     <div className="mt-4 pt-4 border-t border-bz-line">
-      <p className="text-[12px] font-semibold text-bz-muted mb-2">Add a source</p>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-[13px] font-semibold">Add a source</p>
+        <button type="button" onClick={() => { setOpen(false); setErr(""); }} className="text-[13px] font-bold text-bz-muted min-h-[36px] px-1">Close</button>
+      </div>
       <Segmented value={kind} onChange={(v) => { setKind(v); setErr(""); setOk(""); }} label="Kind of source" testid="nb-source-kind"
-        options={[{ value: "file", label: "File" }, { value: "text", label: "Text" }, { value: "url", label: "Web page" }, { value: "doc", label: "My documents" }]} />
+        options={[{ value: "file", label: "File" }, { value: "text", label: "Text" }, { value: "url", label: "Web page" }, { value: "doc", label: "My docs" }]} />
       <div className="mt-3">
         {kind === "file" && <Dropzone onFile={addFile} busy={busy} testid="nb" hint="PDF, Word (.docx), .txt or .md · up to 10 MB. We keep the text only." />}
         {kind === "text" && (
@@ -226,7 +238,7 @@ function SourcesPane({ d, id, refresh }) {
         })}
       </div>
       <ErrorLine>{err}</ErrorLine>
-      {full ? <Note className="mt-3">This project holds {d.max_sources} sources, the most it can. Remove one to add another.</Note> : <AddSource id={id} refresh={refresh} />}
+      {full ? <Note className="mt-3">This project holds {d.max_sources} sources, the most it can. Remove one to add another.</Note> : <AddSource id={id} refresh={refresh} startOpen={d.sources.length === 0} />}
     </Card>
   );
 }
@@ -251,7 +263,11 @@ function Message({ m, id, refresh }) {
   return (
     <div className="space-y-2">
       <div className="ml-auto max-w-[88%] w-fit rounded-bzcard bg-bz-raised border border-bz-line px-3.5 py-2.5 text-[15px]">{m.question}</div>
-      <AiFrame title="Answer" className="!p-3.5 sm:!p-4" right={<span className="text-[12px] text-bz-muted">{ago(m.at)}</span>}>
+      <div className="border-l-[3px] border-bz-teal pl-3.5">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-bz-teal"><Sparkles className="w-3.5 h-3.5" aria-hidden />Answer</span>
+          <span className="text-[12px] text-bz-muted">{ago(m.at)}</span>
+        </div>
         {!m.covered && <Chip tone="muted" className="mb-2">Not in your sources</Chip>}
         <CitedAnswer a={m} testid="nb-answer" />
         {m.covered && (
@@ -259,7 +275,7 @@ function Message({ m, id, refresh }) {
             <Button variant="small" onClick={save} loading={busy} disabled={saved} data-testid="nb-save-answer">{saved ? "Saved to notes" : "Save to notes"}</Button>
           </div>
         )}
-      </AiFrame>
+      </div>
     </div>
   );
 }
@@ -287,7 +303,7 @@ function ChatPane({ d, id, refresh }) {
       <Label tone="teal">Ask your sources</Label>
       {none && <Note>Add a source first. Then ask anything about it.</Note>}
       {!none && d.messages.length === 0 && !pending && <Note>Answers come only from this project's sources, with numbers you can tap to see the exact lines.</Note>}
-      <div className="space-y-4 mt-2">
+      <div className="space-y-6 mt-2">
         {d.messages.map((m) => <Message key={m.id} m={m} id={id} refresh={refresh} />)}
         {pending && (
           <div className="space-y-2">
@@ -297,10 +313,8 @@ function ChatPane({ d, id, refresh }) {
         )}
       </div>
       <form onSubmit={ask} noValidate className="space-y-3 mt-4 pt-4 border-t border-bz-line">
-        <Field label="Your question">
-          <Textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} maxLength={1000} className="min-h-[96px]"
-            placeholder="e.g. What are the biggest costs for small processors?" disabled={none} data-testid="nb-question" />
-        </Field>
+        <Textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={2} maxLength={1000} className="min-h-[72px]" aria-label="Your question"
+          placeholder="Ask a question, e.g. What are the biggest costs for small processors?" disabled={none} data-testid="nb-question" />
         <ErrorLine>{err}</ErrorLine>
         <Button type="submit" variant="ai" className="w-full" disabled={none || !!pending || !canUse(usage)} data-testid="nb-ask">Ask my sources</Button>
         <UsageLine usage={usage} what="document questions" className="text-center" />
@@ -401,6 +415,7 @@ function NotesPane({ d, id, refresh }) {
   const [f, setF] = useState({ title: "", body: "" });
   const [noteErr, setNoteErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [writing, setWriting] = useState(false);
   const usage = plan?.limits?.doc_q;
   const none = d.sources.length === 0;
 
@@ -416,7 +431,7 @@ function NotesPane({ d, id, refresh }) {
     e.preventDefault();
     if (!f.title.trim() || !f.body.trim()) { setNoteErr("A note needs a title and some text."); return; }
     setNoteErr(""); setSaving(true);
-    try { await api.post(`/notebook/${id}/notes`, { title: f.title.trim(), body: f.body }); setF({ title: "", body: "" }); refresh(); } catch (e2) { setNoteErr(apiError(e2)); } finally { setSaving(false); }
+    try { await api.post(`/notebook/${id}/notes`, { title: f.title.trim(), body: f.body }); setF({ title: "", body: "" }); setWriting(false); refresh(); } catch (e2) { setNoteErr(apiError(e2)); } finally { setSaving(false); }
   };
   const going = GENERATE.find((g) => g.kind === busy);
 
@@ -425,30 +440,47 @@ function NotesPane({ d, id, refresh }) {
       <Card className="no-print">
         <Label tone="teal">Make from your sources</Label>
         {busy ? <Thinking label={going?.busy} /> : (
-          <div className="grid grid-cols-2 gap-2">
+          <ul className="divide-y divide-bz-line -my-1">
             {GENERATE.map((g) => (
-              <Button key={g.kind} variant="ai" className="!min-h-[48px] !px-3 !text-[14px]" onClick={() => generate(g.kind)} disabled={none || !canUse(usage)} data-testid={`nb-gen-${g.kind}`}>{g.label}</Button>
+              <li key={g.kind}>
+                <button type="button" onClick={() => generate(g.kind)} disabled={none || !canUse(usage)} data-testid={`nb-gen-${g.kind}`}
+                  className="w-full min-h-[52px] py-2 flex items-center gap-3 text-left rounded-bzbtn hover:bg-bz-panel disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Sparkles className="w-4 h-4 text-bz-teal shrink-0" aria-hidden />
+                  <span className="min-w-0 flex-1"><span className="block font-semibold text-[14.5px]">{g.label}</span><span className="block text-[12.5px] text-bz-muted">{g.what}</span></span>
+                  <ChevronRight className="w-4 h-4 text-bz-muted shrink-0" aria-hidden />
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
         <ErrorLine>{err}</ErrorLine>
-        <Note className="mt-2">{none ? "Add a source first." : "Each one counts as one document question and is saved below. A timeline needs dates in your sources."}</Note>
+        <p className="text-[12px] text-bz-muted mt-2">{none ? "Add a source first." : "Each counts as one document question. It's saved in your notes below."}</p>
       </Card>
 
       <AudioCard d={d} id={id} refresh={refresh} />
 
-      <div className="space-y-2.5" data-testid="nb-notes">
-        {d.notes.map((n) => <NoteCard key={n.id} n={n} id={id} refresh={refresh} />)}
-      </div>
-
-      <Card className="no-print">
-        <Label>Write a note</Label>
-        <form onSubmit={addNote} noValidate className="space-y-3">
-          <Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} maxLength={120} placeholder="Title" aria-label="Note title" data-testid="nb-note-title" />
-          <Textarea value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} maxLength={20000} placeholder="Your thinking, questions for the client, next steps" aria-label="Note text" data-testid="nb-note-body" />
-          <ErrorLine>{noteErr}</ErrorLine>
-          <Button type="submit" variant="secondary" className="w-full" loading={saving} data-testid="nb-note-save">Save note</Button>
-        </form>
+      <Card>
+        <div className="flex items-baseline justify-between gap-3 mb-2">
+          <Label className="mb-0">Your notes</Label>
+          <span className="text-[13px] text-bz-muted tabular">{d.notes.length}</span>
+        </div>
+        {d.notes.length === 0 && !writing && <p className="text-[14px] text-bz-muted">Saved answers, briefings and your own notes appear here.</p>}
+        <div className="space-y-2.5" data-testid="nb-notes">
+          {d.notes.map((n) => <NoteCard key={n.id} n={n} id={id} refresh={refresh} />)}
+        </div>
+        <div className="no-print mt-3">
+          {writing ? (
+            <form onSubmit={addNote} noValidate className="space-y-3 pt-3 border-t border-bz-line">
+              <Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} maxLength={120} placeholder="Title" aria-label="Note title" data-testid="nb-note-title" />
+              <Textarea value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} maxLength={20000} placeholder="Your thinking, questions for the client, next steps" aria-label="Note text" data-testid="nb-note-body" />
+              <ErrorLine>{noteErr}</ErrorLine>
+              <div className="flex gap-2">
+                <Button type="submit" variant="secondary" className="flex-1" loading={saving} data-testid="nb-note-save">Save note</Button>
+                <Button variant="small" onClick={() => { setWriting(false); setNoteErr(""); }}>Cancel</Button>
+              </div>
+            </form>
+          ) : <Button variant="secondary" className="w-full" onClick={() => setWriting(true)} data-testid="nb-note-new"><Plus className="w-4 h-4" aria-hidden />Write a note</Button>}
+        </div>
       </Card>
     </div>
   );
@@ -501,7 +533,9 @@ function Project({ id }) {
   const q = useQuery({ queryKey: ["nb", id], queryFn: async () => (await api.get(`/notebook/${id}`)).data });
   const [tab, setTab] = useState("sources");
   const refresh = () => qc.invalidateQueries({ queryKey: ["nb", id] });
-  const area = (k) => `${tab === k ? "" : "hidden"} lg:block min-w-0`;
+  // phone: three tabs. Desktop: chat always on the right (it's where the work happens); the left column switches
+  // between Sources and Notes & outputs, so there are never three narrow columns side by side.
+  const left = tab === "notes" ? "notes" : "sources";
   return (
     <div className="space-y-4">
       <BackLink to="/app/research">All projects</BackLink>
@@ -511,10 +545,14 @@ function Project({ id }) {
             <ProjectHead p={d.project} id={id} refresh={refresh} />
             <Segmented className="lg:hidden no-print" value={tab} onChange={setTab} label="Project area" testid="nb-tab"
               options={[{ value: "sources", label: `Sources (${d.sources.length})` }, { value: "chat", label: "Chat" }, { value: "notes", label: `Notes (${d.notes.length})` }]} />
-            <div className="grid gap-4 lg:grid-cols-3 items-start">
-              <section className={area("sources")} aria-label="Sources"><SourcesPane d={d} id={id} refresh={refresh} /></section>
-              <section className={area("chat")} aria-label="Chat"><ChatPane d={d} id={id} refresh={refresh} /></section>
-              <section className={area("notes")} aria-label="Notes and outputs"><NotesPane d={d} id={id} refresh={refresh} /></section>
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-start">
+              <div className={`${tab === "chat" ? "hidden" : ""} lg:block min-w-0 space-y-3`}>
+                <Segmented className="hidden lg:flex no-print" value={left} onChange={setTab} label="Show" testid="nb-side"
+                  options={[{ value: "sources", label: `Sources (${d.sources.length})` }, { value: "notes", label: `Notes & outputs (${d.notes.length})` }]} />
+                <section className={left === "sources" ? "" : "hidden"} aria-label="Sources"><SourcesPane d={d} id={id} refresh={refresh} /></section>
+                <section className={left === "notes" ? "" : "hidden"} aria-label="Notes and outputs"><NotesPane d={d} id={id} refresh={refresh} /></section>
+              </div>
+              <section className={`${tab === "chat" ? "" : "hidden"} lg:block min-w-0`} aria-label="Chat"><ChatPane d={d} id={id} refresh={refresh} /></section>
             </div>
           </div>
         )}

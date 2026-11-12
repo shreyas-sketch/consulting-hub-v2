@@ -305,6 +305,7 @@ const ANSWER = 'The real problem is margin leakage since the 5 new stores opened
   });
   await step(l1, 'Research Notebook: write a note', async (p) => {
     await tab(p, /^Notes \(/);
+    await tid(p, 'nb-note-new').click();
     await tid(p, 'nb-note-title').fill('My angle'); await tid(p, 'nb-note-body').fill('Pitch shared cold rooms.'); await tid(p, 'nb-note-save').click();
     await seeText(p, '/My angle/');
     await tid(p, 'nb-gen-briefing').click(); await seeText(p, '/Briefing/i', 30000);
