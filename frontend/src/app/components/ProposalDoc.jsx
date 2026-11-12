@@ -362,11 +362,9 @@ export default function ProposalDoc({ p, fw, fkey, c, answers, grade }) {
         <div className={`grid gap-6 mt-14 grid-cols-2 ${lv.chain.length === 4 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
           {lv.chain.map((s, i) => (
             <div key={i} className={`border-t-2 pt-3 ${i === lv.chain.length - 1 ? "border-[#4458ff]" : "border-[#2a2c38]"}`}>
-              <div className="flex items-start justify-between gap-2">
-                <span className={`pd-h text-[38px] ${i === lv.chain.length - 1 ? "pd-accent" : ""}`}>{s.value}</span>
-                {s.op && <span className="pd-pill bg-[#eef0ff] text-[#2f3fd9] text-[11px]">{s.op}</span>}
-              </div>
+              <span className={`block pd-h whitespace-nowrap ${s.value.length > 6 ? "text-[30px]" : "text-[38px]"} ${i === lv.chain.length - 1 ? "pd-accent" : ""}`}>{s.value}</span>
               <p className="text-[12px] text-[#6b6f80] mt-1">{s.label}</p>
+              {s.op && <span className="inline-block mt-2 rounded-[10px] px-2.5 py-1 bg-[#eef0ff] text-[#2f3fd9] text-[11px] leading-tight">{s.op} →</span>}
             </div>
           ))}
         </div>
@@ -400,7 +398,7 @@ export default function ProposalDoc({ p, fw, fkey, c, answers, grade }) {
               <div key={i} className="bg-[#eef0f6] p-5 rounded-[4px] min-h-[300px]">
                 <span className="w-11 h-11 rounded-full bg-[#07080d] grid place-items-center"><I className="w-5 h-5 text-white" strokeWidth={1.7} aria-hidden /></span>
                 <p className="pd-h text-[24px] mt-6">{x.title}</p>
-                {x.aimed_at && <span className="pd-pill border border-[#4458ff] text-[#2f3fd9] text-[11px] mt-2">Aimed at: {x.aimed_at}</span>}
+                {x.aimed_at && <span className="inline-block rounded-[12px] px-3 py-1 border border-[#4458ff] text-[#2f3fd9] text-[11px] leading-snug mt-2">Aimed at: {x.aimed_at}</span>}
                 <p className="text-[12px] font-semibold mt-5">What it did</p><p className="text-[13px] text-[#6b6f80]">{x.what_it_did}</p>
                 <p className="text-[12px] font-semibold mt-3">Why the number didn't move</p><p className="text-[13px] text-[#6b6f80]">{x.why_not}</p>
               </div>
@@ -456,7 +454,7 @@ export default function ProposalDoc({ p, fw, fkey, c, answers, grade }) {
                 <div className="absolute inset-0 border border-white/60 skew-y-[-12deg] origin-bottom-left" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${0.18 + i * 0.08}), rgba(255,255,255,${0.04 + i * 0.03}))` }} />
                 {[2, 5, 8].includes(i) && phases[[2, 5, 8].indexOf(i)] && (
                   <span className="absolute -top-14 left-1/2 -translate-x-1/2 text-center whitespace-nowrap">
-                    <span className="block pd-h text-[24px] sm:text-[32px] text-white">{phases[[2, 5, 8].indexOf(i)].target}</span>
+                    <span className="block pd-h text-[24px] sm:text-[32px] text-white whitespace-nowrap">{phases[[2, 5, 8].indexOf(i)].target}</span>
                     <span className="block text-[10.5px] text-white/70">{phases[[2, 5, 8].indexOf(i)].days}</span>
                   </span>
                 )}
@@ -473,7 +471,7 @@ export default function ProposalDoc({ p, fw, fkey, c, answers, grade }) {
               <p className="text-[14px] font-semibold text-white mt-1">{ph.headline}</p>
               <p className="text-[12.5px] text-white/60 mt-3">{ph.detail}</p>
               {ph.why && <><p className="text-[11.5px] text-[#7fe0d4] font-semibold mt-4 pt-4 border-t border-white/15">Why it works</p><p className="text-[12.5px] text-white/70 mt-1">{ph.why}</p></>}
-              {ph.target && <div className="mt-auto pt-4 border-t border-white/15 flex items-end justify-between"><span className="text-[11px] text-white/55">{pl.metric || "Target"}</span><span className="pd-h text-[28px] text-white">{ph.target}</span></div>}
+              {ph.target && <div className="mt-auto pt-4 border-t border-white/15 flex items-end justify-between gap-3"><span className="text-[11px] text-white/55 min-w-0">{pl.metric || "Target"}</span><span className={`pd-h text-white whitespace-nowrap ${ph.target.length > 6 ? "text-[22px]" : "text-[28px]"}`}>{ph.target}</span></div>}
             </div>
           ))}
         </div>
