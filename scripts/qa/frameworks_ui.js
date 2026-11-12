@@ -50,7 +50,12 @@ async function run(br, view, vp) {
   check(V('F1: Save is replaced by "saved"'), !(await vis(p, 'fw-save')) && (await vis(p, 'fw-saved-note')));
   await p.getByTestId('fw-proposal-go').click();
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
-  const prop = await p.getByTestId('fw-proposal').innerText();
+  check(V('F1: after generating, a "Proposal created" card with Download, and the pages are not dumped on the page'),
+    /Your proposal is ready/.test(await p.getByTestId('fw-proposal').innerText()) && /Proposal created/.test(await p.getByTestId('fw-proposal').innerText())
+      && (await vis(p, 'fw-download')) && !(await p.getByTestId('fw-proposal-doc').isVisible()));
+  await p.getByTestId('fw-preview').click();
+  check(V('F1: "Preview the pages" opens the designed pages'), await p.getByTestId('fw-proposal-doc').isVisible());
+  const prop = await p.getByTestId('fw-proposal-doc').innerText();
   check(V('F1: proposal follows the house structure (contents, situation, problem, diagnosis, focus, 90-day plan, next steps)'),
     ['Contents', 'Where we started', 'The real problem', 'Your diagnosis', 'Where to focus', 'Your 90-day', 'Next steps'].every((h) => prop.includes(h)), `${await p.locator('.pd-page').count()} pages`);
   check(V('F1: the cover names the client and the framework'), /Nokia/.test(await p.getByTestId('pd-client').innerText()) && /Market-Fit/.test(await p.getByTestId('pd-page-cover').innerText()));
@@ -108,6 +113,7 @@ async function run(br, view, vp) {
   check(V('F3: Zone 3 + fix the reach = 2 of 2'), /2 of 2/.test(await p.getByTestId('fw-score').innerText()));
   await p.getByTestId('fw-proposal-go').click();
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
+  await p.getByTestId('fw-preview').click();
   check(V('F3: the verdict page marks "You are here" on Zone 3'), /Zone 3/.test(await p.getByTestId('pd-page-verdict').locator('[data-testid="pd-here"]').locator('xpath=..').innerText()));
   check(V('F3: the 90-day plan has 3 phases and the impact chart is drawn'), (await p.locator('[data-testid^="pd-phase-"]').count()) === 3 && (await vis(p, 'pd-impact')));
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 90000 }), p.getByTestId('fw-download').click()]);
@@ -116,6 +122,7 @@ async function run(br, view, vp) {
   const pagesIn = (require('fs').readFileSync(pdfPath).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
   check(V('F3: "Download proposal (PDF)" saves a PDF of the proposal only, one page per designed page'),
     head === '%PDF-' && /^Proposal - .*\.pdf$/.test(dl.suggestedFilename()) && pagesIn === (await p.locator('.pd-page').count()), `${pagesIn} pages · ${dl.suggestedFilename()}`);
+  check(V('F3: after the download the card says it was downloaded'), /Downloaded: Proposal - /.test(await p.getByTestId('fw-downloaded').innerText()));
   check(V('F3: the proposal pages fit the screen (no sideways scroll)'), (await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) === 0);
   check(V('F3: free account, 3 of 6 proposals used: says so'), /3 of 6 free framework proposals used/.test(await p.locator('body').innerText()));
   // change the answer WITHOUT saving, then Generate again: it must save the change and write from the new answer
@@ -133,7 +140,7 @@ async function run(br, view, vp) {
   await p.getByText('4 of 6 free framework proposals used').first().waitFor({ timeout: 30000 });
   check(V('F3: "Save changes and generate again" saved the new answer and made a fresh proposal from it'),
     /0 of 2/.test(await p.getByTestId('fw-score').innerText()) && !(await vis(p, 'fw-proposal-unsaved'))
-      && !/earlier answer/.test(await p.getByTestId('fw-proposal').locator('xpath=..').innerText()) && (await vis(p, 'fw-saved-note')));
+      && !/earlier answer/.test(await p.getByTestId('fw-proposal').innerText()) && (await vis(p, 'fw-saved-note')));
 
   // ---- reload and list
   await p.reload({ waitUntil: 'networkidle' });
@@ -170,7 +177,7 @@ async function run(br, view, vp) {
     /2 of 3/.test(await p.getByTestId('fw-score').innerText()) && /availability/i.test(await p.getByTestId('fw-read').innerText()));
   await p.getByTestId('fw-proposal-go').click();
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
-  check(V('Own F1: proposal made for my client'), /sweet shop/.test(await p.getByTestId('fw-proposal').innerText()));
+  check(V('Own F1: proposal made for my client'), /sweet shop/.test(await p.getByTestId('fw-proposal').innerText()) && /sweet shop/.test(await p.getByTestId('fw-proposal-doc').textContent()));
   await p.reload({ waitUntil: 'networkidle' });
   check(V('Own F1: reload keeps the own tab, case, marking and proposal'),
     (await vis(p, 'fw-own-situation')) && (await vis(p, 'fw-marking')) && (await vis(p, 'fw-proposal')));

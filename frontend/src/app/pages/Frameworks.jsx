@@ -12,7 +12,7 @@ import { inr } from "@/lib/format";
 import { useFramework, useFrameworkProposal, useFrameworks, useSaveFramework, useSaveOwn, useSuggestCase } from "@/services/frameworks";
 import Markdown, { CopyButton } from "../components/Markdown";
 import ProposalDoc from "../components/ProposalDoc";
-import { downloadProposalPdf, downloadTextPdf } from "@/lib/proposalPdf";
+import { downloadProposalPdf, downloadTextPdf, proposalFileName } from "@/lib/proposalPdf";
 import { BackLink, UsageLine } from "../components/common";
 import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, LinkButton, Loadable, Note, PageHeader, Segmented, Textarea, Thinking } from "../components/ui";
 
@@ -561,6 +561,8 @@ function Proposal({ fkey, fw, c, mine, own = false, unsaved }) {
   const canRun = !usage || usage.limit == null || usage.used < usage.limit;
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState(false);
+  const [downloaded, setDownloaded] = useState("");
   const gen = useFrameworkProposal(fkey, { own, onDone: () => refreshMe() });
   const p = mine.proposal;
   const [prepping, setPrepping] = useState(false);
@@ -599,8 +601,9 @@ function Proposal({ fkey, fw, c, mine, own = false, unsaved }) {
   const download = async () => {
     setErr(""); setSaving(true);
     try {
-      const el = p.v === 2 ? document.querySelector(`[data-testid='fw-proposal'] [data-testid='pd-doc']`) : null;
+      const el = p.v === 2 ? document.querySelector(`[data-testid='fw-proposal-doc'] [data-testid='pd-doc']`) : null;
       if (el) await downloadProposalPdf(el, p); else await downloadTextPdf(p.markdown, p);
+      setDownloaded(proposalFileName(p));
     } catch {
       setErr("We couldn't make the PDF just now. Try again, or use Copy and paste it into a document.");
     } finally {
@@ -608,32 +611,55 @@ function Proposal({ fkey, fw, c, mine, own = false, unsaved }) {
     }
   };
   const note = `${own ? "A draft proposal for your own client, built on public information." : "A practice proposal for a workshop case."} Check the numbers before you use it with a real client.`;
+  const [nameA, nameB] = (() => { const w = (p.framework || fw.name || "").split(" "); return [w.slice(0, -1).join(" "), w[w.length - 1]]; })();
+  const facts = [p.client && `For ${p.client}`, p.date, p.v === 2 && "13 pages, A4"].filter(Boolean);
   return (
     <div className="space-y-3">
-      {p.v === 2 ? (
-        <div className="rise-in space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 no-print">
-            <Label className="mb-0">Your proposal</Label>
-            <CopyButton text={p.markdown} />
+      {/* The proposal is made: say so, and offer the PDF. The designed pages live in the PDF; Preview opens them here. */}
+      <Card className="rise-in" data-testid="fw-proposal">
+        <div className="flex flex-col sm:flex-row gap-5">
+          <div aria-hidden className="shrink-0 w-[132px] h-[186px] rounded-[10px] overflow-hidden relative self-center sm:self-start shadow-bzframe"
+            style={{ background: "radial-gradient(70% 50% at 90% 0%, rgba(68,88,255,.6), transparent 70%), #07080d" }}>
+            <div className="absolute inset-0 p-3 flex flex-col">
+              <span className="flex gap-[2px]"><i className="block w-[11px] h-[4px] bg-white" /><i className="block w-[3px] h-[4px] bg-white" /><i className="block w-[3px] h-[4px] bg-white" /></span>
+              <span className="mt-6 text-white text-[15px] leading-[1.02] font-medium tracking-[-0.04em]" style={{ fontFamily: "Manrope Variable, Manrope, sans-serif" }}>
+                {nameA}<br /><span className="pd-grad">{nameB}</span>
+              </span>
+              <span className="mt-auto text-[7.5px] text-white/60 leading-snug">Prepared for<br /><span className="text-white/90">{p.client}</span></span>
+            </div>
           </div>
-          {pending ? <p className="no-print text-[13.5px] font-semibold text-bz-gold" data-testid="fw-proposal-unsaved">You've changed your answers above. This proposal still uses the saved ones: "Save changes and generate again" uses the new ones.</p>
-            : p.stale && <Note className="no-print">Made from your earlier answer. Generate again to use what you saved last.</Note>}
-          <div data-testid="fw-proposal"><ProposalDoc p={p} fw={fw} fkey={fkey} c={c} answers={mine.answers} grade={mine.grade} /></div>
-          <p className="text-[12px] text-bz-muted no-print">{note}</p>
+          <div className="min-w-0 flex-1">
+            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#0f7a5c] bg-[#e3f7f1] rounded-full px-2.5 py-1"><Check className="w-3.5 h-3.5" aria-hidden /> Proposal created</span>
+            <p className="text-[20px] font-bold mt-2.5" data-testid="fw-proposal-title">Your proposal is ready</p>
+            <p className="text-[13.5px] text-bz-muted mt-1">{p.framework || fw.name}{facts.length ? ` · ${facts.join(" · ")}` : ""}</p>
+            {p.v === 2 && p.diagnosis?.verdict && (
+              <p className="text-[14.5px] mt-3"><span className="text-bz-muted">Verdict:</span> <b>{p.diagnosis.verdict}</b>{p.diagnosis.verdict_line ? ` · ${p.diagnosis.verdict_line}` : ""}</p>
+            )}
+            {p.v === 2 && p.tagline && <p className="text-[14px] text-bz-muted mt-1">{p.tagline}</p>}
+            {pending ? <p className="text-[13.5px] font-semibold text-bz-gold mt-3" data-testid="fw-proposal-unsaved">You've changed your answers above. This proposal still uses the saved ones: "Save changes and generate again" uses the new ones.</p>
+              : p.stale && <Note className="mt-3">Made from your earlier answer. Generate again to use what you saved last.</Note>}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mt-4">
+              <Button onClick={download} loading={saving} data-testid="fw-download">{!saving && <Download className="w-4 h-4" aria-hidden />}{saving ? "Preparing the PDF…" : "Download proposal (PDF)"}</Button>
+              {p.v === 2 && <Button variant="secondary" onClick={() => setPreview((x) => !x)} aria-expanded={preview} data-testid="fw-preview">{preview ? "Hide preview" : "Preview the pages"}</Button>}
+              {canRun && <Button variant={pending ? "ai" : "secondary"} onClick={run} data-testid="fw-proposal-again">{pending ? "Save changes and generate again" : "Generate again"}</Button>}
+            </div>
+            {downloaded && <p className="text-[13px] text-[#0f7a5c] mt-2" data-testid="fw-downloaded"><Check className="inline w-3.5 h-3.5 -mt-0.5" aria-hidden /> Downloaded: {downloaded}</p>}
+            <ErrorLine>{err}</ErrorLine>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+              <UsageLine usage={usage} what="framework proposals" />
+              <CopyButton text={p.markdown} />
+            </div>
+            <p className="text-[12px] text-bz-muted mt-2">{note}{p.v === 2 ? "" : " Generate again for the designed layout."}</p>
+          </div>
         </div>
-      ) : (
-        <AiFrame title="Your proposal" className="print-plain rise-in" right={<CopyButton text={p.markdown} />}>
-          <div data-testid="fw-proposal"><Markdown text={p.markdown} /></div>
-          {p.stale && <Note className="mt-3">Made from your earlier answer. Generate again to use what you saved last.</Note>}
-          <p className="text-[12px] text-bz-muted mt-3">{note} Generate again for the new proposal layout.</p>
-        </AiFrame>
+      </Card>
+      {/* the designed pages: always in the page (the PDF is made from them), shown only on Preview */}
+      {p.v === 2 && (
+        <div data-testid="fw-proposal-doc" hidden={!preview} className="rise-in">
+          <ProposalDoc p={p} fw={fw} fkey={fkey} c={c} answers={mine.answers} grade={mine.grade} />
+        </div>
       )}
-      <div className="flex flex-col sm:flex-row gap-2 no-print">
-        <Button onClick={download} loading={saving} data-testid="fw-download">{!saving && <Download className="w-4 h-4" aria-hidden />}{saving ? "Preparing the PDF…" : "Download proposal (PDF)"}</Button>
-        {canRun && <Button variant={pending ? "ai" : "secondary"} onClick={run} data-testid="fw-proposal-again">{pending ? "Save changes and generate again" : "Generate again"}</Button>}
-        <UsageLine usage={usage} what="framework proposals" className="sm:ml-auto self-center" />
-      </div>
-      <ErrorLine>{err}</ErrorLine>
+      {p.v !== 2 && preview && <Card><Markdown text={p.markdown} /></Card>}
     </div>
   );
 }
