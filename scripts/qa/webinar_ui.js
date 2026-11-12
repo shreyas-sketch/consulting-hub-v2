@@ -110,10 +110,19 @@ async function run(br, view, vp) {
   await p.waitForTimeout(400);
   check(V('Brief: no company → asked for one'), /company/i.test(await alertText(p)), (await alertText(p)).slice(0, 60));
   await p.getByTestId('brief-company').fill('Tata Motors');
+  await p.getByTestId('brief-website').fill('not a website');
+  await p.getByTestId('brief-run').click();
+  await p.waitForTimeout(800);
+  check(V('Brief: a website that is not an address → said so, no go used'), /doesn't look like a website/.test(await alertText(p)) && (await p.getByTestId('brief-run').isEnabled()));
+  await p.getByTestId('brief-website').fill('tatamotors.com');
   await p.getByTestId('brief-run').click();
   await p.getByText('Likely problems').waitFor({ timeout: 30000 });
   const bt = await p.locator('body').innerText();
   check(V('Brief: about, news, problems, questions and opening'), /Recent news/.test(bt) && /Likely problems/.test(bt) && /\?/.test(bt));
+  const site = await p.getByTestId('brief-site').innerText();
+  check(V('Brief: with a website, "From their website" says what they do, what they sell, who they sell to and their niche'),
+    /From their website/.test(site) && /tatamotors\.com/.test(site) && /Their niche/.test(site) && /What they sell/.test(site) && /Who they sell to/.test(site)
+      && (await p.getByTestId('brief-site-summary').innerText()).length > 100);
   await go(p, '/app/brief');
   const listed = await p.locator('[data-testid^="brief-"]').filter({ hasText: 'Tata Motors' }).count();
   check(V('Brief: listed under past briefs'), listed >= 1);
