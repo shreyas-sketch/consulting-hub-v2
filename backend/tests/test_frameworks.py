@@ -146,8 +146,11 @@ def test_proposal_needs_a_saved_answer_then_counts_one_go(client):
     client.put("/api/frameworks/growth-compass/response", json=COACH)
     d = client.post("/api/frameworks/growth-compass/proposal").json()
     p = d["mine"]["proposal"]
-    assert p["title"] and len(p["approach"]) >= 2 and p["markdown"].startswith("# ") and p["stale"] is False
-    assert "## Objective" in p["markdown"] and "## Approach" in p["markdown"] and "₹" in p["markdown"]
+    assert p["v"] == 2 and p["markdown"].startswith("# The Growth Compass") and p["stale"] is False
+    assert p["client"] and p["date"] and p["framework"] == "The Growth Compass" and len(p["plan"]["phases"]) == 3
+    for h in ("Where we started", "The real problem", "Your diagnosis", "Where to focus", "Your 90-day plan", "Next steps"):
+        assert h in p["markdown"], h
+    assert "Investment" not in p["markdown"]                                   # the house structure has no fee section
     assert used(client, "fw_proposal") == 1 and d["mine"]["proposals_made"] == 1
     client.put("/api/frameworks/growth-compass/response", json={**COACH, "zone": 1})
     assert client.get("/api/frameworks/growth-compass").json()["mine"]["proposal"]["stale"] is True   # made from an older answer
@@ -195,13 +198,23 @@ def test_proposal_check_refuses_thin_answers_and_gives_the_go_back(client, monke
     assert r.status_code == 503 and used(client, "fw_proposal") == 0
 
 
-def test_proposal_reads_fees_and_phases_in_live_model_shapes():
-    from features.frameworks import clean_proposal, fake_proposal
-    raw = fake_proposal("market-fit", NOKIA)
-    raw["investment"] = {"fee_from": "₹3,00,000", "fee_to": "1,50,000", "basis": "for the engagement"}
-    p = clean_proposal(raw, "market-fit")
-    assert (p["investment"]["fee_from"], p["investment"]["fee_to"]) == (150000, 300000)
-    assert "₹1,50,000 to ₹3,00,000" in p["markdown"]
+def test_proposal_keeps_the_house_structure_from_live_model_shapes():
+    """The AI's JSON → the proposal the page renders: numbers read in live shapes, rows cut, missing parts refused."""
+    import llm
+    from features import proposal_doc
+    raw = proposal_doc.fake("The Growth Compass", "Acme", "read")
+    raw["impact"]["scenarios"][1]["value"] = "₹36,00,000"
+    raw["impact"]["scenarios"].append({"label": "no value", "value": "n/a"})
+    raw["key_facts"].append({"value": "4th", "label": "too many"})
+    p = proposal_doc.clean(raw)
+    assert p["impact"]["scenarios"][1]["value"] == 3_600_000 and len(p["impact"]["scenarios"]) == 3
+    assert len(p["key_facts"]) == 3 and p["impact"]["scenarios"][0]["cautious"] is None
+    md = proposal_doc.markdown(p, "The Growth Compass", "Acme", "Asha", "12 November 2026")
+    assert "₹36L" in md and "₹27L" in md and "Prepared for: Acme" in md
+    for part in ("plan", "diagnosis"):
+        broken = {**raw, part: {}}
+        with pytest.raises(llm.LLMError):
+            proposal_doc.clean(broken)
 
 
 def test_members_cannot_see_each_others_answers(app):

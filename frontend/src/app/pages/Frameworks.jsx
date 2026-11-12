@@ -11,6 +11,7 @@ import { apiError } from "@/lib/api";
 import { inr } from "@/lib/format";
 import { useFramework, useFrameworkProposal, useFrameworks, useSaveFramework, useSaveOwn, useSuggestCase } from "@/services/frameworks";
 import Markdown, { CopyButton } from "../components/Markdown";
+import ProposalDoc from "../components/ProposalDoc";
 import { BackLink, UsageLine } from "../components/common";
 import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, LinkButton, Loadable, Note, PageHeader, Segmented, Textarea, Thinking } from "../components/ui";
 
@@ -485,7 +486,7 @@ function OwnCase({ d }) {
         </div>
       )}
       {own.mine && <Marking mine={own.mine} />}
-      {own.mine && <Proposal fkey={key} mine={own.mine} own noAgain={caseChanged} />}
+      {own.mine && <Proposal fkey={key} fw={fw} c={own.case} mine={own.mine} own noAgain={caseChanged} />}
     </>
   );
 }
@@ -549,7 +550,34 @@ function Marking({ mine, akshat }) {
   );
 }
 
-function Proposal({ fkey, mine, own = false, noAgain = false }) {
+// Print only the proposal: the document goes into a hidden frame of its own with the app's styles, so nothing else
+// on the page takes space, and prints one designed page per A4 sheet (index.css: .pd-* print rules).
+export function proposalPrintHtml(el) {
+  return `<!doctype html><html><head><base href="${window.location.origin}/">${document.head.innerHTML}<title>Proposal</title></head>`
+    + `<body class="pd-printing">${el.outerHTML}</body></html>`;
+}
+
+function printProposal() {
+  const el = document.querySelector("[data-testid='pd-doc']");
+  if (!el) { window.print(); return; }
+  const f = document.createElement("iframe");
+  f.setAttribute("aria-hidden", "true");
+  f.style.cssText = "position:fixed;right:0;bottom:0;width:794px;height:10px;border:0;opacity:0;pointer-events:none";
+  document.body.appendChild(f);
+  const w = f.contentWindow;
+  w.document.open();
+  w.document.write(proposalPrintHtml(el));
+  w.document.close();
+  const go = () => {
+    w.focus();
+    w.print();
+    setTimeout(() => f.remove(), 2000);
+  };
+  // wait for the styles and fonts in the frame, then print
+  (w.document.fonts?.ready || Promise.resolve()).then(() => setTimeout(go, 300));
+}
+
+function Proposal({ fkey, fw, c, mine, own = false, noAgain = false }) {
   const { plan, refreshMe } = useAuth();
   const usage = plan?.limits?.fw_proposal;
   const canRun = !usage || usage.limit == null || usage.used < usage.limit;
@@ -557,12 +585,12 @@ function Proposal({ fkey, mine, own = false, noAgain = false }) {
   const gen = useFrameworkProposal(fkey, { own, onDone: () => refreshMe() });
   const p = mine.proposal;
   const run = () => { setErr(""); gen.mutate(undefined, { onError: (e) => { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } }); };
-  if (gen.isPending) return <AiFrame title="Writing your proposal"><Thinking label="Turning your analysis into a client proposal. This takes about half a minute." /></AiFrame>;
+  if (gen.isPending) return <AiFrame title="Writing your proposal"><Thinking label="Turning your analysis into a client proposal. This takes up to a minute." /></AiFrame>;
   if (!p) {
     return (
       <Card className="rise-in" data-testid="fw-proposal-cta">
         <Label>Your proposal</Label>
-        <p className="text-[15px]">Turn your analysis into a proposal this client could say yes to: the situation, what the framework shows, the objective, a phased plan, deliverables, fee and next steps.</p>
+        <p className="text-[15px]">Turn your analysis into a proposal this client could say yes to, in Akshat's structure: where they started, the real problem, your diagnosis with their numbers, where to focus, a 90-day plan, what it's worth and next steps.</p>
         <ErrorLine>{err}</ErrorLine>
         {noAgain ? <Note className="mt-3">Save the new client first, then generate its proposal.</Note>
           : <Button variant="ai" className="w-full mt-4" onClick={run} disabled={!canRun} data-testid="fw-proposal-go">Generate a Proposal</Button>}
@@ -570,15 +598,28 @@ function Proposal({ fkey, mine, own = false, noAgain = false }) {
       </Card>
     );
   }
+  const note = `${own ? "A draft proposal for your own client, built on public information." : "A practice proposal for a workshop case."} Check the numbers before you use it with a real client.`;
   return (
     <div className="space-y-3">
-      <AiFrame title="Your proposal" className="print-plain rise-in" right={<CopyButton text={p.markdown} />}>
-        <div data-testid="fw-proposal"><Markdown text={p.markdown} /></div>
-        {p.stale && <Note className="mt-3">Made from your earlier answer. Generate again to use what you saved last.</Note>}
-        <p className="text-[12px] text-bz-muted mt-3">{own ? "A draft proposal for your own client, built on public information." : "A practice proposal for a workshop case."} Check the numbers and fill in anything in [brackets] before you use it with a real client.</p>
-      </AiFrame>
+      {p.v === 2 ? (
+        <div className="rise-in space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 no-print">
+            <Label className="mb-0">Your proposal</Label>
+            <CopyButton text={p.markdown} />
+          </div>
+          {p.stale && <Note className="no-print">Made from your earlier answer. Generate again to use what you saved last.</Note>}
+          <div data-testid="fw-proposal"><ProposalDoc p={p} fw={fw} fkey={fkey} c={c} answers={mine.answers} grade={mine.grade} /></div>
+          <p className="text-[12px] text-bz-muted no-print">{note}</p>
+        </div>
+      ) : (
+        <AiFrame title="Your proposal" className="print-plain rise-in" right={<CopyButton text={p.markdown} />}>
+          <div data-testid="fw-proposal"><Markdown text={p.markdown} /></div>
+          {p.stale && <Note className="mt-3">Made from your earlier answer. Generate again to use what you saved last.</Note>}
+          <p className="text-[12px] text-bz-muted mt-3">{note} Generate again for the new proposal layout.</p>
+        </AiFrame>
+      )}
       <div className="flex flex-col sm:flex-row gap-2 no-print">
-        <Button variant="secondary" onClick={() => window.print()} data-testid="fw-print">Print or save as PDF</Button>
+        <Button variant="secondary" onClick={p.v === 2 ? printProposal : () => window.print()} data-testid="fw-print">Print or save as PDF</Button>
         {canRun && !noAgain && <Button variant="secondary" onClick={run} data-testid="fw-proposal-again">Generate again</Button>}
         <UsageLine usage={usage} what="framework proposals" className="sm:ml-auto self-center" />
       </div>
@@ -629,7 +670,7 @@ function Activity({ d }) {
         <SaveRow todo={todo} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
       </Card>
       {d.mine && d.akshat && <Marking mine={d.mine} akshat={d.akshat} />}
-      {d.mine && <Proposal fkey={fw.key} mine={d.mine} />}
+      {d.mine && <Proposal fkey={fw.key} fw={fw} c={c} mine={d.mine} />}
     </>
   );
 }
