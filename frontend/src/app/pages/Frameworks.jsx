@@ -77,7 +77,7 @@ function Venn({ fw, value }) {
             {v && (
               <text x={x + (c.key === "price" ? -30 : c.key === "value" ? 30 : 0)} y={y + (c.key === "availability" ? 58 : -4)} textAnchor="middle"
                 style={{ fill: v === "works" ? "rgb(var(--bz-gold-rgb))" : "rgb(var(--bz-miss-rgb))", fontSize: 12, fontWeight: 700 }}>
-                {v === "works" ? "works" : "fails"}
+                {v === "works" ? "Yes" : "No"}
               </text>
             )}
           </g>
@@ -93,7 +93,6 @@ function Venn({ fw, value }) {
 function MarketFit({ fw, c, own, a, set }) {
   const circles = a.circles || {};
   const setC = (k, patch) => set({ ...a, circles: { ...circles, [k]: { ...circles[k], ...patch } } });
-  const where = own ? `in ${c.new_region}` : "for Nokia";
   return (
     <div className="space-y-5">
       <Venn fw={fw} value={circles} />
@@ -101,9 +100,11 @@ function MarketFit({ fw, c, own, a, set }) {
         <div key={s.key} className="rounded-bzcard border border-bz-line bg-bz-panel p-3.5" data-testid={`fw-circle-${s.key}`}>
           <p className="font-bold text-[15px]">{s.name}</p>
           <p className="text-[13.5px] text-bz-muted">{s.ask}</p>
-          <Segmented label={`${s.name}: works or fails`} className="mt-2" value={circles[s.key]?.verdict || ""} testid={`fw-${s.key}`}
+          <p className="text-[12.5px] font-semibold mt-1.5">{own ? `For ${c.product} in ${c.new_region}` : "For Nokia in India"}</p>
+          {/* the question above is answered Yes or No (kept as works / fails underneath) */}
+          <Segmented label={`${s.name}: ${s.ask}`} className="mt-2" value={circles[s.key]?.verdict || ""} testid={`fw-${s.key}`}
             onChange={(v) => setC(s.key, { verdict: v })}
-            options={[{ value: "works", label: `Works ${where}` }, { value: "fails", label: `Fails ${where}` }]} />
+            options={[{ value: "works", label: "Yes" }, { value: "fails", label: "No" }]} />
           <Textarea rows={2} className="mt-2" value={circles[s.key]?.why || ""} maxLength={400} placeholder="Why? One sentence."
             onChange={(e) => setC(s.key, { why: e.target.value })} aria-label={`${s.name}: why`} data-testid={`fw-${s.key}-why`} />
         </div>
@@ -115,11 +116,13 @@ function MarketFit({ fw, c, own, a, set }) {
     </div>
   );
 }
+// A Venn circle's answer as the member chose it (Yes / No); other answers as they are.
+const say = (v) => ({ works: "Yes", fails: "No" }[v] || v);
 const CIRCLE_NAMES = { price: "Price", value: "Value", availability: "Availability" };
 const marketFitMissing = (a) => {
   const out = [];
   for (const [k, n] of Object.entries(CIRCLE_NAMES)) {
-    if (!a.circles?.[k]?.verdict) out.push(`${n}: works or fails`);
+    if (!a.circles?.[k]?.verdict) out.push(`${n}: yes or no`);
     if (!filled(a.circles?.[k]?.why)) out.push(`${n}: why`);
   }
   if (!filled(a.summary)) out.push("Your diagnosis");
@@ -150,7 +153,7 @@ function Concentration({ fw, c, own, a, set }) {
               return (
                 <tr key={i} className="border-t border-bz-line">
                   <td className="py-2.5 pr-2">{s.name || `Source ${i + 1}`}</td>
-                  <td className="py-2.5 text-right tabular">{inr(Number(s.amount) || 0)}<span className="block text-[12px] text-bz-muted">{inrWords(Number(s.amount) || 0)}</span></td>
+                  <td className="py-2.5 pr-4 text-right tabular">{inr(Number(s.amount) || 0)}<span className="block text-[12px] text-bz-muted">{inrWords(Number(s.amount) || 0)}</span></td>
                   <td className="py-2.5 text-right">
                     <Input type="number" inputMode="decimal" min={0} max={100} step="0.1" value={pc[i]} onChange={(e) => setP(i, e.target.value)}
                       className="!min-h-[40px] text-right w-[100px] ml-auto" aria-label={`${s.name || `Source ${i + 1}`}: concentration %`} data-testid={`fw-pct-${i}`} />
@@ -159,10 +162,15 @@ function Concentration({ fw, c, own, a, set }) {
                 </tr>
               );
             })}
-            <tr className="border-t border-bz-line-strong font-semibold"><td className="py-2.5">Total revenue</td><td className="py-2.5 text-right tabular">{inr(total)}</td><td className="py-2.5 text-right tabular text-bz-muted">{Math.round(pc.reduce((t, x) => t + (parseFloat(x) || 0), 0) * 10) / 10}%</td><td /></tr>
+            <tr className="border-t border-bz-line-strong font-semibold"><td className="py-2.5">Total revenue</td><td className="py-2.5 text-right tabular">{inr(total)}</td><td className={`py-2.5 text-right tabular ${pctOff(pc) ? "text-bz-miss font-bold" : "text-bz-muted"}`} data-testid="fw-total-pct">{pctSum(pc)}%</td><td /></tr>
           </tbody>
         </table>
       </div>
+      {pctOff(pc) && (
+        <p className="text-[14px] font-semibold text-bz-miss" role="alert" data-testid="fw-total-off">
+          Your percentages add up to {pctSum(pc)}%. Together the sources are the whole business, so they should make 100%. Check each one: its revenue ÷ total revenue × 100.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2 text-[12.5px]">
         {fw.zones.map((z) => <span key={z.key} className={`px-2 py-1 rounded-bztag ${ZONE_TONE[z.key]}`}><b className="capitalize">{z.key}</b> {z.range}</span>)}
       </div>
@@ -181,11 +189,17 @@ function Concentration({ fw, c, own, a, set }) {
     </div>
   );
 }
+// The shares are the whole business, so together they make 100% (a little either way for rounding).
+const PCT_SLACK = 1.5;
+const pctSum = (pc) => Math.round(pc.reduce((t, x) => t + (parseFloat(x) || 0), 0) * 10) / 10;
+const pctOff = (pc) => pc.length > 0 && pc.every((x) => inRange(x, 0, 100)) && Math.abs(pctSum(pc) - 100) > PCT_SLACK;
 const concentrationMissing = (a, c) => {
   const out = [];
-  fitLen(a.percents, (c.sources || []).length).forEach((x, i) => {
+  const pc = fitLen(a.percents, (c.sources || []).length);
+  pc.forEach((x, i) => {
     if (!inRange(x, 0, 100)) out.push(`Your % for ${c.sources[i]?.name || `source ${i + 1}`} (0 to 100)`);
   });
+  if (pctOff(pc)) out.push(`Your percentages add up to ${pctSum(pc)}%: together they should make 100%`);
   if (!a.recommendation) out.push("Your recommendation: expand or wait");
   if (!filled(a.reason)) out.push("Why you recommend it");
   if (!inRange(a.target_pct, 1, 100)) out.push("The target % for the biggest source (1 to 100)");
@@ -544,7 +558,7 @@ function Marking({ mine, akshat }) {
               : <X className="w-4 h-4 mt-0.5 text-bz-miss shrink-0" aria-label={holds ? "Comes apart" : "Doesn't match"} />}
             <span className="min-w-0">
               {holds ? <><b>{m.label}.</b> {m.ok ? "Holds" : "Comes apart"}</>
-                : <><b>{m.label}.</b> You: {m.yours}{!m.ok && m.right && <> · {g.own ? "The rule says" : "Akshat"}: <b>{m.right}</b></>}</>}
+                : <><b>{m.label}.</b> Your answer: {say(m.yours)}{!m.ok && m.right && <> · {g.own ? "Correct answer" : "Correct answer (Akshat)"}: <b>{say(m.right)}</b></>}</>}
             </span>
           </li>
         ))}
