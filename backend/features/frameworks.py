@@ -23,6 +23,7 @@ fw_responses {_id "<user_id>:<key>", user_id, key, answers, grade, saved_at, upd
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends
@@ -41,6 +42,7 @@ from util import inr, iso
 from .common import NO_VENDOR, as_dict, as_list, run_metered, strip_providers, text, text_list
 from .knowledge import knowledge
 
+log = logging.getLogger("frameworks")
 router = APIRouter(prefix="/frameworks", tags=["frameworks"])
 indexes.register("fw_responses", [("user_id", 1)])
 events.register("framework_saved", "Framework activity saved (props.key, correct)")
@@ -529,10 +531,31 @@ async def suggest_real_case(key: str, k: dict, hint: str, avoid: list[str], queu
     if m == "off":
         raise llm.LLMError("framework case: web search is off")
     tool = {"type": search.SEARCH_TOOL, "name": "web_search", "max_uses": CASE_SEARCHES, "user_location": search.USER_LOCATION}
-    reply = await llm.complete_with_tools(task="framework_case", system=CASE_SYSTEM, prompt=case_prompt(key, k, hint, avoid),
-                                          tools=[tool], model="strong", max_tokens=2500, timeout=CASE_TIMEOUT_S,
-                                          queue_wait=queue_wait, tool_choice=search.FORCE_SEARCH)
-    found, raw = search.results_and_answer(reply.get("content") or [])
+    # The strong model refuses a forced tool_choice (400), so the search is asked for in the prompt, and once more if the
+    # model answered without searching. A case is only built from what the search really returned.
+    prompt = "Use the web_search tool first; do not answer from memory.\n\n" + case_prompt(key, k, hint, avoid)
+    found, raw = {}, None
+    model, force = "strong", None
+    for attempt in range(2):
+        try:
+            reply = await llm.complete_with_tools(task="framework_case", system=CASE_SYSTEM, prompt=prompt, tools=[tool],
+                                                  model=model, max_tokens=2500, timeout=CASE_TIMEOUT_S,
+                                                  queue_wait=queue_wait, tool_choice=force)
+        except llm.LLMError as e:
+            why = str(e).lower()
+            if attempt == 0 and ("badrequest" in why or "invalid_request" in why or " 400" in why):
+                # The request itself was refused on the strong model: use the fast model with the search forced,
+                # the set-up Meeting Brief runs on every day.
+                log.warning("framework case: strong model refused the search request (%s); using the fast model", e)
+                model, force = "fast", search.FORCE_SEARCH
+                continue
+            raise
+        found, raw = search.results_and_answer(reply.get("content") or [])
+        if found:
+            break
+        log.warning("framework case: the model did not search (stop_reason=%s)%s", reply.get("stop_reason"),
+                    "; asking once more" if attempt == 0 else "")
+        prompt = "You must call the web_search tool before answering.\n\n" + prompt
     if not found or not raw:
         raise llm.LLMError(f"framework case: {'no search results' if not found else 'no JSON after searching'}")
     return clean_case(key, raw, found)

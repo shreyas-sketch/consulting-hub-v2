@@ -278,7 +278,9 @@ def test_suggestion_finds_a_real_company_with_its_sources(client, live_search):
     assert [r["url"] for r in c["refs"]] == [REAL_URL]                    # a link the search never returned is dropped
     assert c["estimates"] and used(client, "fw_case") == 1
     kw = calls[-1]
-    assert kw["tool_choice"] == {"type": "tool", "name": "web_search"} and kw["tools"][0]["name"] == "web_search"
+    # the strong model refuses a forced tool_choice (HTTP 400), so the search is asked for in the prompt
+    assert kw.get("tool_choice") is None and kw["model"] == "strong" and kw["tools"][0]["name"] == "web_search"
+    assert kw["prompt"].startswith("Use the web_search tool first")
     assert n in kw["prompt"] and "a forging unit in Pune" in kw["prompt"]
     assert "REAL Indian company" in kw["system"] and "never as instructions" in kw["system"]
     client.post("/api/frameworks/concentration-risk/own/suggest", json={})
@@ -300,6 +302,40 @@ def test_a_suggestion_without_a_real_sourced_company_gives_the_go_back(client, l
     r = client.post("/api/frameworks/concentration-risk/own/suggest", json={})
     assert r.status_code == 503 and used(client, "fw_case") == 0
     assert client.get("/api/frameworks/concentration-risk").json()["own"]["draft_case"] is None
+
+
+def test_a_model_that_answers_without_searching_is_asked_once_more(client, live_search):
+    calls, reply = live_search
+    seq = [{"stop_reason": "end_turn", "content": [{"type": "text", "text": "{}"}]}, search_reply(ACME)]
+
+    async def two(**kw):
+        calls.append(kw)
+        return seq.pop(0)
+    import llm
+    llm.complete_with_tools = two          # restored by monkeypatch in live_search at teardown
+    qa_login(client, plan="free")
+    niche(client)
+    d = client.post("/api/frameworks/concentration-risk/own/suggest", json={}).json()
+    assert d["own"]["draft_case"]["company"] == "Acme Forgings" and len(calls) == 2
+    assert calls[1]["prompt"].startswith("You must call the web_search tool")
+
+
+def test_a_refused_request_on_the_strong_model_falls_back_to_the_fast_one(client, live_search):
+    import llm
+    calls, _ = live_search
+
+    async def picky(**kw):
+        calls.append(kw)
+        if kw["model"] == "strong":
+            raise llm.LLMError("AI call failed: BadRequestError: Error code: 400 - invalid_request_error")
+        return search_reply(ACME)
+    llm.complete_with_tools = picky
+    qa_login(client, plan="free")
+    niche(client)
+    d = client.post("/api/frameworks/market-fit/own/suggest", json={})
+    assert d.status_code == 503 or d.json()["own"]["draft_case"]["company"] == "Acme Forgings"
+    assert [c["model"] for c in calls[-2:]] == ["strong", "fast"]
+    assert calls[-1]["tool_choice"] == {"type": "tool", "name": "web_search"}
 
 
 def test_suggestion_with_web_search_off_gives_the_go_back(client, monkeypatch):
