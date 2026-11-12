@@ -51,7 +51,10 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-proposal-go').click();
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
   const prop = await p.getByTestId('fw-proposal').innerText();
-  check(V('F1: proposal has situation, objective, approach, next steps'), ['The situation', 'Objective', 'Approach', 'Next steps'].every((h) => prop.includes(h)));
+  check(V('F1: proposal follows the house structure (contents, situation, problem, diagnosis, focus, 90-day plan, next steps)'),
+    ['Contents', 'Where we started', 'The real problem', 'Your diagnosis', 'Where to focus', 'Your 90-day', 'Next steps'].every((h) => prop.includes(h)), `${await p.locator('.pd-page').count()} pages`);
+  check(V('F1: the cover names the client and the framework'), /Nokia/.test(await p.getByTestId('pd-client').innerText()) && /Market-Fit/.test(await p.getByTestId('pd-page-cover').innerText()));
+  check(V('F1: no fee section in the proposal'), !/Investment|fee_from/.test(prop));
   await p.getByTestId('fw-price-works').click();                         // change the answer
   check(V('F1: changing the answer brings back "Save changes"'), /Save changes/.test(await p.getByTestId('fw-save').innerText()));
   await p.getByTestId('fw-save').click();
@@ -105,7 +108,9 @@ async function run(br, view, vp) {
   check(V('F3: Zone 3 + fix the reach = 2 of 2'), /2 of 2/.test(await p.getByTestId('fw-score').innerText()));
   await p.getByTestId('fw-proposal-go').click();
   await p.getByTestId('fw-proposal').waitFor({ timeout: 30000 });
-  check(V('F3: proposal made'), true);
+  check(V('F3: the verdict page marks "You are here" on Zone 3'), /Zone 3/.test(await p.getByTestId('pd-page-verdict').locator('[data-testid="pd-here"]').locator('xpath=..').innerText()));
+  check(V('F3: the 90-day plan has 3 phases and the impact chart is drawn'), (await p.locator('[data-testid^="pd-phase-"]').count()) === 3 && (await vis(p, 'pd-impact')));
+  check(V('F3: the proposal pages fit the screen (no sideways scroll)'), (await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)) === 0);
   check(V('F3: free account, 3 of 6 proposals used: says so'), /3 of 6 free framework proposals used/.test(await p.locator('body').innerText()));
 
   // ---- reload and list
