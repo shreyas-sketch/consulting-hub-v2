@@ -188,6 +188,8 @@ function Copyable({ label, text: t, children }) {
   );
 }
 
+const TAG = "text-[11.5px] font-bold uppercase tracking-[0.06em]";   // the small headings inside a change
+
 // The order a member works through the changes: the text they can paste first, then the rest.
 const ORDER = ["headline", "about", "banner", "experience", "featured", "skills", "photo", "contact", "activity"];
 // the one-line "what to do" when the AI wrote the text for a section but no note on it
@@ -199,7 +201,7 @@ function ReadyText({ k, rv }) {
   if (k === "headline" && rv.headlines?.length) {
     return (
       <div className="space-y-2">
-        <p className="text-[12.5px] font-semibold text-bz-teal">Pick one and paste it as your headline</p>
+        <p className={`${TAG} text-bz-teal`}>Pick one and paste it as your headline</p>
         {rv.headlines.map((h, i) => (
           <Copyable key={h.text} label={`Option ${i + 1}${h.angle ? ` · ${h.angle}` : ""}`} text={h.text}>
             <p className="text-[15px] font-bold">{h.text}</p>
@@ -211,12 +213,12 @@ function ReadyText({ k, rv }) {
   }
   if (k === "about" && rv.about) return <AboutText text={rv.about} />;
   if (k === "banner" && rv.banner) {
-    return <div><p className="text-[12.5px] font-semibold text-bz-teal mb-2">Text for your banner</p><Copyable text={rv.banner}><p className="font-bold">{rv.banner}</p></Copyable></div>;
+    return <div><p className={`${TAG} text-bz-teal mb-2`}>Text for your banner</p><Copyable text={rv.banner}><p className="font-bold">{rv.banner}</p></Copyable></div>;
   }
   if (k === "experience" && rv.experience?.length) {
     return (
       <div className="space-y-2">
-        <p className="text-[12.5px] font-semibold text-bz-teal">Replace each role's description with these results</p>
+        <p className={`${TAG} text-bz-teal`}>Replace each role's description with these results</p>
         {rv.experience.map((e) => (
           <Copyable key={e.role} label={e.role} text={e.bullets.map((b) => `• ${b}`).join("\n")}>
             <ul className="mt-1 space-y-1 text-[14.5px] list-disc pl-5">{e.bullets.map((b) => <li key={b}>{b}</li>)}</ul>
@@ -227,14 +229,14 @@ function ReadyText({ k, rv }) {
   }
   if (k === "featured" && rv.featured?.length) {
     return (
-      <div><p className="text-[12.5px] font-semibold text-bz-teal mb-2">Pin these, in this order</p>
+      <div><p className={`${TAG} text-bz-teal mb-2`}>Pin these, in this order</p>
         <ol className="space-y-1.5 text-[14.5px] list-decimal pl-5">{rv.featured.map((x) => <li key={x}>{x}</li>)}</ol></div>
     );
   }
   if (k === "skills" && rv.skills?.length) {
     return (
       <div>
-        <div className="flex items-center justify-between gap-2 mb-2"><p className="text-[12.5px] font-semibold text-bz-teal">Your top skills, in this order</p><CopyBtn text={rv.skills.join(", ")} /></div>
+        <div className="flex items-center justify-between gap-2 mb-2"><p className={`${TAG} text-bz-teal`}>Your top skills, in this order</p><CopyBtn text={rv.skills.join(", ")} /></div>
         <div className="flex flex-wrap gap-1.5">{rv.skills.map((x) => <Chip key={x}>{x}</Chip>)}</div>
       </div>
     );
@@ -246,7 +248,7 @@ function AboutText({ text: t }) {
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <div className="flex items-center justify-between gap-2 mb-2"><p className="text-[12.5px] font-semibold text-bz-teal">Your new About section</p><CopyBtn text={t} /></div>
+      <div className="flex items-center justify-between gap-2 mb-2"><p className={`${TAG} text-bz-teal`}>Your new About section</p><CopyBtn text={t} /></div>
       <div className={`relative rounded-bzcard border border-bz-line bg-bz-panel p-3.5 ${open ? "" : "max-h-[168px] overflow-hidden"}`}>
         <Para text={t} className="text-[14.5px]" />
         {!open && <span aria-hidden className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-bz-panel to-transparent" />}
@@ -288,10 +290,17 @@ function ChangeItem({ n, s, rv, done, onToggle, open, onOpen }) {
       </div>
       {open && (
         <div className="px-3.5 sm:px-4 pb-4 sm:pl-12 space-y-3" data-testid={`li-sec-${s.key}-detail`}>
-          {(now || why) && (
-            <div className="rounded-bzcard bg-bz-panel border border-bz-line p-3 text-[14px] space-y-1">
-              {now && <p><span className="font-semibold">Now: </span><span className="text-bz-muted">“{now}”</span></p>}
-              {why && <p><span className="font-semibold">Why it costs you: </span>{why}</p>}
+          {/* before → why → after: what the profile says today is its own block, so it's found at a glance */}
+          {now && (
+            <div className="rounded-bzcard border border-bz-miss/30 border-l-4 border-l-bz-miss bg-bz-miss-tint p-3.5" data-testid={`li-sec-${s.key}-now`}>
+              <p className={`${TAG} text-bz-miss`}>On your profile now</p>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-bz-ink">“{now}”</p>
+            </div>
+          )}
+          {why && (
+            <div className="px-0.5">
+              <p className={`${TAG} text-bz-muted`}>Why it costs you</p>
+              <p className="mt-1 text-[14.5px] leading-relaxed">{why}</p>
             </div>
           )}
           <ReadyText k={s.key} rv={rv} />
