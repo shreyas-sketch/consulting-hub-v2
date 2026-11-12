@@ -267,7 +267,7 @@ input[type="range"] {
   background-size: 48px 48px; }
 .pd-doc h1, .pd-doc h2, .pd-h { font-family: "Manrope Variable", "Manrope", "Inter", system-ui, sans-serif; font-feature-settings: normal; }
 .pd-h { font-weight: 500; letter-spacing: -0.045em; line-height: 1.02; }
-.pd-grad { display: inline-block; padding-bottom: .08em; background: linear-gradient(90deg, var(--pd-violet), var(--pd-blue-2) 45%, var(--pd-teal));
+.pd-grad { display: inline-block; padding-bottom: .08em; background: linear-gradient(90deg, #8b93ff, #4458ff 45%, #7fe0d4);
   -webkit-background-clip: text; background-clip: text; color: transparent; }
 .pd-light .pd-accent { background: none; color: var(--pd-blue); }
 .pd-muted-dark { color: rgb(232 234 244 / .55); }
