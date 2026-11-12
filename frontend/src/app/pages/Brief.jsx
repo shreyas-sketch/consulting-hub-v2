@@ -1,5 +1,6 @@
-// /app/brief and /app/brief/:id — Meeting Brief: company in, one-page brief out (news with real links, likely problems,
-// questions to ask, an opening line). Past briefs listed under the form.
+// /app/brief and /app/brief/:id — Meeting Brief: company in, one-page brief out (with a website: what the business does,
+// who it sells to and its niche, read from its own pages; news with real links, likely problems, questions to ask, an
+// opening line). Past briefs listed under the form.
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +33,43 @@ function NewsAgain({ b, onNews }) {
   );
 }
 
+// "From their website": written from the company's own pages, which the hub reads whenever a website is given.
+function SiteSummary({ site }) {
+  if (!site?.summary) return null;
+  const host = (site.url || "").replace(/^https?:\/\//, "");
+  return (
+    <section className="mt-5 rounded-bzcard border border-bz-line bg-bz-panel p-4" data-testid="brief-site">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[12px] font-semibold text-bz-teal">From their website</p>
+        <a href={site.url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-bz-teal inline-flex items-center gap-1 hover:underline">
+          {host}<ExternalLink className="w-3 h-3" aria-hidden />
+        </a>
+      </div>
+      {site.niche && <p className="mt-2 text-[15px]"><span className="font-semibold">Their niche: </span>{site.niche}</p>}
+      <p className="mt-2 text-[15px] leading-relaxed" data-testid="brief-site-summary">{site.summary}</p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {site.offerings?.length > 0 && (
+          <div>
+            <p className="text-[13px] font-semibold mb-1.5">What they sell</p>
+            <ul className="space-y-1 text-[14.5px] list-disc pl-5">{site.offerings.map((o) => <li key={o}>{o}</li>)}</ul>
+          </div>
+        )}
+        {site.audiences?.length > 0 && (
+          <div>
+            <p className="text-[13px] font-semibold mb-1.5">Who they sell to</p>
+            <ul className="space-y-2 text-[14.5px]">
+              {site.audiences.map((a) => <li key={a.who}><span className="font-semibold">{a.who}</span>{a.why && <span className="block text-[13px] text-bz-muted">{a.why}</span>}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+      <p className="text-[12px] text-bz-muted mt-3">
+        {site.test ? "Test mode: a sample, not read from the real site." : `Read from ${site.pages?.length || 1} page${(site.pages?.length || 1) === 1 ? "" : "s"} of their website when this brief was made.`}
+      </p>
+    </section>
+  );
+}
+
 export function BriefBody({ b: initial }) {
   const [b, setB] = useState(initial);
   useEffect(() => { setB(initial); }, [initial]);
@@ -40,6 +78,7 @@ export function BriefBody({ b: initial }) {
       <p className="text-[24px] font-display font-[500] tracking-[-0.01em] leading-tight">{b.input.company}</p>
       {(b.input.meeting_with || b.input.purpose) && <p className="text-[14px] text-bz-muted mt-1">{[b.input.meeting_with && `Meeting: ${b.input.meeting_with}`, b.input.purpose].filter(Boolean).join(" · ")}</p>}
       <p className="text-[15px] mt-3 leading-relaxed">{b.about}</p>
+      <SiteSummary site={b.site} />
 
       <div className="mt-5">
         <p className="text-[12px] font-semibold text-bz-teal mb-2">Recent news</p>
@@ -119,12 +158,12 @@ export default function Brief() {
     <div className="space-y-5">
       <PageHeader kicker="Meeting Brief" ai title="Walk into any meeting" accent="already prepared."
         sub="Type the company you're meeting. In about a minute you get recent news with links, the problems they likely have, questions to ask and an opening line." />
-      {busy ? <AiFrame title="Meeting Brief"><Thinking label={`Reading the news on ${f.company}`} /></AiFrame> : (
+      {busy ? <AiFrame title="Meeting Brief"><Thinking label={f.website.trim() ? `Reading ${f.company}'s website and the news on them` : `Reading the news on ${f.company}`} /></AiFrame> : (
         <Card>
           <form onSubmit={run} noValidate className="space-y-3">
             <Field label="Company"><Input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} placeholder="e.g. Haldiram's" maxLength={120} data-testid="brief-company" /></Field>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Website (optional)"><Input value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} placeholder="haldirams.com" maxLength={200} /></Field>
+              <Field label="Website (optional)" hint="We read it and sum up what they do, who they sell to and their niche."><Input value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} placeholder="haldirams.com" maxLength={200} inputMode="url" autoCapitalize="none" data-testid="brief-website" /></Field>
               <Field label="Who you're meeting (optional)"><Input value={f.meeting_with} onChange={(e) => setF({ ...f, meeting_with: e.target.value })} placeholder="e.g. Head of Operations" maxLength={120} /></Field>
             </div>
             <Field label="What the meeting is about (optional)"><Input value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })} placeholder="e.g. First conversation about their supply chain" maxLength={300} /></Field>

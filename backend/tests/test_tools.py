@@ -1,4 +1,5 @@
 """Webinar tools: Readiness Score, Starting Point, cases, Meeting Brief, LinkedIn Score, My Consulting File."""
+import pytest
 from conftest import qa_login
 
 import llm
@@ -124,6 +125,66 @@ def test_meeting_brief_always_searches(seeded_client, monkeypatch):
     assert b["live_news"] is True
 
 
+def test_brief_with_a_website_reads_it_and_summarises_the_business(seeded_client, monkeypatch):
+    """A website given → the hub reads the home page and the About page; the brief opens with a detailed summary of
+    what the business does, its offerings, target audiences and niche, written from those pages."""
+    from research import search
+    fetched, prompts = [], []
+    real_x, real_llm = search.extract, llm.complete_json
+
+    async def spy_x(urls):
+        fetched.extend(urls)
+        return await real_x(urls)
+
+    async def spy_llm(**kw):
+        prompts.append(kw["prompt"])
+        return await real_llm(**kw)
+    monkeypatch.setattr(search, "extract", spy_x)
+    monkeypatch.setattr(llm, "complete_json", spy_llm)
+    c = seeded_client
+    qa_login(c, plan="member")
+    b = c.post("/api/briefs", json={"company": "Acme Pumps", "website": "www.AcmePumps.in/products"}).json()
+    assert fetched == ["https://www.acmepumps.in", "https://www.acmepumps.in/about-us", "https://www.acmepumps.in/about"]
+    assert "THE COMPANY'S OWN WEBSITE" in prompts[-1] and "Test mode sample text for acmepumps.in" in prompts[-1]
+    site = b["site"]
+    assert site["url"] == "https://www.acmepumps.in" and site["pages"] == ["https://www.acmepumps.in"]   # repeats dropped
+    assert len(site["summary"]) >= 120 and site["niche"] and site["offerings"] and site["audiences"][0]["who"]
+    assert c.get(f"/api/briefs/{b['id']}").json()["site"] == site                                        # kept
+
+
+def test_brief_without_a_website_reads_no_site(seeded_client, monkeypatch):
+    from research import search
+
+    async def boom(urls):
+        raise AssertionError("no website, nothing to read")
+    monkeypatch.setattr(search, "extract", boom)
+    qa_login(seeded_client, plan="member")
+    b = seeded_client.post("/api/briefs", json={"company": "Acme Pumps"}).json()
+    assert b["site"] is None and b["about"]
+
+
+def test_brief_stops_when_the_website_cant_be_read_and_keeps_the_go(seeded_client, monkeypatch):
+    from research import search
+
+    async def nothing(urls):
+        return []
+    monkeypatch.setattr(search, "extract", nothing)
+    c = seeded_client
+    qa_login(c, plan="free")
+    r = c.post("/api/briefs", json={"company": "Acme Pumps", "website": "acmepumps.in"})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "website_unreadable"
+    assert "acmepumps.in" in r.json()["detail"]["msg"] and "didn't use up your go" in r.json()["detail"]["msg"]
+    assert c.post("/api/briefs", json={"company": "Acme Pumps"}).status_code == 200              # the go is still there
+
+
+@pytest.mark.parametrize("bad", ["not a website", "acme", "http://", "acme..in."])
+def test_brief_refuses_a_website_that_isnt_an_address(seeded_client, bad):
+    qa_login(seeded_client, plan="free")
+    r = seeded_client.post("/api/briefs", json={"company": "Acme Pumps", "website": bad})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "bad_website"
+    assert seeded_client.post("/api/briefs", json={"company": "Acme Pumps"}).status_code == 200   # no go used
+
+
 def test_meeting_brief_when_search_finds_nothing(seeded_client, monkeypatch):
     monkeypatch.setenv("SEARCH_MODE", "off")
     c = seeded_client
@@ -218,7 +279,7 @@ def test_brief_without_news_can_look_again_free_three_times(seeded_client, monke
     monkeypatch.setenv("SEARCH_MODE", "off")
     c = seeded_client
     qa_login(c, plan="free")
-    b = c.post("/api/briefs", json={"company": "Acme Pumps", "website": "acmepumps.in"}).json()
+    b = c.post("/api/briefs", json={"company": "Acme Pumps"}).json()
     assert b["live_news"] is False and b["news"] == [] and b["news_tries_left"] == 3
 
     def brief_uses():
