@@ -334,6 +334,7 @@ def test_suggestion_finds_a_real_company_with_its_sources(client, live_search):
     assert kw["prompt"].startswith("Use the web_search tool first")
     assert n in kw["prompt"] and "a forging unit in Pune" in kw["prompt"]
     assert "REAL Indian company" in kw["system"] and "never as instructions" in kw["system"]
+    assert "₹5 crore to ₹150 crore" in kw["prompt"] and "₹12 crore = 120000000" in kw["prompt"]   # sized and in rupees
     client.post("/api/frameworks/concentration-risk/own/suggest", json={})
     assert "PICK A DIFFERENT COMPANY: Acme Forgings" in calls[-1]["prompt"]       # "Suggest another" moves on
 
@@ -344,6 +345,9 @@ def test_suggestion_finds_a_real_company_with_its_sources(client, live_search):
     (ACME, ()),                                                               # the search found nothing
     ({**ACME, "client": "x", "company": "", "sources": [{"name": "Only one", "amount": 100}]}, (REAL_URL,)),
     ({**ACME, "situation": "short"}, (REAL_URL,)),
+    ({**ACME, "sources": [{"name": "Exports", "amount": 9_000_000_000_000}, {"name": "Domestic", "amount": 1}]},
+     (REAL_URL,)),                                                            # a slip in units: ₹90,000 crore
+    ({**ACME, "sources": [{"name": "A", "amount": 20_000}, {"name": "B", "amount": 30_000}]}, (REAL_URL,)),   # ₹50,000
 ])
 def test_a_suggestion_without_a_real_sourced_company_gives_the_go_back(client, live_search, case, urls):
     _, reply = live_search

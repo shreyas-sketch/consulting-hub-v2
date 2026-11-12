@@ -22,6 +22,17 @@ export function inrShort(v) {
   return `${s}₹${a.toFixed(0)}`;
 }
 
+// ₹62 crore / ₹45 lakh / ₹8,500: an amount as people say it, under a long number so it can be read at a glance.
+export function inrWords(v) {
+  const n = num(v);
+  if (n === null) return "—";
+  const a = Math.abs(n);
+  const s = n < 0 ? "−" : "";
+  if (a >= 1e7) return `${s}₹${trimZeros((a / 1e7).toFixed(2))} crore`;
+  if (a >= 1e5) return `${s}₹${trimZeros((a / 1e5).toFixed(2))} lakh`;
+  return `${s}₹${a.toLocaleString("en-IN")}`;
+}
+
 export function usd(v) {
   const n = num(v);
   if (n === null) return "—";

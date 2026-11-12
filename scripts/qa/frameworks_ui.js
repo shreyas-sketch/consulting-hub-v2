@@ -226,6 +226,9 @@ async function run(br, view, vp) {
   check(V('Own F2: while the case differs from the saved one, the marking is labelled as the saved client\'s'), await vis(p, 'fw-own-old'));
   await p.getByTestId('fw-case-src-name-3').fill('Festive pop-up stalls');
   await p.getByTestId('fw-case-src-amt-3').fill('1000000');
+  check(V('Own F2: a revenue amount shows Indian commas and is said in words (10,00,000 → ₹10 lakh), and so is the total'),
+    (await p.getByTestId('fw-case-src-amt-3').inputValue()) === '10,00,000' && (await p.getByTestId('fw-case-src-words-3').innerText()) === '₹10 lakh'
+      && /lakh|crore/.test(await p.getByTestId('fw-case-total').innerText()));
   check(V('Own F2: once named, the table has 4 rows and waits for the new %'),
     (await p.locator('[data-testid^="fw-pct-"]').count()) === 4 && !(await vis(p, 'fw-save')));
   await p.getByTestId('fw-pct-0').fill('40.9'); await p.getByTestId('fw-pct-1').fill('27.3'); await p.getByTestId('fw-pct-2').fill('22.7'); await p.getByTestId('fw-pct-3').fill('9.1');

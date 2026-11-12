@@ -421,9 +421,12 @@ CASE_SHAPES = {
                    '{"company": "", "client": "", "product": "", "new_region": "", "situation": "", '
                    '"refs": [""], "estimates": ""}'),
     "concentration-risk": ("The company is considering an expansion (a plant, a city, a product line; use a real "
-                           "announced plan if there is one). Give 3 to 5 revenue sources (customers, segments or "
-                           "markets) with yearly amounts in rupees as whole numbers that add up to its real or "
-                           "estimated revenue; use any customer or segment split it publishes, otherwise estimate.",
+                           "announced plan if there is one). Pick a company the size this consultant could really "
+                           "win as a client: usually ₹5 crore to ₹150 crore of revenue a year, not a listed giant. "
+                           "Give 3 to 5 revenue sources (customers, segments or markets) with yearly amounts in "
+                           "rupees as whole numbers (₹12 crore = 120000000; ₹45 lakh = 4500000) that add up to the "
+                           "revenue it publishes or that the search results show; never inflate it. Use any customer "
+                           "or segment split it publishes, otherwise estimate the split and say so in estimates.",
                            '{"company": "", "client": "", "situation": "", "sources": [{"name": "", "amount": 0}], '
                            '"refs": [""], "estimates": ""}'),
     "growth-compass": ("The company's growth has been flat or slow (use its published results if they show it). "
@@ -433,6 +436,7 @@ CASE_SHAPES = {
                        '{"company": "", "client": "", "situation": "", "reach_per_month": 0, "conversion_pct": 0, '
                        '"reach_level": "high|low", "conversion_level": "high|low", "refs": [""], "estimates": ""}'),
 }
+CASE_TOTAL = (10_00_000, 1_000_00_00_000)    # a suggested client's yearly revenue: ₹10 lakh to ₹1,000 crore
 CASE_SEARCHES = 4                # find a company that fits, then read about it
 CASE_TIMEOUT_S = 120             # a search turn on the strong model: find, read, write
 
@@ -486,6 +490,9 @@ def clean_case(key: str, raw: Any, found: Optional[dict] = None) -> dict:
     if key == "concentration-risk":
         r["sources"] = [{"name": text(s.get("name"), 100), "amount": _num(s.get("amount")) or 0}
                         for s in as_list(r.get("sources"))[:6] if isinstance(s, dict)]
+        total = sum(s["amount"] for s in r["sources"])
+        if found is not None and not CASE_TOTAL[0] <= total <= CASE_TOTAL[1]:   # a slip in units, or not a client-sized firm
+            raise llm.LLMError(f"framework case: revenue total out of range ({total})")
     if key == "growth-compass":
         r["reach_per_month"] = _num(r.get("reach_per_month"))
         try:
