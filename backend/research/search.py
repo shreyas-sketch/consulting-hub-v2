@@ -216,6 +216,34 @@ def _json_obj(text: str) -> Optional[dict]:
     return out if isinstance(out, dict) else None
 
 
+def results_and_answer(blocks: list[dict]) -> tuple[dict[str, dict], Optional[dict]]:
+    """For callers that write their own JSON after searching (e.g. a real client case): every result the search tool
+    returned, keyed for lookup ({key: {url, title, source}}), and the JSON object written after the last result.
+    Links in that JSON are only trusted when `key_of(url)` is one of these keys."""
+    found: dict[str, dict] = {}
+    last_result = -1
+    for i, b in enumerate(blocks):
+        if b.get("type") != "web_search_tool_result":
+            continue
+        last_result = i
+        content = b.get("content")
+        if isinstance(content, dict):
+            log.warning("web search error: %s", str(content.get("error_code"))[:60])
+            continue
+        for r in content or []:
+            if isinstance(r, dict) and r.get("type") == "web_search_result":
+                url = _web_url(r.get("url"))
+                k = _key(url)
+                if url and k and k not in found:
+                    found[k] = {"url": url[:500], "title": _plain(r.get("title"), 200) or _source(url), "source": _source(url)}
+    texts = [str(b.get("text") or "") for b in blocks[last_result + 1:] if b.get("type") == "text"]
+    return found, _json_obj("".join(texts))
+
+
+def key_of(url: Any) -> str:
+    return _key(_web_url(url))
+
+
 def parse_search_reply(blocks: list[dict], n: int) -> list[dict]:
     """Messages API content blocks (web search turn) → news rows. Only URLs from web_search_tool_result blocks."""
     found: dict[str, dict] = {}          # _key(url) → tool result, in the order the tool returned them

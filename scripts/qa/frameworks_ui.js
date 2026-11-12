@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const B = process.env.HUB_URL || 'http://127.0.0.1:8002', OUT = process.argv[2] || '.';
 const rows = [];
 const check = (name, ok, detail = '') => { rows.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? '  [' + detail + ']' : ''}`); };
-const scenario = (name) => fetch(`${B}/api/_qa/scenario`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+const scenario = (name, env) => fetch(`${B}/api/_qa/scenario`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, env }) });
 const vis = async (p, id) => (await p.getByTestId(id).count()) > 0 && p.getByTestId(id).first().isVisible();
 
 async function run(br, view, vp) {
@@ -30,14 +30,17 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-activity').waitFor();
   check(V('F1: Akshat\'s Amul example is shown'), /Amul/.test(await p.locator('body').innerText()));
   check(V('F1: no Save before the activity is done'), !(await vis(p, 'fw-save')) && (await vis(p, 'fw-incomplete')));
+  // short, ordinary answers, as members type them (a hidden minimum length once kept Save from ever appearing)
   await p.getByTestId('fw-price-fails').click();                         // a wrong call on purpose
-  await p.getByTestId('fw-price-why').fill('Smartphones from others were cheaper later.');
+  await p.getByTestId('fw-price-why').fill('Cheaper rivals');
   await p.getByTestId('fw-value-fails').click();
-  await p.getByTestId('fw-value-why').fill('Stayed on Symbian and was late to touchscreens.');
-  check(V('F1: still no Save with one circle left'), !(await vis(p, 'fw-save')));
+  await p.getByTestId('fw-value-why').fill('Symbian');
+  check(V('F1: still no Save with one circle left, and the list says what is missing'), !(await vis(p, 'fw-save'))
+    && /Availability: works or fails/.test(await p.getByTestId('fw-incomplete').innerText()) && /Your diagnosis/.test(await p.getByTestId('fw-incomplete').innerText())
+    && !/Price/.test(await p.getByTestId('fw-incomplete').innerText()));
   await p.getByTestId('fw-availability-works').click();
-  await p.getByTestId('fw-availability-why').fill('Sold everywhere, Tier 2 and Tier 3 towns too.');
-  await p.getByTestId('fw-summary').fill('The value circle came apart when smartphones arrived; Nokia did not move in time.');
+  await p.getByTestId('fw-availability-why').fill('Everywhere');
+  await p.getByTestId('fw-summary').fill('Value failed');
   check(V('F1: Save appears once every step is done'), await vis(p, 'fw-save'));
   await p.getByTestId('fw-save').click();
   await p.getByTestId('fw-marking').waitFor();
@@ -65,7 +68,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-pct-1').fill('30');
   await p.getByTestId('fw-pct-2').fill('10');
   await p.getByTestId('fw-rec-wait').click();
-  await p.getByTestId('fw-reason').fill('60% of revenue is one developer; if they leave, the firm loses most of its income overnight.');
+  await p.getByTestId('fw-reason').fill('Too risky');
   await p.getByTestId('fw-target').fill('35');
   check(V('F2: no Save until months are filled'), !(await vis(p, 'fw-save')));
   await p.getByTestId('fw-months').fill('12');
@@ -93,10 +96,10 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-zone-3').click();
   check(V('F3: tapping a zone selects it'), (await p.getByTestId('fw-zone-3').getAttribute('aria-pressed')) === 'true');
   await p.getByTestId('fw-fix-reach').click();
-  await p.getByTestId('fw-action-0').fill('Run a free monthly career-switch webinar');
-  await p.getByTestId('fw-action-1').fill('Partner with three HR communities');
-  check(V('F3: no Save with two actions'), !(await vis(p, 'fw-save')));
-  await p.getByTestId('fw-action-2').fill('Ask alumni for referrals with a small reward');
+  await p.getByTestId('fw-action-0').fill('Webinars');
+  await p.getByTestId('fw-action-1').fill('HR groups');
+  check(V('F3: no Save with two actions, the list asks for Action 3'), !(await vis(p, 'fw-save')) && /Action 3/.test(await p.getByTestId('fw-incomplete').innerText()));
+  await p.getByTestId('fw-action-2').fill('Referrals');
   await p.getByTestId('fw-save').click();
   await p.getByTestId('fw-marking').waitFor();
   check(V('F3: Zone 3 + fix the reach = 2 of 2'), /2 of 2/.test(await p.getByTestId('fw-score').innerText()));
@@ -154,15 +157,17 @@ async function run(br, view, vp) {
   await p.request.post(`${B}/api/start/snapshot/${snap.id}/choose`, { data: { index: 0 } });
   await p.goto(B + '/app/frameworks/concentration-risk?case=own', { waitUntil: 'networkidle' });
   check(V('Own F2: my niche is named'), await vis(p, 'fw-own-niche'));
-  await scenario('vendor_error');
+  await scenario('ok', { SEARCH_MODE: 'off' });          // the web search can't run → no real company → busy, go kept
   await p.getByTestId('fw-own-suggest').click();
   await p.getByText('The AI is busy right now').waitFor({ timeout: 30000 });
-  check(V('Own F2: AI failure on suggest shows the busy message, no case'), !(await vis(p, 'fw-case-editor')));
-  await scenario('ok');
+  check(V('Own F2: search failure on suggest shows the busy message, no case'), !(await vis(p, 'fw-case-editor')));
+  await scenario('ok', { SEARCH_MODE: 'fake' });
   await p.getByTestId('fw-own-suggest').click();
   await p.getByTestId('fw-case-editor').waitFor({ timeout: 30000 });
   const n0 = await p.locator('[data-testid^="fw-pct-"]').count();
   check(V('Own F2: suggested client fills the editor, one % box per source'), n0 === 3 && (await p.getByTestId('fw-case-client').inputValue()).length > 3, `rows=${n0}`);
+  check(V('Own F2: the suggestion is shown as a real company, with its sources and estimates'),
+    (await vis(p, 'fw-real')) && (await p.locator('[data-testid="fw-refs"] a[href^="http"]').count()) >= 1 && (await vis(p, 'fw-estimates')));
   await p.getByTestId('fw-pct-0').fill('45'); await p.getByTestId('fw-pct-1').fill('30'); await p.getByTestId('fw-pct-2').fill('25');
   await p.getByTestId('fw-rec-wait').click();
   await p.getByTestId('fw-reason').fill('45% comes from one corporate client; losing it would take almost half the revenue.');
@@ -173,6 +178,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-case-edit').click();
   await p.getByTestId('fw-case-src-add').click();
   check(V('Own F2: a blank new source pauses the exercise (no Save)'), (await vis(p, 'fw-case-incomplete')) && !(await vis(p, 'fw-save')));
+  check(V('Own F2: while the case differs from the saved one, the marking is labelled as the saved client\'s'), await vis(p, 'fw-own-old'));
   await p.getByTestId('fw-case-src-name-3').fill('Festive pop-up stalls');
   await p.getByTestId('fw-case-src-amt-3').fill('1000000');
   check(V('Own F2: once named, the table has 4 rows and waits for the new %'),
@@ -182,6 +188,7 @@ async function run(br, view, vp) {
   await p.getByTestId('fw-save').click();
   await p.waitForTimeout(800);
   check(V('Own F2: re-marked on 4 sources (6 checks)'), /of 6/.test(await p.getByTestId('fw-score').innerText()));
+  check(V('Own F2: after saving, the "saved client" label is gone'), !(await vis(p, 'fw-own-old')));
 
   // ---- 6. Compass on a suggested client
   await p.goto(B + '/app/frameworks/growth-compass?case=own', { waitUntil: 'networkidle' });

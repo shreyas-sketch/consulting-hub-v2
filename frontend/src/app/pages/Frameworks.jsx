@@ -5,7 +5,7 @@
 // written by the member, editable, checked against the framework's rules, then a proposal.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Check, ChevronRight, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiError } from "@/lib/api";
 import { inr } from "@/lib/format";
@@ -17,6 +17,11 @@ import { AiFrame, Button, Card, Chip, ErrorLine, Field, Input, Label, LinkButton
 const ZONE_TONE = { green: "text-[#0f7a3d] bg-[#e7f6ec]", orange: "text-[#a35200] bg-[#fdf0e1]", red: "text-bz-miss bg-bz-miss-tint" };
 const zoneFor = (p) => (p <= 20 ? "green" : p <= 40 ? "orange" : "red");
 const words = (s) => (s || "").trim().length;
+// An answer counts once it has any real text (FILLED in backend/features/frameworks.py). Save shows as soon as every step
+// is answered; until then the page lists exactly what is still empty.
+const filled = (s) => words(s) >= 2;
+const num = (x) => (x === "" || x == null ? NaN : Number(x));
+const inRange = (x, lo, hi) => Number.isFinite(num(x)) && num(x) >= lo && num(x) <= hi;
 
 // ============================================================================ the list (also shown on Cases) ====
 export function FrameworkList({ compact = false }) {
@@ -108,8 +113,16 @@ function MarketFit({ fw, c, own, a, set }) {
     </div>
   );
 }
-const marketFitDone = (a) => ["price", "value", "availability"].every((k) => a.circles?.[k]?.verdict && words(a.circles[k].why) >= 10)
-  && words(a.summary) >= 20;
+const CIRCLE_NAMES = { price: "Price", value: "Value", availability: "Availability" };
+const marketFitMissing = (a) => {
+  const out = [];
+  for (const [k, n] of Object.entries(CIRCLE_NAMES)) {
+    if (!a.circles?.[k]?.verdict) out.push(`${n}: works or fails`);
+    if (!filled(a.circles?.[k]?.why)) out.push(`${n}: why`);
+  }
+  if (!filled(a.summary)) out.push("Your diagnosis");
+  return out;
+};
 
 // ============================================================================ framework 2: concentration ====
 const fitLen = (arr, n) => Array.from({ length: n }, (_, i) => (arr || [])[i] ?? "");
@@ -166,10 +179,16 @@ function Concentration({ fw, c, own, a, set }) {
     </div>
   );
 }
-const concentrationDone = (a, c) => {
-  const pc = fitLen(a.percents, (c.sources || []).length);
-  return pc.length >= 2 && pc.every((x) => x !== "" && Number.isFinite(parseFloat(x)))
-    && a.recommendation && words(a.reason) >= 20 && Number(a.target_pct) >= 5 && Number(a.months) >= 1;
+const concentrationMissing = (a, c) => {
+  const out = [];
+  fitLen(a.percents, (c.sources || []).length).forEach((x, i) => {
+    if (!inRange(x, 0, 100)) out.push(`Your % for ${c.sources[i]?.name || `source ${i + 1}`} (0 to 100)`);
+  });
+  if (!a.recommendation) out.push("Your recommendation: expand or wait");
+  if (!filled(a.reason)) out.push("Why you recommend it");
+  if (!inRange(a.target_pct, 1, 100)) out.push("The target % for the biggest source (1 to 100)");
+  if (!inRange(a.months, 1, 60) || !Number.isInteger(num(a.months))) out.push("Within how many months (1 to 60)");
+  return out;
 };
 
 // ============================================================================ framework 3: the compass ====
@@ -218,13 +237,19 @@ function Compass({ fw, c, own, a, set }) {
     </div>
   );
 }
-const compassDone = (a) => Number(a.zone) >= 1 && a.fix && [0, 1, 2].every((i) => words((a.actions || [])[i]) >= 8);
+const compassMissing = (a) => {
+  const out = [];
+  if (!(Number(a.zone) >= 1)) out.push("A zone on the compass");
+  if (!a.fix) out.push("What to work on");
+  [0, 1, 2].forEach((i) => { if (!filled((a.actions || [])[i])) out.push(`Action ${i + 1}`); });
+  return out;
+};
 
 const ACTIVITY = {
-  "market-fit": { El: MarketFit, done: marketFitDone, blank: () => ({ circles: {}, summary: "" }) },
-  "concentration-risk": { El: Concentration, done: concentrationDone,
+  "market-fit": { El: MarketFit, missing: marketFitMissing, blank: () => ({ circles: {}, summary: "" }) },
+  "concentration-risk": { El: Concentration, missing: concentrationMissing,
     blank: (c) => ({ percents: fitLen([], (c?.sources || []).length || 3), recommendation: "", reason: "", target_pct: "", months: "" }) },
-  "growth-compass": { El: Compass, done: compassDone, blank: () => ({ zone: 0, fix: "", actions: ["", "", ""] }) },
+  "growth-compass": { El: Compass, missing: compassMissing, blank: () => ({ zone: 0, fix: "", actions: ["", "", ""] }) },
 };
 const toPayload = (key, a, c) => (key === "concentration-risk"
   ? { ...a, percents: fitLen(a.percents, (c?.sources || []).length).map((x) => parseFloat(x)), target_pct: Number(a.target_pct), months: Number(a.months) }
@@ -236,17 +261,36 @@ const BLANK_CASE = {
   "concentration-risk": () => ({ client: "", situation: "", sources: [{ name: "", amount: "" }, { name: "", amount: "" }, { name: "", amount: "" }] }),
   "growth-compass": () => ({ client: "", situation: "", reach_per_month: "", conversion_pct: "", reach_level: "", conversion_level: "" }),
 };
-const CASE_FIELDS = ["client", "situation", "product", "new_region", "sources", "reach_per_month", "conversion_pct", "reach_level", "conversion_level"];
+const CASE_FIELDS = ["client", "situation", "product", "new_region", "sources", "reach_per_month", "conversion_pct", "reach_level", "conversion_level",
+  "company", "refs", "estimates"];
 const pickCase = (c) => Object.fromEntries(CASE_FIELDS.filter((f) => c && f in c).map((f) => [f, c[f]]));
-const caseOk = (key, c) => {
-  if (!c || words(c.client) < 3 || words(c.situation) < 40) return false;
-  if (key === "market-fit") return words(c.product) >= 3 && words(c.new_region) >= 2;
-  if (key === "concentration-risk") return (c.sources || []).length >= 2 && c.sources.every((s) => words(s.name) >= 2 && Number(s.amount) > 0);
-  const conv = parseFloat(c.conversion_pct);
-  return Number(c.reach_per_month) >= 1 && Number.isFinite(conv) && conv >= 0 && conv <= 100 && c.reach_level && c.conversion_level;
+// The same rules as the case schemas in backend/features/frameworks.py.
+const caseMissing = (key, c) => {
+  if (!c) return [];
+  const out = [];
+  if (!filled(c.client)) out.push("The client");
+  if (key === "market-fit") {
+    if (!filled(c.product)) out.push("The product or service");
+    if (!filled(c.new_region)) out.push("Where it wants to launch");
+  }
+  if (words(c.situation) < 10) out.push("The situation (a sentence or more)");
+  if (key === "concentration-risk") {
+    (c.sources || []).forEach((x, i) => {
+      if (!filled(x.name)) out.push(`Source ${i + 1}: name`);
+      if (!(num(x.amount) > 0)) out.push(`Source ${i + 1}: revenue in ₹`);
+    });
+    if ((c.sources || []).length < 2) out.push("At least two revenue sources");
+  }
+  if (key === "growth-compass") {
+    if (!(num(c.reach_per_month) >= 1)) out.push("Reach (people a month)");
+    if (!inRange(c.conversion_pct, 0, 100)) out.push("Conversion (0 to 100%)");
+    if (!c.reach_level) out.push("Research says reach is high or low");
+    if (!c.conversion_level) out.push("Research says conversion is high or low");
+  }
+  return out;
 };
 const casePayload = (key, c) => {
-  const p = pickCase(c);
+  const p = { company: "", refs: [], estimates: "", ...pickCase(c) };     // the same shape the server keeps
   if (key === "concentration-risk") p.sources = (p.sources || []).map((s) => ({ name: s.name, amount: Math.round(Number(s.amount)) }));
   if (key === "growth-compass") { p.reach_per_month = Math.round(Number(p.reach_per_month)); p.conversion_pct = parseFloat(p.conversion_pct); }
   return p;
@@ -258,12 +302,36 @@ const ownTitle = (key, c) => {
   return `${who}: revenue is flat. What should they fix?`;
 };
 
+// A suggested client is a real company: show where its facts come from and which numbers are estimates.
+function RealCompany({ c }) {
+  if (!c.company) return null;
+  return (
+    <div className="rounded-bzcard border border-bz-line bg-bz-panel p-3.5 text-[13.5px] space-y-2" data-testid="fw-real">
+      <p><Chip tone="gold">Real company</Chip> <b className="ml-1">{c.company}</b></p>
+      {(c.refs || []).length > 0 && (
+        <ul className="space-y-1" data-testid="fw-refs">
+          {c.refs.map((r) => (
+            <li key={r.url} className="min-w-0">
+              <a href={r.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-start gap-1.5 text-bz-gold hover:underline break-words">
+                <ExternalLink className="w-3.5 h-3.5 mt-[3px] shrink-0" aria-hidden /><span className="min-w-0">{r.title}{r.source ? ` · ${r.source}` : ""}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {c.estimates && <p className="text-bz-muted" data-testid="fw-estimates"><b>Estimated for practice:</b> {c.estimates}</p>}
+      <p className="text-bz-muted">Built on public information for practice. Check the facts before you talk to the company.</p>
+    </div>
+  );
+}
+
 function CaseEditor({ fkey, c, set }) {
   const up = (patch) => set({ ...c, ...patch });
   const src = c.sources || [];
   const setS = (i, patch) => up({ sources: src.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   return (
     <div className="space-y-3" data-testid="fw-case-editor">
+      <RealCompany c={c} />
       <Field label="The client" hint="A short description, like “a family-run sweet shop chain in Pune”.">
         <Input value={c.client || ""} maxLength={120} onChange={(e) => up({ client: e.target.value })} data-testid="fw-case-client" />
       </Field>
@@ -321,26 +389,26 @@ function OwnStart({ fkey, niche, onWrite, hasCase }) {
   const [err, setErr] = useState("");
   const suggest = useSuggestCase(fkey, { onDone: () => refreshMe() });
   const run = () => { setErr(""); suggest.mutate(hint, { onError: (e) => { if (![402, 403].includes(e?.response?.status)) setErr(apiError(e)); } }); };
-  if (suggest.isPending) return <AiFrame title="Finding a client from your niche"><Thinking label="Writing a realistic client case for your niche. This takes a few seconds." /></AiFrame>;
+  if (suggest.isPending) return <AiFrame title="Finding a real company in your niche"><Thinking label="Searching the web for a company in your niche and reading what's public about it. This can take up to a minute." /></AiFrame>;
   return (
     <Card data-testid="fw-own-start">
       <Label>Your own client</Label>
       {niche ? (
         <>
-          <p className="text-[15px]">Practise on a client you could really serve. From your niche: <b data-testid="fw-own-niche">{niche.niche}</b>.</p>
-          <Field label="Have a client in mind? (optional)" className="mt-3">
-            <Input value={hint} maxLength={300} onChange={(e) => setHint(e.target.value)} placeholder="e.g. a dental clinic chain in Chennai" data-testid="fw-own-hint" />
+          <p className="text-[15px]">Practise on a real company you could pitch to, found on the web for your niche: <b data-testid="fw-own-niche">{niche.niche}</b>.</p>
+          <Field label="Have a company in mind? (optional)" hint="Its name, or what kind of company, e.g. “an auto parts maker in Chennai”." className="mt-3">
+            <Input value={hint} maxLength={300} onChange={(e) => setHint(e.target.value)} placeholder="e.g. Sundram Fasteners" data-testid="fw-own-hint" />
           </Field>
           <ErrorLine>{err}</ErrorLine>
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
-            <Button variant="ai" onClick={run} disabled={!canRun} data-testid="fw-own-suggest">{hasCase ? "Suggest another client" : "Suggest a client from my niche"}</Button>
+            <Button variant="ai" onClick={run} disabled={!canRun} data-testid="fw-own-suggest">{hasCase ? "Suggest another company" : "Suggest a real company from my niche"}</Button>
             {!hasCase && <Button variant="secondary" onClick={onWrite} data-testid="fw-own-write">Write my own client</Button>}
           </div>
-          <UsageLine usage={usage} what="client suggestions" className="mt-2" />
+          <UsageLine usage={usage} what="company suggestions" className="mt-2" />
         </>
       ) : (
         <>
-          <p className="text-[15px]">Choose your niche in Starting Point and we'll suggest a client from it. Or write your own client now.</p>
+          <p className="text-[15px]">Choose your niche in Starting Point and we'll find a real company in it for you. Or write your own client now.</p>
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
             <LinkButton to="/app/start" variant="secondary" data-testid="fw-own-start-link">Go to Starting Point</LinkButton>
             {!hasCase && <Button variant="secondary" onClick={onWrite} data-testid="fw-own-write">Write my own client</Button>}
@@ -354,7 +422,7 @@ function OwnStart({ fkey, niche, onWrite, hasCase }) {
 function OwnCase({ d }) {
   const fw = d.framework;
   const key = fw.key;
-  const { El, done, blank } = ACTIVITY[key];
+  const { El, missing, blank } = ACTIVITY[key];
   const own = d.own || {};
   const savedCase = own.case ? pickCase(own.case) : null;
   const saved = own.mine?.answers;
@@ -369,11 +437,14 @@ function OwnCase({ d }) {
     if (draft) { setC(draft); setA(blank(draft)); setEditing(true); }
   }, [draftSig]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = useSaveOwn(key);
-  const okCase = caseOk(key, c);
-  const complete = okCase && done(a, c);
+  const caseTodo = caseMissing(key, c);
+  const okCase = !!c && caseTodo.length === 0;
+  const todo = okCase ? missing(a, c) : [];
   const payload = useMemo(() => (c ? { case: casePayload(key, c), answers: toPayload(key, a, c) } : null), [c, a, key]);
   const dirty = JSON.stringify(payload) !== JSON.stringify(savedCase && saved ? { case: casePayload(key, savedCase), answers: toPayload(key, saved, savedCase) } : null);
   const onSave = () => { setErr(""); save.mutate(payload, { onSuccess: () => setEditing(false), onError: (e) => setErr(apiError(e)) }); };
+  // the case on screen is not the saved one (a new suggestion, or edits): what's below belongs to the saved client
+  const caseChanged = !!(savedCase && c && JSON.stringify(casePayload(key, c)) !== JSON.stringify(casePayload(key, savedCase)));
   const setCase = (v) => {
     setErr("");
     // the table follows the sources: one % per source
@@ -390,7 +461,8 @@ function OwnCase({ d }) {
             <CaseEditor fkey={key} c={c} set={setCase} />
           ) : (
             <>
-              <p className="text-[15px]" data-testid="fw-own-situation">{c.situation}</p>
+              <RealCompany c={c} />
+              <p className="text-[15px] mt-3" data-testid="fw-own-situation">{c.situation}</p>
               <Button variant="secondary" className="mt-2" onClick={() => setEditing(true)} data-testid="fw-case-edit">Edit the case</Button>
             </>
           )}
@@ -400,14 +472,20 @@ function OwnCase({ d }) {
               <div className="mt-4"><El fw={fw} c={c} own a={a} set={(v) => { setA(v); setErr(""); }} /></div>
             </>
           ) : (
-            <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-case-incomplete">Fill in the case above and the exercise appears.</p>
+            <ToDo items={caseTodo} title="Fill in the case and the exercise appears. Still empty:" testid="fw-case-incomplete" />
           )}
           <ErrorLine>{err}</ErrorLine>
-          <SaveRow complete={complete} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
+          {okCase && <SaveRow todo={todo} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />}
         </Card>
       )}
+      {own.mine && caseChanged && (
+        <div className="rounded-bzcard border border-bz-line-strong bg-bz-raised p-3.5 text-[14px]" data-testid="fw-own-old">
+          <b>Below: your saved client, {savedCase.client}.</b> The marking and proposal are for that client. Save the
+          new client above to replace them.
+        </div>
+      )}
       {own.mine && <Marking mine={own.mine} />}
-      {own.mine && <Proposal fkey={key} mine={own.mine} own />}
+      {own.mine && <Proposal fkey={key} mine={own.mine} own noAgain={caseChanged} />}
     </>
   );
 }
@@ -471,7 +549,7 @@ function Marking({ mine, akshat }) {
   );
 }
 
-function Proposal({ fkey, mine, own = false }) {
+function Proposal({ fkey, mine, own = false, noAgain = false }) {
   const { plan, refreshMe } = useAuth();
   const usage = plan?.limits?.fw_proposal;
   const canRun = !usage || usage.limit == null || usage.used < usage.limit;
@@ -486,7 +564,8 @@ function Proposal({ fkey, mine, own = false }) {
         <Label>Your proposal</Label>
         <p className="text-[15px]">Turn your analysis into a proposal this client could say yes to: the situation, what the framework shows, the objective, a phased plan, deliverables, fee and next steps.</p>
         <ErrorLine>{err}</ErrorLine>
-        <Button variant="ai" className="w-full mt-4" onClick={run} disabled={!canRun} data-testid="fw-proposal-go">Generate a Proposal</Button>
+        {noAgain ? <Note className="mt-3">Save the new client first, then generate its proposal.</Note>
+          : <Button variant="ai" className="w-full mt-4" onClick={run} disabled={!canRun} data-testid="fw-proposal-go">Generate a Proposal</Button>}
         <UsageLine usage={usage} what="framework proposals" className="mt-2 text-center" />
       </Card>
     );
@@ -496,11 +575,11 @@ function Proposal({ fkey, mine, own = false }) {
       <AiFrame title="Your proposal" className="print-plain rise-in" right={<CopyButton text={p.markdown} />}>
         <div data-testid="fw-proposal"><Markdown text={p.markdown} /></div>
         {p.stale && <Note className="mt-3">Made from your earlier answer. Generate again to use what you saved last.</Note>}
-        <p className="text-[12px] text-bz-muted mt-3">{own ? "A draft proposal for your own client." : "A practice proposal for a workshop case."} Check the numbers and fill in anything in [brackets] before you use it with a real client.</p>
+        <p className="text-[12px] text-bz-muted mt-3">{own ? "A draft proposal for your own client, built on public information." : "A practice proposal for a workshop case."} Check the numbers and fill in anything in [brackets] before you use it with a real client.</p>
       </AiFrame>
       <div className="flex flex-col sm:flex-row gap-2 no-print">
         <Button variant="secondary" onClick={() => window.print()} data-testid="fw-print">Print or save as PDF</Button>
-        {canRun && <Button variant="secondary" onClick={run} data-testid="fw-proposal-again">Generate again</Button>}
+        {canRun && !noAgain && <Button variant="secondary" onClick={run} data-testid="fw-proposal-again">Generate again</Button>}
         <UsageLine usage={usage} what="framework proposals" className="sm:ml-auto self-center" />
       </div>
       <ErrorLine>{err}</ErrorLine>
@@ -508,24 +587,35 @@ function Proposal({ fkey, mine, own = false }) {
   );
 }
 
-function SaveRow({ complete, dirty, saved, pending, onSave }) {
-  if (complete && (dirty || !saved)) {
+function ToDo({ items, title, testid }) {
+  return (
+    <div className="mt-5 rounded-bzcard border border-dashed border-bz-line-strong p-3.5" data-testid={testid}>
+      <p className="text-[13.5px] font-semibold">{title}</p>
+      <ul className="mt-1.5 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-[13.5px] text-bz-muted list-disc pl-5">
+        {items.map((m) => <li key={m}>{m}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function SaveRow({ todo, dirty, saved, pending, onSave }) {
+  if (todo.length) return <ToDo items={todo} title="Answer these and the Save button appears:" testid="fw-incomplete" />;
+  if (dirty || !saved) {
     return <Button className="w-full mt-5 rise-in" onClick={onSave} loading={pending} data-testid="fw-save">{saved ? "Save changes" : "Save my answer"}</Button>;
   }
-  if (!complete) return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-incomplete">Finish every step above and a Save button appears.</p>;
-  return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-saved-note">Saved. Change anything above to save again.</p>;
+  return <p className="mt-4 text-center text-[13px] text-bz-muted" data-testid="fw-saved-note"><Check className="inline w-4 h-4 -mt-0.5 text-bz-gold" aria-hidden /> Saved. Your marking and the proposal are below. Change anything above to save again.</p>;
 }
 
 function Activity({ d }) {
   const fw = d.framework;
   const c = fw.case;
-  const { El, done, blank } = ACTIVITY[fw.key];
+  const { El, missing, blank } = ACTIVITY[fw.key];
   const saved = d.mine?.answers;
   const [a, setA] = useState(saved || blank(c));
   const [err, setErr] = useState("");
   useEffect(() => { setA(saved || blank(c)); }, [fw.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = useSaveFramework(fw.key);
-  const complete = done(a, c);
+  const todo = missing(a, c);
   const dirty = useMemo(() => JSON.stringify(toPayload(fw.key, a, c)) !== JSON.stringify(saved ? toPayload(fw.key, saved, c) : null), [a, saved, fw.key, c]);
   const onSave = () => { setErr(""); save.mutate(toPayload(fw.key, a, c), { onError: (e) => setErr(apiError(e)) }); };
   return (
@@ -536,7 +626,7 @@ function Activity({ d }) {
         <p className="text-[14px] font-semibold mt-2">{c.task}</p>
         <div className="mt-5"><El fw={fw} c={c} own={false} a={a} set={(v) => { setA(v); setErr(""); }} /></div>
         <ErrorLine>{err}</ErrorLine>
-        <SaveRow complete={complete} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
+        <SaveRow todo={todo} dirty={dirty} saved={!!saved} pending={save.isPending} onSave={onSave} />
       </Card>
       {d.mine && d.akshat && <Marking mine={d.mine} akshat={d.akshat} />}
       {d.mine && <Proposal fkey={fw.key} mine={d.mine} />}
