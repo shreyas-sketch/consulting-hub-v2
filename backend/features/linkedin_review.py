@@ -46,6 +46,7 @@ indexes.register("li_plans", [("user_id", 1), ("at", -1)])
 events.register("linkedin_reviewed", "LinkedIn screenshot review made (props.images, score)")
 events.register("linkedin_plan_made", "30-day LinkedIn post plan made")
 
+WEBINAR_QUEUE_WAIT = 45       # seconds a review may wait for an AI slot when the whole webinar uploads at once
 MAX_FILES = 5
 MAX_MB = 8
 MAX_IMAGES_TO_AI = 8          # after tall screenshots are cut into readable pieces
@@ -445,7 +446,8 @@ async def make_review(files: list[UploadFile] = File(...), target: str = Form(""
     async def work(plan: str):
         out = clean_review(await llm.complete_json(
             task="linkedin_review", system=SYSTEM, prompt=review_prompt(k, who, notes.strip()[:500], proof, len(images)),
-            fake=lambda: fake_review(k, who), model="vision", images=images, timeout=150))
+            fake=lambda: fake_review(k, who), model="vision", images=images, timeout=150,
+            queue_wait=WEBINAR_QUEUE_WAIT))
         doc = {"_id": uuid.uuid4().hex, "user_id": uid, "target": who, "notes": notes.strip()[:500], "images_n": len(raw),
                "read": out["read"], "review": out["review"], "at": utcnow()}
         await db().li_reviews.insert_one(doc)
