@@ -4,6 +4,7 @@ pulse            KPIs: accounts, plan mix (free / ₹1,999 / L1 / L2), MRR, sign
 live             During the webinar: accounts made and tools used in the last 15 minutes and today
 webinar          Report for a date window; group-session.csv = accounts from that window who didn't buy
 users            Search, detail, grant a plan, start L2, disable
+users/report.csv Every member, one row each: details, plan, and how often they used each tool (with last use)
 flags, settings, vendors, jobs, cases (live case picker), kb (knowledge base for Akshat AI, stage 3)
 """
 from __future__ import annotations
@@ -261,6 +262,81 @@ async def users(q: Optional[str] = None, plan: Optional[str] = None, page: int =
     total = await d.users.count_documents(flt)
     cur = d.users.find(flt).sort("created_at", -1).skip((page - 1) * size).limit(size)
     return {"total": total, "items": [await _row(d, u) async for u in cur]}
+
+
+# The members report: one column per tool, each counting the events that mean "used it". Ordered as the member's
+# menu runs (webinar tools, ₹1,999 plan, L1, L2), then support.
+REPORT_TOOLS: list[tuple[str, tuple[str, ...]]] = [
+    ("Readiness Score", ("readiness_done",)), ("Niche Snapshot", ("snapshot_run",)), ("Goal Map", ("goal_saved",)),
+    ("Cases", ("case_answered",)), ("Work along with Akshat", ("framework_saved", "framework_proposal")),
+    ("Meeting Brief", ("brief_made", "brief_news_retried")), ("LinkedIn Score", ("linkedin_checked",)),
+    ("LinkedIn Review", ("linkedin_reviewed", "linkedin_plan_made")), ("My Consulting File", ("file_viewed",)),
+    ("Presentation Builder", ("deck_made", "deck_edited")), ("Visual Builder", ("visual_made",)),
+    ("Website Builder", ("site_built", "site_ai_edit", "site_published")), ("Listen mode", ("audio_made",)),
+    ("Doc Reader", ("doc_uploaded", "doc_asked", "doc_summary")), ("Progress Report", ("progress_made",)),
+    ("4-3-2-1 program", ("program_enrolled", "program_task_done")), ("Session recaps", ("recap_opened",)),
+    ("Action Hub and Mentorship tools", ("gpt_started", "gpt_message")), ("Akshat AI", ("akshat_ai_asked",)),
+    ("Offer Card", ("offer_card_made", "offer_card_edited")), ("Career Story Bank", ("story_saved",)),
+    ("Industry Insight Pack", ("insight_pack_made", "insight_audio_made")),
+    ("Portfolio Project", ("portfolio_started", "portfolio_done")),
+    ("Pitch Practice", ("pitch_thread_started", "pitch_take_analysed", "pitch_chat")),
+    ("Research Notebook", ("notebook_created", "notebook_source_added", "notebook_asked", "notebook_generated",
+                           "notebook_audio")),
+    ("Bootcamps", ("bootcamp_submitted",)), ("Warm Network Finder", ("network_imported", "contacts_scored")),
+    ("Outreach Drafter", ("outreach_drafted", "outreach_sent")), ("Opportunity Radar", ("radar_run",)),
+    ("Discovery Call Prep", ("call_prep_made",)), ("Proposal Follow-through", ("proposal_made", "proposal_status")),
+    ("Client Diagnostic", ("diagnostic_made", "diagnostic_published")), ("Social Media Builder", ("posts_made",)),
+    ("Support", ("support_ticket_opened", "support_member_reply")),
+]
+REPORT_EVENT_TOOL = {e: name for name, evs in REPORT_TOOLS for e in evs}
+
+
+def _ist(v) -> str:
+    return as_utc(v).astimezone(IST).strftime("%Y-%m-%d %H:%M") if v else ""
+
+
+@router.get("/users/report.csv")
+async def members_report(_: dict = Admin):
+    """Every member account (staff left out), newest first: who they are, their plan, and for each tool how many
+    times they used it; 'Tools used' lists each tool with the day it was last used."""
+    d = db()
+    now = utcnow()
+    paid = await paid_subs(d, now)
+    granted = await _granted(d, now)
+    use: dict[str, dict[str, list]] = {}                     # user → tool → [count, last used]
+    async for r in d.events.aggregate([
+            {"$match": {"name": {"$in": list(REPORT_EVENT_TOOL)}, "user_id": {"$ne": None}}},
+            {"$group": {"_id": {"u": "$user_id", "n": "$name"}, "n": {"$sum": 1}, "last": {"$max": "$ts"}}}],
+            allowDiskUse=True):
+        tool = REPORT_EVENT_TOOL[r["_id"]["n"]]
+        cell = use.setdefault(r["_id"]["u"], {}).setdefault(tool, [0, None])
+        cell[0] += r["n"]
+        cell[1] = max(x for x in (cell[1], r["last"]) if x is not None)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Name", "Phone", "Email", "Plan", "Plan from", "Status", "Came from", "Signed up (IST)", "Last login (IST)",
+                "Last activity (IST)", "Tools used", "Total actions", "Tools used (last used)",
+                *[name for name, _ in REPORT_TOOLS]])
+    async for u in d.users.find({"role": {"$ne": "admin"}, "phone": {"$exists": True}}).sort("created_at", -1):
+        uid = str(u["_id"])
+        if uid in paid:
+            plan, plan_from = paid[uid][0], f"paid ({paid[uid][1]})"
+        elif uid in granted:
+            plan, plan_from = granted[uid], "given by the team"
+        else:
+            plan, plan_from = "free", ""
+        mine = use.get(uid, {})
+        lasts = [c[1] for c in mine.values() if c[1]]
+        used = sorted(mine.items(), key=lambda kv: kv[1][1] or now, reverse=True)
+        w.writerow([csv_safe(x) for x in (
+            u.get("name") or "", u.get("phone") or "", u.get("email") or "", plans.LABELS.get(plan, plan), plan_from,
+            u.get("status") or "active", (u.get("acquisition") or {}).get("source") or "", _ist(u.get("created_at")),
+            _ist(u.get("last_login_at")), _ist(max(lasts)) if lasts else "", len(mine), sum(c[0] for c in mine.values()),
+            "; ".join(f"{t} ({_ist(c[1])[:10]})" for t, c in used),
+            *[mine.get(name, [0])[0] for name, _ in REPORT_TOOLS])])
+    stamp = now.astimezone(IST).strftime("%Y-%m-%d")
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="members-report-{stamp}.csv"'})
 
 
 async def _user(user_id: str) -> dict:

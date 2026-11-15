@@ -103,3 +103,42 @@ def test_tick_due_and_ingest_key(client, mdb, monkeypatch):
     assert r.status_code == 200 and "l2_resume" in r.json()["ran"]
     from jobs import registry
     assert "l2_resume" not in run(registry.due(mdb))
+
+
+def test_members_report_csv_lists_every_member_with_their_tool_use(seeded_client):
+    """Admin › Members › Download members report: one row per member, newest first, with plan and per-tool use."""
+    import csv
+    import io
+    c = seeded_client
+    login(c, phone="9876500021", name="Asha Rao", utm={"src": "webinar"})
+    c.post("/api/readiness", json={"scores": {"diagnosis": 7, "offer": 1, "acquisition": 1, "pricing": 1,
+                                              "delivery": 1, "visibility": 1}, "potential": 6})
+    c.post("/api/briefs", json={"company": "Acme Pumps"})
+    c.post("/api/auth/logout")
+    login(c, phone="9876500022", name="=cmd")                        # a member-typed name that looks like a formula
+    co = c.post("/api/billing/checkout", json={"plan": "l1"}).json()
+    c.post("/api/billing/verify", json={"subscription_id": co["subscription_id"]})
+    c.post("/api/auth/logout")
+    assert c.get("/api/admin/users/report.csv").status_code == 401           # staff only
+    qa_login(c, role="admin")
+    r = c.get("/api/admin/users/report.csv")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    assert 'filename="members-report-' in r.headers["content-disposition"]
+    rows = list(csv.DictReader(io.StringIO(r.text)))
+    by = {x["Phone"]: x for x in rows}
+    asha, other = by["+919876500021"], by["+919876500022"]
+    assert asha["Name"] == "Asha Rao" and asha["Plan"].startswith("Free") and asha["Came from"] == "webinar"
+    assert asha["Readiness Score"] == "1" and asha["Meeting Brief"] == "1" and asha["Doc Reader"] == "0"
+    assert asha["Tools used"] == "2" and asha["Total actions"] == "2" and asha["Last activity (IST)"]
+    assert "Meeting Brief (" in asha["Tools used (last used)"] and "Readiness Score (" in asha["Tools used (last used)"]
+    assert not other["Plan"].startswith("Free") and other["Plan from"].startswith("paid") and other["Name"] == "'=cmd"
+    assert other["Tools used"] == "0" and other["Tools used (last used)"] == ""
+    assert not any(x["Phone"] == "" for x in rows)                          # staff accounts are left out
+    assert [x["Phone"] for x in rows].index("+919876500022") < [x["Phone"] for x in rows].index("+919876500021")
+
+
+def test_members_report_columns_cover_only_known_events():
+    from admin.routes import REPORT_EVENT_TOOL, REPORT_TOOLS
+    from growth.events import EVENTS
+    assert all(e in EVENTS for e in REPORT_EVENT_TOOL)                         # a renamed event would count nothing
+    assert len({n for n, _ in REPORT_TOOLS}) == len(REPORT_TOOLS)
