@@ -1,8 +1,9 @@
 // Admin › Users: search by phone/name, plan filter, paging; detail sheet with plan, L2, subscriptions, usage and events;
-// grant a plan, start L2 (pauses L1), revoke.
+// grant a plan, start L2 (pauses L1), revoke. "Download members report" = every member with their per-tool use (CSV).
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, apiError } from "@/lib/api";
+import { Download } from "lucide-react";
+import { API_BASE, api, apiError } from "@/lib/api";
 import { PLAN_LABEL, usageName } from "@/lib/features";
 import { hdate } from "@/lib/format";
 import { Button, Card, Chip, Field, Input, Label, Select, Sheet, Skeleton } from "../components/ui";
@@ -147,6 +148,15 @@ export default function Users({ initialQ = "" }) {
   const pages = pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1;
   return (
     <div className="space-y-4">
+      <Card className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div>
+          <p className="font-bold text-[15px]">Members report</p>
+          <p className="text-[13px] text-bz-muted">Every member in one spreadsheet: details, plan, sign-up and last login, and how many times they used each tool, with when they last used it.</p>
+        </div>
+        <a href={`${API_BASE}/admin/users/report.csv`} className="shrink-0 inline-flex items-center justify-center gap-2 min-h-[48px] px-5 rounded-bzbtn bg-bz-gold text-bz-on-accent font-bold text-[14.5px]" data-testid="admin-members-report">
+          <Download className="w-4 h-4" aria-hidden /> Download members report (CSV)
+        </a>
+      </Card>
       <div className="flex flex-col sm:flex-row gap-2">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search phone or name" className="sm:max-w-sm" data-testid="admin-user-search" />
         <Select value={plan} onChange={(e) => { setPlan(e.target.value); setPage(1); }} className="sm:w-48" data-testid="admin-user-plan">
